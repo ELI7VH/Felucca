@@ -56,6 +56,12 @@
   #steps tr.off td { color: var(--dim); }
   .stepcols { columns: 470px; column-gap: 24px; }
   .stepcols table { break-inside: avoid; }
+  @media (max-width: 600px) {
+    .stepcols { columns: auto; overflow-x: auto; }
+    #steps input[type=text] { width: 84px; }
+    #steps input[type=number] { width: 42px; }
+    #steps th, #steps td { padding-right: 3px; }
+  }
   .smp { margin: 0 0 14px; padding: 6px 0 0; border-top: 1px solid var(--line); }
   .smp.over { outline: 1px solid var(--fg); outline-offset: 2px; }
   .smp .head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
@@ -68,10 +74,6 @@
   footer { margin-top: 24px; font-size: 11px; color: var(--dim); }
   .row.pushed .v { font-weight: 600; }
   /* librarian: local library and the device's user bank side by side, stacked on a phone */
-  details.lib { margin: 12px 0; }
-  details.lib > summary { list-style: none; cursor: pointer; }
-  details.lib > summary::-webkit-details-marker { display: none; }
-  details.lib:not([open]) > summary h2 { color: var(--dim); }
   .libcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 8px 24px; margin-top: 6px; }
   .libcols > div { min-width: 0; }
   .libcols .bar input[type=search] { flex: 1 1 120px; min-width: 0; }
@@ -85,7 +87,7 @@
   .list tr.over td { outline: 1px dashed var(--fg); outline-offset: -1px; }
   .list.over { outline: 1px solid var(--fg); }
   .list .none { padding: 6px; color: var(--dim); }
-  .list col.n { width: 28px; } .list col.e { width: 72px; } .list col.d { width: 78px; }
+  .list col.n { width: 40px; } .list col.e { width: 72px; } .list col.d { width: 78px; }
   .ic { font-family: "Fukiai"; font-style: normal; font-weight: 400; font-synthesis: none; line-height: 1; margin-right: .3em; }
   html:not(.fk) .ic { display: none; }
   /* wave choices: a page-drawn picker so the options can carry an icon (Chrome 135+); native menus get words only */
@@ -99,6 +101,49 @@
     select.wave option:hover, select.wave option:focus-visible { background: var(--fg); color: var(--bg); }
     select.wave option::checkmark { display: none; }
   }
+  /* tabs: a wrapping row of plain buttons, the open one inverted; header stays at the top on wide screens */
+  .top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0 0; }
+  @media (max-width: 600px) { .top { position: static; } }
+  .tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--fg); margin: 6px 0 0; }
+  .tabs button { background: none; color: var(--dim); padding: 4px 10px; border: 1px solid transparent; border-bottom: 0; white-space: nowrap; }
+  .tabs button:hover { color: var(--fg); }
+  .tabs button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
+  .trackbar { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .seg { display: inline-flex; flex-wrap: wrap; }
+  .seg button, button.tog { background: var(--bg); color: var(--fg); border: 1px solid var(--fg); padding: 1px 10px; }
+  .seg button + button { border-left: 0; }
+  .seg button[aria-pressed="true"], button.tog[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .panel { margin: 12px 0; }
+  .hint { margin: 16px 0; color: var(--dim); }
+  /* sequencer: a step grid over the selected track (16 per row, 8 on a phone) */
+  .grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; margin: 6px 0 12px; }
+  @media (max-width: 600px) { .grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+  .grid button { background: var(--bg); color: var(--fg); border: 1px solid var(--line); padding: 2px; min-width: 0; height: 52px;
+                 display: flex; flex-direction: column; justify-content: flex-start; gap: 1px; text-align: left; overflow: hidden; font-size: 10px; line-height: 1.15; }
+  .grid button .n { color: var(--dim); }
+  .grid button .x { overflow: hidden; overflow-wrap: anywhere; flex: 1; }
+  .grid button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .grid button.on .n { color: inherit; opacity: .6; }
+  .grid button.acc .x { font-weight: 700; }
+  .grid button.tie { border-style: dashed; border-color: var(--fg); }
+  .grid button.beat { border-left-color: var(--fg); }
+  #steps tr.hl td { outline: 1px solid var(--fg); }
+  /* mixer: four channel strips as on the device's TRACKS page */
+  .mixer { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 640px; margin: 6px 0; }
+  .strip { border: 1px solid var(--line); padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .strip.sel { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .strip .num { font-size: 18px; font-weight: 600; line-height: 1; }
+  .strip .snd { font-size: 11px; line-height: 1.3; width: 100%; text-align: center; overflow-wrap: anywhere; min-height: 2.6em; }
+  .strip .rec { font-size: 11px; color: var(--dim); }
+  .strip .rec.on { color: var(--fg); font-weight: 600; }
+  .strip .rec:not(.on) .ic { visibility: hidden; }
+  .strip input.fader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 150px; }
+  .strip .v { font-size: 11px; white-space: nowrap; }
+  .strip .pan { width: 100%; }
+  .strip.muted .fader, .strip.muted .lv { opacity: .35; }
+  .strip button { width: 100%; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .strip button.selb:disabled { opacity: 1; background: none; color: var(--dim); }
+  #sysinfo th { padding-right: 16px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -106,53 +151,69 @@
 <main>
   <button class="lang" id="lang"></button>
   <h1>Felucca Editor</h1>
-  <p class="dim"><a href="../installer/" style="color:inherit">Felucca installer</a></p>
-  <div class="bar">
-    <button id="connect" data-t="connect" data-ic="port_usb_c"></button>
-    <span id="version" class="dim"></span>
-    <span id="live" class="dim"></span>
-    <span id="mock" class="dim" hidden data-t="mock"></span>
-  </div>
-  <div id="status"></div>
+  <p class="dim"><a href="../installer/" style="color:inherit" data-t="installer"></a></p>
+  <!-- always visible: connection, version, sync mode, the tabs and (Sound / Sequencer / Tracks) the track selector -->
+  <header class="top">
+    <div class="bar">
+      <button id="connect" data-t="connect" data-ic="port_usb_c"></button>
+      <span id="version" class="dim"></span>
+      <span id="live" class="dim"></span>
+      <span id="mock" class="dim" hidden data-t="mock"></span>
+    </div>
+    <div id="status"></div>
+    <nav class="tabs" id="tabs" role="tablist">
+      <button role="tab" data-tab="sound" data-t="sound" data-ic="symbol_audio"></button>
+      <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
+      <button role="tab" data-tab="tracks" data-t="tabTracks" data-ic="ui_slider_vertical"></button>
+      <button role="tab" data-tab="library" data-t="library" data-ic="symbol_books"></button>
+      <button role="tab" data-tab="samples" data-t="samples" data-ic="symbol_waves"></button>
+      <button role="tab" data-tab="projects" data-t="projects" data-ic="symbol_folder"></button>
+      <button role="tab" data-tab="settings" data-t="tabSettings" data-ic="symbol_cog"></button>
+    </nav>
+    <div class="trackbar" id="trackbar" hidden><span class="dim" data-t="track"></span><span class="seg" id="trackbtns" role="group"></span></div>
+  </header>
+  <p class="hint" id="hint" hidden></p>
 
-  <div id="ui" hidden>
-    <section>
-      <h2 data-t="sound" data-ic="symbol_audio"></h2>
-      <div class="browser">
-        <label><span data-t="engine"></span><br><select id="engine"></select></label>
-        <label><span data-t="presets"></span><br><select id="preset" size="8"></select></label>
-        <div>
-          <p class="bar"><button id="init" data-t="initSound"></button>
-            <button id="factlib" data-t="factoryToLib" data-ic="symbol_folder"></button></p>
-          <p class="bar"><button id="savefile" data-t="saveFile" data-ic="symbol_download"></button>
-            <button id="loadfile" data-t="loadFile" data-ic="symbol_upload"></button>
-            <input type="file" id="file" accept=".json,application/json" hidden></p>
-          <h3 data-t="projects" data-ic="symbol_folder"></h3>
-          <div class="slots" id="slots"></div>
-        </div>
+  <section class="panel" id="p-sound" data-tab="sound" data-dev hidden>
+    <div class="browser" id="browser">
+      <label><span data-t="engine"></span><br><select id="engine"></select></label>
+      <label><span data-t="presets"></span><br><select id="preset" size="8"></select></label>
+      <div>
+        <p class="bar"><button id="init" data-t="initSound"></button>
+          <button id="factlib" data-t="factoryToLib" data-ic="symbol_folder"></button></p>
+        <p class="bar"><button id="savefile" data-t="saveFile" data-ic="symbol_download"></button>
+          <button id="loadfile" data-t="loadFile" data-ic="symbol_upload"></button>
+          <input type="file" id="file" accept=".json,application/json" hidden></p>
       </div>
-    </section>
+    </div>
+    <p class="dim" id="drumnote" data-t="drumNote" hidden></p>
     <p class="dim" id="ctlhelp" data-t="ctlHelp"></p>
-    <section class="groups" id="groups"></section>
-    <section id="steps">
+    <div class="groups" id="groups"></div>
+  </section>
+
+  <section class="panel" id="p-sequencer" data-tab="sequencer" data-dev hidden>
+    <div class="groups" id="seqgroups"></div>
+    <div id="steps">
       <h2 data-t="steps" data-ic="note_eight"></h2>
       <p class="bar"><button id="reloadsteps" data-t="reload" data-ic="control_arrow_loop"></button>
         <button id="clearseq" data-t="clearSeq" data-ic="symbol_trash"></button>
-        <span class="dim" data-t="notesHelp"></span></p>
+        <span class="dim" id="noteshelp"></span></p>
+      <div class="grid" id="stepgrid"></div>
       <div class="stepcols" id="steptables"></div>
-    </section>
-    <section id="samples" hidden>
-      <h2 data-t="samples" data-ic="symbol_waves"></h2>
-      <p class="dim" data-t="smpHelp"></p>
-      <div id="smpslots"></div>
-    </section>
-  </div>
+    </div>
+  </section>
 
-  <!-- shown without a device too; moved under "Sound" while connected -->
-  <details class="lib" id="libsec" open>
-    <summary><h2 data-t="library" data-ic="symbol_folder"></h2></summary>
-    <div class="libcols">
+  <section class="panel" id="p-tracks" data-tab="tracks" data-dev hidden>
+    <h2 data-t="mixer" data-ic="ui_slider_vertical"></h2>
+    <div class="mixer" id="mixer"></div>
+    <p class="dim" data-t="mixHelp"></p>
+  </section>
+
+  <!-- works without a device too (the device bank shows while connected) -->
+  <section class="panel" id="p-library" data-tab="library" hidden>
+    <div class="libcols" id="libsec">
       <div id="libpane">
+        <h2 data-t="library" data-ic="symbol_books"></h2>
         <div class="bar">
           <input type="search" id="libq" spellcheck="false">
           <select id="libeng"></select>
@@ -177,23 +238,47 @@
           <span class="dim" id="libcount"></span>
         </p>
       </div>
-      <div id="bankpane" hidden>
-        <div class="bar"><b id="bankhead"></b></div>
-        <div class="list" id="banklist"></div>
-        <p class="bar" style="margin-top:6px">
-          <button id="bkload" data-t="bankLoad" data-ic="symbol_folder_open"></button>
-          <button id="bkstore" data-t="bankStore" data-ic="port_disk"></button>
-          <button id="bkget" data-t="bankGet" data-ic="symbol_download"></button>
-          <button id="bkerase" data-t="erase" data-ic="symbol_trash"></button>
-        </p>
-        <p class="bar">
-          <button id="bkrefresh" data-t="reload" data-ic="control_arrow_loop"></button>
-          <button id="bkexport" data-t="exportBank" data-ic="symbol_download"></button>
-          <span class="dim" data-t="dndHelp"></span>
-        </p>
+      <div>
+        <h2 data-t="bank" data-ic="port_disk"></h2>
+        <p class="dim" id="bankhint"></p>
+        <div id="bankpane" hidden>
+          <div class="bar"><b id="bankhead"></b></div>
+          <div class="list" id="banklist"></div>
+          <p class="bar" style="margin-top:6px">
+            <button id="bkload" data-t="bankLoad" data-ic="symbol_folder_open"></button>
+            <button id="bkstore" data-t="bankStore" data-ic="port_disk"></button>
+            <button id="bkget" data-t="bankGet" data-ic="symbol_download"></button>
+            <button id="bkerase" data-t="erase" data-ic="symbol_trash"></button>
+          </p>
+          <p class="bar">
+            <button id="bkrefresh" data-t="reload" data-ic="control_arrow_loop"></button>
+            <button id="bkexport" data-t="exportBank" data-ic="symbol_download"></button>
+            <span class="dim" data-t="dndHelp"></span>
+          </p>
+        </div>
       </div>
     </div>
-  </details>
+  </section>
+
+  <section class="panel" id="p-samples" data-tab="samples" data-dev hidden>
+    <h2 data-t="samples" data-ic="symbol_waves"></h2>
+    <p class="dim" data-t="smpHelp"></p>
+    <div id="smpslots"></div>
+  </section>
+
+  <section class="panel" id="p-projects" data-tab="projects" data-dev hidden>
+    <h2 data-t="projects" data-ic="symbol_folder"></h2>
+    <p class="dim" data-t="projHelp"></p>
+    <div class="slots" id="slots"></div>
+  </section>
+
+  <section class="panel" id="p-settings" data-tab="settings" data-dev hidden>
+    <div class="groups" id="setgroups"></div>
+    <div class="group" style="margin-top:12px">
+      <h2 data-t="system" data-ic="symbol_cog"></h2>
+      <table id="sysinfo"></table>
+    </div>
+  </section>
 
   <footer>Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
     <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners.<br>
@@ -207,7 +292,8 @@ const HDR = [0x7D, 0x46, 0x4C];
 const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 7, PRESET: 8, PROJECT: 9, NAMES: 10,
   SMP_BEGIN: 11, SMP_WRITE: 12, SMP_END: 13, SMP_ERASE: 14, SMP_INFO: 15,
   UP_LIST: 16, UP_GET: 17, UP_PUT: 18, UP_STORE: 19, UP_LOAD: 20, UP_ERASE: 21,
-  WATCH: 22, CHANGED: 23, RELOAD: 24, PING: 25, STEP_CHANGED: 26 };
+  WATCH: 22, CHANGED: 23, RELOAD: 24, PING: 25, STEP_CHANGED: 26,
+  TRACK: 27, TRACK_MIX: 28, TRACK_DUMP: 29, TRACK_STEP: 30 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED]);
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
@@ -242,6 +328,7 @@ const parse = {
     const r = new Reader(a);
     const o = { version: r.s(), nengines: r.b(), pcount: r.b(), gcount: r.b(), nstep: r.b(), pe0: r.b(), engines: [] };
     for (let i = 0; i < o.nengines; i++) o.engines.push(r.s());
+    o.ntrk = r.i < a.length ? r.b() : 0;             /* v3: tracks (0 = older firmware, one instrument) */
     return o;
   },
   [CMD.GET](a) { const r = new Reader(a); return { scope: r.b(), id: r.b(), value: r.v() }; },
@@ -307,9 +394,27 @@ const parse = {
   [CMD.UP_ERASE](a) { return parse[CMD.SMP_BEGIN](a); },
   [CMD.WATCH](a) { return { on: new Reader(a).b() }; },
   [CMD.CHANGED](a) { return parse[CMD.GET](a); },
-  [CMD.RELOAD](a) { const r = new Reader(a); return { engine: r.b(), preset: r.b() }; },
+  [CMD.RELOAD](a) { const r = new Reader(a); return { engine: r.b(), preset: r.b(), track: r.i < a.length ? r.b() : 0 }; },
   [CMD.PING](a) { return {}; },
-  [CMD.STEP_CHANGED](a) { return { index: new Reader(a).b() }; },
+  [CMD.STEP_CHANGED](a) { const r = new Reader(a); return { index: r.b(), track: r.i < a.length ? r.b() : 0 }; },
+  /* v3: tracks. engine === NENGINES: the drum track */
+  [CMD.TRACK](a) {
+    const r = new Reader(a);
+    const o = { sel: r.b(), ntrk: r.b(), tracks: [] };
+    for (let i = 0; i < o.ntrk; i++) o.tracks.push({ engine: r.b(), preset: r.b(), level: r.v(), mute: r.b(), armed: r.b() });
+    return o;
+  },
+  [CMD.TRACK_MIX](a) { const r = new Reader(a); return { track: r.b(), level: r.v(), mute: r.b() }; },
+  [CMD.TRACK_DUMP](a, info) {
+    const r = new Reader(a);
+    const o = { track: r.b(), engine: r.b(), preset: r.b(), p: [] };
+    for (let i = 0; i < info.pcount; i++) o.p.push(r.v());
+    return o;
+  },
+  [CMD.TRACK_STEP](a) {
+    const r = new Reader(a);
+    return { track: r.b(), index: r.b(), n: r.b(), notes: [r.b(), r.b(), r.b(), r.b()], time: r.b(), flags: r.b(), vel: r.b() };
+  },
 };
 
 /* a name the device accepts: printable ASCII, 1..12 characters */
@@ -345,6 +450,11 @@ const req = {
   upErase: (s) => [CMD.UP_ERASE, [s & 0x7F]],
   watch: (on) => [CMD.WATCH, [on ? 1 : 0]],
   ping: () => [CMD.PING, []],
+  /* v3: tracks 0..3 (3 = drums) */
+  track: (sel) => [CMD.TRACK, sel == null ? [] : [sel & 0x7F]],
+  trackMix: (tr, level, mute) => [CMD.TRACK_MIX, level == null ? [tr & 0x7F] : [tr & 0x7F, ...v14enc(level), mute ? 1 : 0]],
+  trackDump: (tr) => [CMD.TRACK_DUMP, [tr & 0x7F]],
+  trackStep: (tr, i, st) => [CMD.TRACK_STEP, st ? [tr & 0x7F, ...req.stepSet(i, st)[1]] : [tr & 0x7F, i & 0x7F]],
 };
 
 /* which reply belongs to which request (the device echoes these) */
@@ -356,7 +466,8 @@ function replyMatches(cmd, args, a) {
     case CMD.SMP_WRITE: return a[0] === args[0] && a[1] === args[1] && a[2] === args[2] && a[3] === args[3];
     case CMD.PROJECT: return a[0] === args[0] && a[1] === args[1];
     case CMD.UP_LIST: case CMD.UP_GET: case CMD.UP_PUT: case CMD.UP_STORE: case CMD.UP_LOAD: case CMD.UP_ERASE:
-    case CMD.WATCH: return a[0] === args[0];
+    case CMD.WATCH: case CMD.TRACK_MIX: case CMD.TRACK_DUMP: return a[0] === args[0];
+    case CMD.TRACK_STEP: return a[0] === args[0] && a[1] === args[1];
     default: return true;
   }
 }
@@ -443,7 +554,18 @@ class Link {
 /* ------------------------------------------------------------- formatting --- */
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const noteName = (n) => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1);   /* 60 = C4 */
+/* GM drum notes (35..81) by short names, for the drum track's steps */
+const GM_DRUM = { 35: "KICK2", 36: "KICK", 37: "RIM", 38: "SNARE", 39: "CLAP", 40: "SNARE2", 41: "LTOM2", 42: "CHH", 43: "LTOM",
+  44: "PHH", 45: "MTOM2", 46: "OHH", 47: "MTOM", 48: "HTOM2", 49: "CRASH", 50: "HTOM", 51: "RIDE", 52: "CHINA", 53: "BELL",
+  54: "TAMB", 55: "SPLASH", 56: "COWBELL", 57: "CRASH2", 58: "VIBRA", 59: "RIDE2", 60: "HBONGO", 61: "LBONGO", 62: "MCONGA",
+  63: "HCONGA", 64: "LCONGA", 65: "HTIMB", 66: "LTIMB", 67: "HAGOGO", 68: "LAGOGO", 69: "CABASA", 70: "MARACA", 71: "SWHIS",
+  72: "LWHIS", 73: "SGUIRO", 74: "LGUIRO", 75: "CLAVES", 76: "HWOOD", 77: "LWOOD", 78: "MCUICA", 79: "OCUICA", 80: "MTRI", 81: "OTRI" };
+const GM_DRUM_BY_NAME = Object.fromEntries(Object.entries(GM_DRUM).map(([n, s]) => [s, +n]));
+const drumName = (n) => GM_DRUM[n] || String(n);
+/* a note token: a number, a note name (C4, F#3, Bb2) or a GM drum name (KICK, CHH) */
 function parseNote(tok) {
+  const dn = GM_DRUM_BY_NAME[tok.toUpperCase()];
+  if (dn != null) return dn;
   if (/^\d+$/.test(tok)) { const n = +tok; return n <= 127 ? n : null; }
   const m = /^([A-Ga-g])([#b]?)(-?\d)$/.exec(tok);
   if (!m) return null;
@@ -485,8 +607,8 @@ function fmtValue(d, v) {
 }
 
 /* ---------------------------------------------------------- user samples --- */
-/* A port of felucca/tools/sampleio.py (read_any_wav, resample, to_int16, ima_encode, user_slot),
-   byte for byte: felucca/web/test_web.mjs compares them. */
+/* A port of tools/sampleio.py (read_any_wav, resample, to_int16, ima_encode, user_slot),
+   byte for byte: web/test_web.mjs compares them. */
 const SMP = { SLOT_SIZE: 0x14000, DATA_OFF: 512, RATE: 22050, HDR_LEN: 32 + 16 * 28, MAX_ZONES: 16 };
 SMP.MAX_DATA = SMP.SLOT_SIZE - SMP.DATA_OFF;
 
@@ -854,8 +976,33 @@ async function startWatch(rq) {
   catch (e) { if (e.message === "closed") throw e; return false; }
 }
 
+/* ------------------------------------------------------------ mixer (v3) --- */
+/* The TRACKS page in the editor: TRACK (engine, preset, level, mute, armed of all four) and TRACK_DUMP
+   of each track for its P_PAN. Level and mute go through TRACK_MIX (any track; the drum level is
+   G_DRLVL). Pan is a plain SET, and SET reaches only the selected track: another track is selected for
+   it and the selection is put back (TRACK pushes no RELOAD). ids: {pan: P_PAN id} */
+const mixer = {
+  async read(rq, info, ids) {
+    const tr = parse[CMD.TRACK](await rq(req.track()));
+    for (let i = 0; i < tr.ntrk; i++) {
+      const d = parse[CMD.TRACK_DUMP](await rq(req.trackDump(i)), info);
+      tr.tracks[i].pan = ids.pan == null ? null : d.p[ids.pan];
+    }
+    return tr;
+  },
+  /* -> {track, level, mute} as the device has them now */
+  async setMix(rq, track, level, mute, opt) { return parse[CMD.TRACK_MIX](await rq(req.trackMix(track, level, mute), opt)); },
+  /* -> the pan value after clamping */
+  async setPan(rq, track, sel, panId, v) {
+    if (track === sel) return parse[CMD.SET](await rq(req.set(0, panId, v))).value;
+    await rq(req.track(track));
+    try { return parse[CMD.SET](await rq(req.set(0, panId, v))).value; }
+    finally { await rq(req.track(sel)).catch(() => {}); }
+  },
+};
+
 /* ------------------------------------------------------------ mock device --- */
-/* Implements the protocol like felucca/src/editor.c, with tables copied from params.c
+/* Implements the protocol like firmware/src/editor.c, with tables copied from params.c
    and the engine sources. Used with ?mock=1 (add &legacy=1 for a firmware without cmds 16..26).
    opt: {legacy: no user bank / WATCH, auto: false = no simulated knobs (tests drive sim.*),
          watchMs: how long WATCH lasts after the last request (3000), slots: user bank size (32)} */
@@ -920,9 +1067,9 @@ function makeMockDevice(opt = {}) {
       presets: [P("PIANO", [0, 0, 0, 0, 127, 0, 0, 0]), P("TRANH", [1, 0, 0, 0, 120, 0, 0, 0]), P("FLUTE", [2, 0, 0, 1, 110, 0, 0, 0]),
         P("SAX", [3, 0, 0, 1, 110, 0, 10, 0]), P("PERC", [4, 0, 0, 0, 127, 0, 0, 0])] },
     { name: "VOICE", titles: ["VOWL", "TONE"], edit: [D("VOWEL", F.INT, 0, 127, 0), D("VOWL2", F.INT, 0, 127, 64), D("TALK", F.TIME, 0, 127, 0),
-        D("SHIFT", F.SEMI, -12, 12, 0), D("BUZZ", F.PCT, 0, 127, 64), D("BRETH", F.PCT, 0, 127, 10), D("Q", F.PCT, 0, 127, 64), D("FOLOW", F.PCT, 0, 127, 25)],
-      presets: [P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 30], [85, 90, 115, 95], 0, 5), P("VOX LEAD", [32, 0, 0, 2, 90, 8, 72, 40], [6, 70, 105, 55], 1, 4),
-        P("WOW BASS", [95, 0, 68, 0, 100, 0, 80, 0], [0, 70, 70, 30], 1, 8), P("WHISPER", [0, 95, 88, 3, 50, 120, 50, 20], [50, 90, 110, 90], 0, 5)] },
+        D("SHIFT", F.SEMI, -12, 12, 0), D("BUZZ", F.PCT, 0, 127, 64), D("BRETH", F.PCT, 0, 127, 10), D("Q", F.PCT, 0, 127, 64), D("RAND", F.PCT, 0, 127, 0)],
+      presets: [P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5), P("VOX LEAD", [32, 0, 0, 2, 90, 8, 72, 0], [6, 70, 105, 55], 1, 4),
+        P("WOW BASS", [95, 0, 68, 0, 100, 0, 80, 0], [0, 70, 70, 30], 1, 8), P("WHISPER", [0, 95, 88, 3, 50, 120, 50, 0], [50, 90, 110, 90], 0, 5)] },
   ];
   /* factory PATTERNS[] (ui.c): absolute notes, 0 rest; flags 1 accent, 2 slide, 4 tie (holds the previous note) */
   const T_ = 4;
@@ -938,16 +1085,24 @@ function makeMockDevice(opt = {}) {
   ];
   const P_COUNT = 53, G_COUNT = 27, NSTEP = 64, P_E0 = 45, G_ENGSEL = 20;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const st = {
-    engine: 0, preset: 0,
+  /* four tracks (firmware v3); engine / preset / p / step below are the selected track's */
+  const NTRK = 4, TRK_DRUM = 3;
+  const newTrack = (i) => ({ engine: 0, preset: 0, drum: i === TRK_DRUM,
     p: TP.map((d) => d.def).concat(new Array(8).fill(0)),
+    step: Array.from({ length: NSTEP }, () => ({ n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0 })) });
+  const st = {
+    tracks: [0, 1, 2, 3].map(newTrack), sel: 0, rec: 0,
     g: GP.map((d) => d.def),
-    step: Array.from({ length: NSTEP }, () => ({ n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0 })),
     slots: [null, null, null, null],
     smp: [0, 1, 2].map(() => ({ flash: new Uint8Array(SMP.SLOT_SIZE).fill(0xFF), zones: 0, name: "", len: 0, next: SMP.DATA_OFF })),
     bank: new Array(opt.slots || 32).fill(null),     /* user presets: {engine, name, p, pattern} */
     watch: false, lastReq: 0,
   };
+  for (const k of ["engine", "preset", "p", "step"]) {
+    Object.defineProperty(st, k, { enumerable: false, get: () => st.tracks[st.sel][k], set: (v) => { st.tracks[st.sel][k] = v; } });
+  }
+  const drumSel = () => st.tracks[st.sel].drum;
+  const engOf = (t) => (t.drum ? ENG.length : t.engine);   /* the engine byte: NENGINES = drums */
   const watchMs = opt.watchMs || 3000;
   const desc = (scope, id) => (scope === 0 && id < P_COUNT ? (id >= P_E0 ? ENG[st.engine].edit[id - P_E0] : TP[id])
     : scope === 1 && id < G_COUNT ? GP[id] : null);
@@ -959,6 +1114,7 @@ function makeMockDevice(opt = {}) {
   }
   const loadPattern = (k) => loadPat16(PATTERNS[k][0].map((n, i) => [n, PATTERNS[k][1][i]]));
   function applyPreset(pi) {
+    if (drumSel()) return;
     const e = ENG[st.engine];
     pi %= e.presets.length;
     const pr = e.presets[pi];
@@ -970,6 +1126,7 @@ function makeMockDevice(opt = {}) {
     if (pr.pat && seqEmpty()) loadPattern(pr.pat - 1);
   }
   function setEngine(ei) {
+    if (drumSel()) return;
     st.engine = ei % ENG.length;
     for (let i = 0; i < 8; i++) st.p[P_E0 + i] = ENG[st.engine].edit[i].def;
     applyPreset(0);
@@ -982,10 +1139,19 @@ function makeMockDevice(opt = {}) {
     st.bank[slot] = snapshot(name);
     clearSteps();
   });
+  [[1, 1, 5], [2, 3, 0]].forEach(([i, e, p]) => { st.sel = i; setEngine(e); applyPreset(p); clearSteps(); });   /* PAD, PULSE LD */
+  /* a mix to look at: pads left, lead right, and a GM drum pattern on track 4 */
+  st.tracks[1].p[39] = -24; st.tracks[2].p[39] = 20; st.tracks[2].p[0] = 92; st.tracks[TRK_DRUM].p[39] = 0;
+  const KICK = 36, SNARE = 38, CHH = 42, OHH = 46, CLAP = 39;
+  [[KICK, CHH], [CHH], [CHH], [CHH], [SNARE, CHH], [CHH], [CHH], [KICK, OHH], [KICK, CHH], [CHH], [KICK], [CHH], [SNARE, CLAP], [CHH], [CHH], [OHH]]
+    .forEach((ns, i) => Object.assign(st.tracks[TRK_DRUM].step[i], { n: ns.length, notes: [...ns, 0, 0, 0, 0].slice(0, 4), time: 0,
+      flags: i % 4 === 0 ? 1 : 0, vel: 100 }));
+  st.sel = 0;
   setEngine(0);
   clearSteps();
   applyPreset(4);                                   /* ACID with its pattern */
-  st.slots[0] = JSON.parse(JSON.stringify({ engine: st.engine, preset: st.preset, p: st.p, g: st.g, step: st.step }));
+  const project = () => JSON.parse(JSON.stringify({ tracks: st.tracks, sel: st.sel, g: st.g }));
+  st.slots[0] = project();
 
   function handle(cmd, a) {
     const out = [];
@@ -1030,16 +1196,18 @@ function makeMockDevice(opt = {}) {
       case CMD.UP_STORE: {
         if (a.length < 2) return null;
         const name = new Reader(a.slice(1)).s();
-        const rc = a[0] >= NB || name.length > UP.NAME_MAX ? 1 : 0;
+        const rc = a[0] >= NB || name.length > UP.NAME_MAX || drumSel() ? 1 : 0;
         if (!rc) st.bank[a[0]] = snapshot(name || `${ENG[st.engine].name} ${String(a[0] + 1).padStart(2, "0")}`);
         b(a[0]); b(rc);
         break;
       }
       case CMD.UP_LOAD: {
         if (a.length < 1) return null;
-        const u = st.bank[a[0]];
-        if (u) {
+        const u = drumSel() ? null : st.bank[a[0]];
+        if (u) {                                    /* the sound; the track's LEVEL / PAN / MUTE stay */
+          const mix = [0, 39, 40].map((i) => st.p[i]);
           st.engine = u.engine; st.preset = 0; st.p = u.p.slice();
+          [0, 39, 40].forEach((i, k) => { st.p[i] = mix[k]; });
           if (u.pattern.some((x) => x[0]) && seqEmpty()) { loadPat16(u.pattern); st.p[29] = clamp(u.p[29], 1, 16); }
         }
         b(a[0]); b(u ? 0 : 1);
@@ -1061,6 +1229,7 @@ function makeMockDevice(opt = {}) {
       case CMD.INFO:
         s(opt.legacy ? "FELUCCA 0.4 BETA (MOCK)" : "FELUCCA 0.5 BETA (MOCK)"); b(ENG.length); b(P_COUNT); b(G_COUNT); b(NSTEP); b(P_E0);
         ENG.forEach((e) => s(e.name));
+        if (!opt.legacy) b(NTRK);
         break;
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
@@ -1075,8 +1244,39 @@ function makeMockDevice(opt = {}) {
         break;
       }
       case CMD.DUMP:
-        b(st.engine); b(st.preset); st.p.forEach(v); st.g.forEach(v);
+        b(engOf(st.tracks[st.sel])); b(st.preset); st.p.forEach(v); st.g.forEach(v);
         break;
+      case CMD.TRACK:
+        if (a.length >= 1 && a[0] < NTRK) st.sel = a[0];
+        b(st.sel); b(NTRK);
+        st.tracks.forEach((t, i) => { b(engOf(t)); b(t.preset); v(i === TRK_DRUM ? st.g[25] : t.p[0]); b(t.p[40] ? 1 : 0); b((st.rec >> i) & 1); });
+        break;
+      case CMD.TRACK_MIX: {
+        if (a.length < 1 || a[0] >= NTRK) return null;
+        const t = st.tracks[a[0]], drum = a[0] === TRK_DRUM;
+        if (a.length >= 4) {
+          const lv = clamp(v14dec(a[1], a[2]), 0, 127);
+          if (drum) st.g[25] = lv; else t.p[0] = lv;
+          t.p[40] = a[3] ? 1 : 0;
+        }
+        b(a[0]); v(drum ? st.g[25] : t.p[0]); b(t.p[40] ? 1 : 0);
+        break;
+      }
+      case CMD.TRACK_DUMP: {
+        if (a.length < 1 || a[0] >= NTRK) return null;
+        const t = st.tracks[a[0]];
+        b(a[0]); b(engOf(t)); b(t.preset); t.p.forEach(v);
+        break;
+      }
+      case CMD.TRACK_STEP: {
+        if (a.length < 2 || a[0] >= NTRK || a[1] >= NSTEP) return null;
+        const x = st.tracks[a[0]].step[a[1]];
+        if (a.length >= 10) {
+          x.n = Math.min(4, a[2]); x.notes = a.slice(3, 7); x.time = Math.min(2, a[7]); x.flags = a[8] & 3; x.vel = a[9];
+        }
+        b(a[0]); b(a[1]); b(x.n); x.notes.forEach(b); b(x.time); b(x.flags); b(x.vel);
+        break;
+      }
       case CMD.DESC: {
         if (a.length < 2) return null;
         const d = desc(a[0], a[1]);
@@ -1098,13 +1298,13 @@ function makeMockDevice(opt = {}) {
         if (a.length < 2 || a[0] >= ENG.length) return null;
         if (a[0] !== st.engine) setEngine(a[0]);
         applyPreset(a[1]);
-        b(st.engine); b(st.preset);
+        b(engOf(st.tracks[st.sel])); b(st.preset);
         break;
       case CMD.PROJECT: {
         if (a.length < 2) return null;
         const k = a[1] & 3;
         if (a[0] > 2) return null;
-        if (a[0] === 1) st.slots[k] = JSON.parse(JSON.stringify({ engine: st.engine, preset: st.preset, p: st.p, g: st.g, step: st.step }));
+        if (a[0] === 1) st.slots[k] = project();
         else if (a[0] === 0 && st.slots[k]) Object.assign(st, JSON.parse(JSON.stringify(st.slots[k])));
         b(a[0]); b(k); b(st.slots[k] ? 1 : 0);
         break;
@@ -1184,7 +1384,7 @@ function makeMockDevice(opt = {}) {
         if (r && input.onmidimessage) input.onmidimessage({ data: Uint8Array.from(r) });
         const ra = r ? r.slice(5, -1) : [];
         if (r && ((f.cmd === CMD.SET && f.a[0] === 1 && f.a[1] === G_ENGSEL) || f.cmd === CMD.PRESET
-          || (f.cmd === CMD.PROJECT && f.a[0] === 0 && ra[2]) || (f.cmd === CMD.UP_LOAD && !ra[1]))) push(CMD.RELOAD, [st.engine, st.preset]);
+          || (f.cmd === CMD.PROJECT && f.a[0] === 0 && ra[2]) || (f.cmd === CMD.UP_LOAD && !ra[1]))) reloadPush();
       }, f.cmd === CMD.SMP_ERASE ? 900 : f.cmd === CMD.SMP_BEGIN ? 120 : flash ? 150 : f.cmd === CMD.SMP_WRITE ? 25 + Math.random() * 10 : 4 + Math.random() * 12);
     },
   };
@@ -1199,6 +1399,7 @@ function makeMockDevice(opt = {}) {
     setTimeout(() => { if (input.onmidimessage) input.onmidimessage({ data: fr }); }, 0);
     return true;
   }
+  const reloadPush = () => push(CMD.RELOAD, opt.legacy ? [st.engine, st.preset] : [engOf(st.tracks[st.sel]), st.preset, st.sel]);
   /* things done on the device itself */
   const sim = {
     knob(id = [9, 33, 35, P_E0 + 4][Math.floor(Math.random() * 4)], dv = Math.random() < 0.5 ? -4 : 4) {
@@ -1209,17 +1410,34 @@ function makeMockDevice(opt = {}) {
     },
     reload(pi = st.preset + 1) {
       applyPreset(pi);
-      push(CMD.RELOAD, [st.engine, st.preset]);
+      reloadPush();
       return { engine: st.engine, preset: st.preset };
     },
+    track(i = (st.sel + 1) % NTRK) {                /* TRACKS page KNOB 1 */
+      st.sel = i;
+      reloadPush();
+      return i;
+    },
+    /* TRACKS page KNOB 2: the selected track's level (the drum track: G_DRLVL); pushes CHANGED */
+    level(v) {
+      const drum = st.sel === TRK_DRUM;
+      v = clamp(v, 0, 127);
+      if (drum) st.g[25] = v; else st.p[0] = v;
+      push(CMD.CHANGED, drum ? [1, 25, ...v14enc(v)] : [0, 0, ...v14enc(v)]);
+      return v;
+    },
+    mute(on = !st.p[40]) { st.p[40] = on ? 1 : 0; push(CMD.CHANGED, [0, 40, ...v14enc(st.p[40])]); return st.p[40]; },
+    /* REC on TRACKS: arm / disarm live recording of a track (no push: the editor reads TRACK) */
+    arm(i = st.sel) { st.rec ^= 1 << i; return (st.rec >> i) & 1; },
     step(i = Math.floor(Math.random() * 16)) {
       const x = st.step[i];
       if (x.n) x.flags ^= 1;
       else Object.assign(x, { n: 1, notes: [60 + Math.floor(Math.random() * 12), 0, 0, 0], time: 0, flags: 0, vel: 96 });
-      push(CMD.STEP_CHANGED, [i]);
+      push(CMD.STEP_CHANGED, opt.legacy ? [i] : [i, st.sel]);
       return i;
     },
   };
+  if (opt.auto !== false) st.rec = 1 << 2;          /* the browser mock: track 3 armed, to show it */
   const timers = opt.auto === false ? [] : [
     setInterval(() => sim.knob(), 3000),
     setInterval(() => sim.step(), 11000),
@@ -1258,7 +1476,8 @@ const GLYPH = {
   control_arrow_loop: 0xEAD6, note_eight: 0xEAEF, symbol_waves: 0xEAE6, function_env_adsr_exp: 0xEA12,
   ui_knob: 0xEA70, symbol_keyboard: 0xEABC, symbol_effector: 0xEAB7, symbol_echo: 0xEAB5, symbol_spring: 0xEAD1,
   symbol_tuning: 0xEAA7, control_arrow_up_down: 0xEACF, symbol_grid: 0xEABA, symbol_cog: 0xEA46, symbol_drum: 0xEA66,
-  function_filter_lpf_peak: 0xEAA0,
+  function_filter_lpf_peak: 0xEAA0, ui_slider_vertical: 0xEA73, symbol_books: 0xEADC, control_rec_f: 0xEA09,
+  symbol_pan: 0xEA53, control_speaker_mute: 0xEAEB,
   waveform_sine: 0xEA85, waveform_triangle_ac: 0xEA89, waveform_sawtooth_ac: 0xEA81, waveform_square: 0xEA87,
   waveform_pulse_quarter: 0xEA7F, waveform_pulse_eighth: 0xEA7B, waveform_noise_step: 0xEA79,
   waveform_noise_white: 0xEA7A, waveform_harmonic: 0xEAC5,
@@ -1289,6 +1508,7 @@ const TEXT = {
   ja: {
     other: "English", connect: "接続", disconnect: "切断", mock: "モック（実機なし）",
     sound: "音色", engine: "エンジン", presets: "プリセット", initSound: "音色を初期化",
+    track: "トラック", drum: "ドラム",
     saveFile: "ファイルに保存", loadFile: "ファイルを読み込む", projects: "プロジェクト",
     load: "読込", save: "保存", used: "使用中", empty: "空", unknown: "—",
     steps: "ステップ", reload: "再読み込み", clearSeq: "シーケンスを消去",
@@ -1333,10 +1553,22 @@ const TEXT = {
     putDone: "本体に書き込みました: スロット ", storedSlot: "本体に保存しました: スロット ", erasedSlot: "消去しました: スロット ",
     loadedUser: "読み込みました: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
+    installer: "Felucca インストーラー",
+    tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
+    needDevice: "FM-1 を接続すると編集できます。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
+    bankConnect: "FM-1 を接続すると本体のユーザープリセットも扱えます。", bankNone: "このファームウェアにはユーザープリセットがありません。",
+    drumNote: "ドラムトラックにはエンジンもプリセットもありません。レベル・パン・ミュートは「トラック」、キットは「設定」の DRUMS で。パターンは「シーケンサー」で。",
+    drumHelp: "ドラムは KICK SNARE CHH のように GM の名前か番号で入力（最大 4 音）。",
+    mixer: "ミキサー", mixHelp: "本体の TRACKS ページと同じ 4 トラック。フェーダーはレベル（ドラムは GLO > DRUMS LEVEL）。選択していないトラックのパンは、一瞬そのトラックを選んで書き込みます。REC は本体での録音待機の表示です。",
+    level: "レベル", pan: "パン", mute: "ミュート", rec: "REC", selectTrack: "選択", selectedTrack: "選択中",
+    projHelp: "プロジェクトは本体の状態をまとめて保存します: 4 トラックの音色とパターン、選択中のトラック、グローバル設定。",
+    system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
+    smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
   },
   en: {
     other: "日本語", connect: "Connect", disconnect: "Disconnect", mock: "Mock device (no hardware)",
     sound: "Sound", engine: "Engine", presets: "Presets", initSound: "Init sound",
+    track: "Track", drum: "Drums",
     saveFile: "Save to file", loadFile: "Load file", projects: "Projects",
     load: "Load", save: "Save", used: "used", empty: "empty", unknown: "—",
     steps: "Steps", reload: "Reload", clearSeq: "Clear sequence",
@@ -1381,6 +1613,17 @@ const TEXT = {
     putDone: "Written to the device: slot ", storedSlot: "Stored on the device: slot ", erasedSlot: "Erased slot ",
     loadedUser: "Loaded ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
+    installer: "Felucca installer",
+    tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
+    needDevice: "Connect the FM-1 to edit.", smpNone: "This firmware has no user sample slots.",
+    bankConnect: "Connect the FM-1 to see its user presets too.", bankNone: "This firmware has no user presets.",
+    drumNote: "The drum track has no engine or presets. Level, pan and mute: Tracks; the kit: Settings > DRUMS; the pattern: Sequencer.",
+    drumHelp: "Enter drums by GM name or number, like KICK SNARE CHH (up to 4).",
+    mixer: "Mixer", mixHelp: "The four tracks of the device's TRACKS page. The fader is the level (drums: GLO > DRUMS LEVEL). Pan of a track that is not selected is written by selecting it for a moment. REC shows a track armed for live recording on the device.",
+    level: "Level", pan: "Pan", mute: "Mute", rec: "REC", selectTrack: "Select", selectedTrack: "Selected",
+    projHelp: "A project keeps the whole device state: the sound and pattern of all four tracks, the selected track and the global settings.",
+    system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
+    smpSlots: "Sample slots", userBank: "User presets", none: "none",
   },
 };
 let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
@@ -1397,9 +1640,67 @@ function applyLang() {
   renderLive();
   renderLib();
   renderBank();
-  if (dev) { renderSlots(); renderStepHead(); renderSamples(); }
+  renderPanels();
+  if (dev) { renderSlots(); renderStepHead(); renderSamples(); renderTrackbar(); renderMixer(); renderSysinfo(); }
 }
 $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; applyLang(); });
+
+/* ---------------------------------------------------------------- tabs --- */
+/* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
+const TABS = ["sound", "sequencer", "tracks", "library", "samples", "projects", "settings"];
+const TAB_KEY = "felucca-editor-tab";
+const TRACK_TABS = new Set(["sound", "sequencer", "tracks"]);
+let tab = (() => {
+  const h = location.hash.slice(1);
+  if (TABS.includes(h)) return h;
+  try { const v = localStorage.getItem(TAB_KEY); if (TABS.includes(v)) return v; } catch (e) { /* no storage */ }
+  return "sound";
+})();
+const hasTracks = () => !!dev && !!dev.info && !!dev.info.ntrk;
+function showTab(name) {
+  if (!TABS.includes(name)) name = "sound";
+  const prev = tab;
+  tab = name;
+  try { localStorage.setItem(TAB_KEY, name); } catch (e) { /* no storage */ }
+  if (location.hash !== "#" + name) history.replaceState(null, "", location.pathname + location.search + "#" + name);
+  renderPanels();
+  if (name === "tracks" && prev !== "tracks" && hasTracks() && dev.dump) op(readMixer);
+}
+function renderPanels() {
+  /* the Tracks tab only with a four-track firmware */
+  const tracksOk = !dev || hasTracks() || !dev.info;
+  const want = tab === "tracks" && dev && dev.info && !hasTracks() ? "sound" : tab;
+  for (const b of $("tabs").querySelectorAll("button[data-tab]")) {
+    const on = b.dataset.tab === want;
+    b.setAttribute("aria-selected", on ? "true" : "false");
+    b.tabIndex = on ? 0 : -1;
+    if (b.dataset.tab === "tracks") b.hidden = !tracksOk;
+  }
+  const ready = !!dev && !!dev.dump;
+  let hint = "";
+  for (const p of document.querySelectorAll(".panel")) {
+    const mine = p.dataset.tab === want;
+    let show = mine && (!("dev" in p.dataset) || ready);
+    if (mine && "dev" in p.dataset && !dev) hint = "needDevice";   /* (while connecting the status line says it) */
+    if (show && want === "samples" && !dev.smp) { show = false; hint = "smpNone"; }
+    p.hidden = !show;
+  }
+  $("hint").hidden = !hint;
+  if (hint) $("hint").textContent = t(hint);
+  $("trackbar").hidden = !(ready && hasTracks() && TRACK_TABS.has(want));
+}
+$("tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+$("tabs").addEventListener("keydown", (e) => {          /* arrow keys move between the tabs */
+  const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+  if (!dir) return;
+  const bs = [...$("tabs").querySelectorAll("button[data-tab]:not([hidden])")];
+  const i = bs.findIndex((b) => b.getAttribute("aria-selected") === "true");
+  const n = bs[(i + dir + bs.length) % bs.length];
+  e.preventDefault();
+  showTab(n.dataset.tab);
+  n.focus();
+});
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (TABS.includes(h) && h !== tab) showTab(h); });
 
 const QS = new URLSearchParams(location.search);
 const MOCK = QS.get("mock") === "1";
@@ -1428,7 +1729,7 @@ function selfLoad() {
 }
 const stepEdit = new Map(); /* index -> time of the last edit */
 
-/* parameter ids (felucca/src/core.h); used only when P_COUNT / G_COUNT match */
+/* parameter ids (firmware/src/core.h); used only when P_COUNT / G_COUNT match */
 const EXPECT = { pcount: 53, gcount: 27, pe0: 45 };
 const P = { LEVEL: 0, SLEN: 29 };
 const LAYOUT = (pe0) => [
@@ -1439,15 +1740,20 @@ const LAYOUT = (pe0) => [
   { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["DLY", 1, [4, 5, 6, 7]], ["REV/CHO", 1, [8, 9, 10, 11]]] },
   { t: "SCL", pages: [["SCL", 0, [25, 26, 27, 28]]] },
   { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
-  { t: "SEQ PATTERN", pages: [["PATTERN", 0, [29, 30, 31, 32]]] },
-  { t: "GLOBAL", pages: [["GLOBAL", 1, [0, 1, 2, 3]]] },
-  { t: "DRUMS", pages: [["DRUMS", 1, [24, 25, 26]]] },
+  { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]]] },
+  { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [0, 1, 2, 3]]] },
+  { t: "DRUMS", tab: "setgroups", pages: [["DRUMS", 1, [24, 25, 26]]] },
 ];
 /* globals that are actions or placeholders on the device: buttons instead, or hidden */
 const G_SKIP = new Set(["SLOT", "NAME", "LOAD", "SAVE", "ENG", "SET", "CLRSQ", "INIT", "MIDI", "SYNC", "ROUT", "CPU", "CLK"]);
 const key = (s, id) => s + ":" + id;
 const gEng = () => { const i = dev.gdesc.findIndex((d) => d && d.label === "ENG"); return i >= 0 ? i : 20; };
 const pSlen = () => { const i = dev.pdesc.findIndex((d) => d && d.fmt === F.STEPS); return i >= 0 ? i : P.SLEN; };
+/* mixer ids by DESC label (core.h: P_PAN 39, P_MUTE 40, G_DRLVL 25) */
+const pById = (label, def) => { const i = dev.pdesc.findIndex((d, k) => d && k < dev.info.pe0 && d.label === label); return i >= 0 ? i : def; };
+const pPan = () => pById("PAN", 39), pMute = () => pById("MUTE", 40);
+const gDrLvl = () => { const i = dev.gdesc.findIndex((d, k) => d && k > gEng() && d.label === "LEVEL"); return i >= 0 ? i : 25; };
+const isDrum = () => !!dev && !!dev.dump && dev.dump.engine >= dev.info.nengines;
 
 /* -------------------------------------------------------------- MIDI --- */
 async function connect() {
@@ -1501,8 +1807,9 @@ function disconnect(reasonKey = "disconnected") {
   dev = null;
   busy = 0;
   needReload = false;
-  $("ui").hidden = true;
-  $("ui").after($("libsec"));
+  renderPanels();
+  renderMixer();
+  renderSysinfo();
   renderLive();
   renderLib();
   renderBank();
@@ -1551,11 +1858,12 @@ async function load(d) {
     catch (e) { if (e.message === "closed") throw e; d.smp = null; }   /* older firmware, or no flash */
     d.keys = paramKeys(d.pdesc, d.info.pe0, d.info.pcount);
     await libAdopt(d);
+    if (d.info.ntrk) d.sel = parse[CMD.TRACK](await d.link.request(req.track())).sel;   /* v3: the selected track */
     d.dump = await getDump();
     buildUI();
-    $("ui").hidden = false;
-    $("ui").insertBefore($("libsec"), $("ctlhelp"));
+    renderPanels();
     await loadSteps();
+    if (d.info.ntrk) await readMixer();
     /* protocol v2: live pushes and the user bank; older firmware: DUMP polling, no bank */
     const rqd = (r, o) => d.link.request(r, o);
     d.watch = await startWatch(rqd);
@@ -1567,6 +1875,7 @@ async function load(d) {
     renderLive();
     renderLib();
     renderBank();
+    renderSysinfo();
     sayK("ready");
   } finally { busy--; }
 }
@@ -1593,16 +1902,61 @@ async function loadSteps() {
 function buildUI() {
   const sel = $("engine");
   sel.replaceChildren(...dev.info.engines.map((n, i) => el("option", { value: i, text: n })));
+  dev.mix = null;
   buildGroups();
   updateBrowser();
   renderSlots();
   renderSamples();
+  renderSysinfo();
+}
+
+/* the track selector (v3): T1..T3 synth parts, T4 the drum track; the editor shows the selected one */
+function renderTrackbar() {
+  const box = $("trackbtns");
+  const ntrk = hasTracks() ? dev.info.ntrk : 0;
+  if (box.children.length !== ntrk || box.dataset.lang !== lang) {
+    box.dataset.lang = lang;
+    box.replaceChildren(...Array.from({ length: ntrk }, (_, i) => el("button", { type: "button", "data-i": i,
+      onclick: () => selectTrack(i) }, `${i + 1}${i === ntrk - 1 ? " " + t("drum") : ""}`)));
+  }
+  for (const b of box.children) b.setAttribute("aria-pressed", +b.dataset.i === (dev.sel || 0) ? "true" : "false");
+}
+function selectTrack(i) {
+  if (!dev || !hasTracks() || i === dev.sel) return;
+  op(async () => {
+    dev.sel = parse[CMD.TRACK](await rq(req.track(i))).sel;
+    await afterSoundChange();
+  });
+}
+
+/* settings > system: what the device reported */
+function renderSysinfo() {
+  const box = $("sysinfo");
+  if (!dev || !dev.info) { box.replaceChildren(); return; }
+  const i = dev.info;
+  const rows = [
+    ["firmware", i.version], ["sync", t(dev.watch ? "live" : "polling")], ["enginesL", i.engines.join(", ")],
+    ["tracksN", i.ntrk ? String(i.ntrk) : "1"], ["stepsN", String(i.nstep)],
+    ["smpSlots", dev.smp ? `${dev.smp.nslots} × ${dev.smp.slotKiB} KiB` : t("none")],
+    ["userBank", dev.bank ? String(dev.bank.total) : t("none")],
+  ];
+  box.replaceChildren(...rows.map(([k, v]) => el("tr", {}, el("th", { text: t(k) }), el("td", { text: v }))));
 }
 
 function updateBrowser() {
   const e = dev.dump.engine;
   const sel = $("engine");
-  if (document.activeElement !== sel) sel.value = String(e);
+  const drum = e >= dev.info.nengines;              /* the drum track: no engine, no presets */
+  renderTrackbar();
+  sel.disabled = drum;
+  $("preset").disabled = drum;
+  $("init").disabled = drum;
+  $("factlib").disabled = drum;
+  $("drumnote").hidden = !drum;
+  $("browser").hidden = drum;
+  $("groups").hidden = drum;
+  $("ctlhelp").hidden = drum;
+  if (document.activeElement !== sel) sel.value = drum ? "" : String(e);
   const ps = $("preset");
   const names = dev.names[e] || [];
   if (ps.dataset.engine !== String(e)) {
@@ -1617,8 +1971,8 @@ function visible(d) { return d && d.max > d.min && d.label !== "-"; }
 function buildGroups() {
   ctl.clear();
   dev.built = dev.dump.engine;
-  const box = $("groups");
-  const groups = [];
+  /* Sound: the selected track's parameters; Sequencer: its pattern settings; Settings: globals and drums */
+  const groups = { groups: [], seqgroups: [], setgroups: [] };
   const { info } = dev;
   if (info.pcount === EXPECT.pcount && info.gcount === EXPECT.gcount && info.pe0 === EXPECT.pe0) {
     for (const g of LAYOUT(info.pe0)) {
@@ -1630,7 +1984,7 @@ function buildGroups() {
         if (g.pages.length > 1) div.append(el("h3", { ic: PAGE_IC[tt || title], text: tt || title }));
         div.append(...rows);
       }
-      groups.push(div);
+      groups[g.tab || "groups"].push(div);
     }
   } else {
     /* unknown firmware layout: everything in id order */
@@ -1639,9 +1993,10 @@ function buildGroups() {
     const c = el("div", { class: "group" }, el("h2", { ic: HEAD_IC.GLOBAL, text: "GLOBAL" }));
     for (let i = 0; i < info.pcount; i++) { const r = paramRow(0, i); if (r) (i >= info.pe0 ? b : a).append(r); }
     for (let i = 0; i < info.gcount; i++) { const r = paramRow(1, i); if (r) c.append(r); }
-    groups.push(a, b, c);
+    groups.groups.push(a, b);
+    groups.setgroups.push(c);
   }
-  box.replaceChildren(...groups);
+  for (const [id, divs] of Object.entries(groups)) $(id).replaceChildren(...divs);
 }
 
 function paramRow(s, id) {
@@ -1720,6 +2075,7 @@ function userSet(s, id, v, final) {
   const k = key(s, id);
   (s ? dev.dump.g : dev.dump.p)[id] = v;
   showValue(k, v, false);
+  mixFromDump();
   let st = sets.get(k);
   if (!st) sets.set(k, (st = { last: 0, sent: null }));
   st.last = performance.now();
@@ -1736,6 +2092,7 @@ async function sendSet(s, id, k) {
     if (dev && dragging !== k && st.sent === v && !dev.link.hasQueued(k)) {   /* the device's value after clamping */
       (s ? dev.dump.g : dev.dump.p)[id] = r.value;
       showValue(k, r.value, false);
+      mixFromDump();
     }
   } catch (e) { if (e.message !== "closed") console.warn(e); }
 }
@@ -1759,6 +2116,7 @@ async function afterSoundChange(msg = "ready") {
   updateBrowser();
   refreshAll();
   await loadSteps();                                /* a preset can bring a pattern */
+  if (hasTracks()) await readMixer();               /* the sound names and the selected strip */
   sayK(msg);
 }
 $("init").addEventListener("click", async () => {
@@ -1804,13 +2162,19 @@ async function project(op, slot) {
 /* ---------------------------------------------------------- steps --- */
 const TIMES = ["NOTE", "TIE", "REST"];
 function renderStepHead() { if (dev && dev.steps.length) renderSteps(); }
+const stepLen = () => Math.max(1, Math.min(dev.info.nstep, dev.dump.p[pSlen()] || 16));
+/* a step's notes as text: GM drum names on the drum track */
+const stepNotes = (s) => s.notes.slice(0, s.n).map(isDrum() ? drumName : noteName).join(" ");
 function renderSteps() {
   if (!dev || !dev.steps.length) return;
-  const len = Math.max(1, Math.min(dev.info.nstep, dev.dump.p[pSlen()] || 16));
+  const len = stepLen();
   const box = $("steptables");
+  const shape = len + (isDrum() ? "d" : "");
+  $("noteshelp").textContent = t(isDrum() ? "drumHelp" : "notesHelp");
+  renderGrid();
   /* keep the rows the user is typing in */
-  if (box.contains(document.activeElement) && box.dataset.len === String(len)) { updateStepRows(); return; }
-  box.dataset.len = String(len);
+  if (box.contains(document.activeElement) && box.dataset.len === shape) { updateStepRows(); return; }
+  box.dataset.len = shape;
   const tables = [];
   for (let b = 0; b < len; b += 16) {
     const tb = el("table", {}, el("tr", {}, el("th"), el("th", { text: t("notes") }), el("th", { text: t("time") }),
@@ -1841,7 +2205,7 @@ function stepRow(i) {
 function fillStep(tr, s) {
   const c = tr._c;
   if (!s) return;
-  c.notes.value = s.notes.slice(0, s.n).map(noteName).join(" ");
+  c.notes.value = stepNotes(s);
   c.notes.classList.remove("bad");
   c.time.value = String(s.time);
   c.acc.checked = !!(s.flags & 1);
@@ -1854,6 +2218,33 @@ function updateStepRows() {
     if (tr.contains(document.activeElement)) continue;
     fillStep(tr, dev.steps[+tr.dataset.i]);
   }
+  renderGrid();
+}
+/* the step grid: one cell per step up to LEN; a cell jumps to its row in the table */
+function renderGrid() {
+  const box = $("stepgrid");
+  if (!dev || !dev.steps.length) { box.replaceChildren(); return; }
+  const len = stepLen();
+  if (box.children.length !== len) {
+    box.replaceChildren(...Array.from({ length: len }, (_, i) => el("button", { type: "button", "data-i": i, onclick: () => focusStep(i) })));
+  }
+  for (const b of box.children) {
+    const i = +b.dataset.i, s = dev.steps[i];
+    const on = !!s && s.n > 0 && s.time === 0, tie = !!s && s.time === 1;
+    const txt = on ? stepNotes(s) : tie ? "—" : "";
+    const marks = s && on ? (s.flags & 1 ? " >" : "") + (s.flags & 2 ? " ~" : "") : "";
+    b.className = [on && "on", tie && "tie", on && s.flags & 1 && "acc", i % 4 === 0 && "beat"].filter(Boolean).join(" ");
+    b.title = `${i + 1}: ${on ? txt : tie ? "TIE" : "REST"}${marks}`;
+    b.replaceChildren(el("span", { class: "n", text: String(i + 1) + marks }), el("span", { class: "x", text: txt }));
+  }
+}
+function focusStep(i) {
+  const tr = $("steptables").querySelector(`tr[data-i="${i}"]`);
+  if (!tr) return;
+  tr.scrollIntoView({ block: "center", behavior: "smooth" });
+  tr._c.notes.focus({ preventScroll: true });
+  tr.classList.add("hl");
+  setTimeout(() => tr.classList.remove("hl"), 1200);
 }
 async function writeStep(i, tr) {
   const c = tr._c;
@@ -1939,10 +2330,8 @@ async function addFiles(k, list) {
 }
 
 function renderSamples() {
-  const sec = $("samples");
-  if (!dev || !dev.smp) { sec.hidden = true; return; }
-  sec.hidden = false;
-  const box = $("smpslots");
+  const box = $("smpslots");                        /* the tab says when there are no slots (renderPanels) */
+  if (!dev || !dev.smp) { box.replaceChildren(); return; }
   const max = SMP.MAX_DATA;
   box.replaceChildren(...dev.smp.slots.map((u, k) => {
     const d = smpDraft[k];
@@ -2055,16 +2444,199 @@ async function smpErase(k) {
   }
 }
 
+/* ---------------------------------------------------------- mixer (v3) --- */
+/* dev.mix = TRACK reply + pan per track ({sel, ntrk, tracks: [{engine, preset, level, mute, armed, pan}]}).
+   Read on connect, after every RELOAD / sound change, with the slow safety DUMP and when the tab opens.
+   The selected track's level / pan / mute are also Sound parameters: both views follow each other. */
+let mixDrag = null;                 /* "lv:i" / "pan:i" while a strip control is dragged */
+const mixEdit = new Map();          /* "lv:i" / "pan:i" -> time of the user's last change */
+const mixCtl = [];                  /* per track: the strip's elements */
+let panning = false;                /* another track is selected for a moment (pan of a track that is not selected) */
+const mixTouched = (kind, i) => mixDrag === `${kind}:${i}` || performance.now() - (mixEdit.get(`${kind}:${i}`) || 0) < 600
+  || (!!dev && kind === "lv" && dev.link.hasQueued("mix:" + i)) || (kind === "pan" && panWant.has(i));
+const drumTrack = (i) => !!dev && !!dev.mix && i === dev.mix.ntrk - 1;
+function trackName(x) {
+  if (x.engine >= dev.info.nengines) return "DRUM";
+  return [dev.info.engines[x.engine], (dev.names[x.engine] || [])[x.preset]].filter(Boolean).join(" ");
+}
+
+async function readMixer() {
+  const d = dev;
+  if (!d || !hasTracks()) return;
+  const m = await mixer.read(rq, d.info, { pan: pPan() });
+  if (d !== dev) return;
+  if (d.mix) m.tracks.forEach((x, i) => {           /* what the user is moving stays */
+    const o = d.mix.tracks[i];
+    if (!o) return;
+    if (mixTouched("lv", i)) { x.level = o.level; x.mute = o.mute; }
+    if (mixTouched("pan", i)) x.pan = o.pan;
+  });
+  d.mix = m;
+  if (m.sel !== d.sel && !panning) { d.sel = m.sel; needReload = true; }   /* selected on the device, push missed */
+  renderMixer();
+}
+
+/* the Sound view's values of the selected track (and the drum level, a global) -> the strips */
+function mixFromDump() {
+  if (!dev || !dev.mix || !dev.dump || panning) return;
+  const m = dev.mix, ds = m.ntrk - 1, x = m.tracks[dev.sel];
+  if (!mixTouched("lv", ds)) m.tracks[ds].level = dev.dump.g[gDrLvl()];
+  if (x) {
+    if (!mixTouched("lv", dev.sel)) {
+      if (dev.sel !== ds) x.level = dev.dump.p[P.LEVEL];
+      x.mute = dev.dump.p[pMute()] ? 1 : 0;
+    }
+    if (!mixTouched("pan", dev.sel)) x.pan = dev.dump.p[pPan()];
+  }
+  if (mixCtl.length === m.ntrk) m.tracks.forEach((_, i) => updateStrip(i));
+}
+/* a strip's values -> the Sound view (selected track; the drum level always) */
+function mixToSound(i) {
+  const x = dev.mix.tracks[i];
+  const put = (s, id, v) => { if (v == null) return; (s ? dev.dump.g : dev.dump.p)[id] = v; showValue(key(s, id), v, false); };
+  if (drumTrack(i)) put(1, gDrLvl(), x.level);
+  if (i !== dev.sel) return;
+  if (!drumTrack(i)) put(0, P.LEVEL, x.level);
+  put(0, pMute(), x.mute ? 1 : 0);
+  put(0, pPan(), x.pan);
+}
+
+function renderMixer() {
+  const box = $("mixer");
+  if (!dev || !dev.mix) { box.replaceChildren(); mixCtl.length = 0; return; }
+  const m = dev.mix;
+  if (mixCtl.length !== m.ntrk || box.dataset.lang !== lang) {
+    box.dataset.lang = lang;
+    mixCtl.length = 0;
+    box.replaceChildren(...m.tracks.map((_, i) => buildStrip(i)));
+  }
+  m.tracks.forEach((_, i) => updateStrip(i));
+}
+function buildStrip(i) {
+  const drum = drumTrack(i);
+  const lvDesc = (drum ? dev.gdesc[gDrLvl()] : dev.pdesc[P.LEVEL]) || { fmt: F.INT, min: 0, max: 127, def: 100 };
+  const pDesc = dev.pdesc[pPan()] || { fmt: F.BIPCT, min: -64, max: 63, def: 0 };
+  const fader = el("input", { type: "range", class: "fader", min: 0, max: 127, step: 1, "aria-label": `${t("level")} ${i + 1}` });
+  fader.addEventListener("pointerdown", () => { mixDrag = "lv:" + i; });
+  fader.addEventListener("input", () => setLevel(i, +fader.value));
+  fader.addEventListener("change", () => setLevel(i, +fader.value));
+  fader.addEventListener("dblclick", () => setLevel(i, Math.max(0, Math.min(127, lvDesc.def))));
+  const pan = el("input", { type: "range", class: "pan", min: pDesc.min, max: pDesc.max, step: 1, "aria-label": `${t("pan")} ${i + 1}` });
+  pan.addEventListener("pointerdown", () => { mixDrag = "pan:" + i; });
+  pan.addEventListener("input", () => setPan(i, +pan.value, false));
+  pan.addEventListener("change", () => setPan(i, +pan.value, true));
+  pan.addEventListener("dblclick", () => setPan(i, pDesc.def, true));
+  const c = {
+    lvDesc, pDesc, fader, pan,
+    num: el("button", { type: "button", class: "tog num", title: t("selectTrack"), onclick: () => selectTrack(i) }, String(i + 1)),
+    snd: el("div", { class: "snd" }),
+    rec: el("span", { class: "rec", ic: "control_rec_f", title: t("rec") }, t("rec")),
+    lvOut: el("span", { class: "v lv" }),
+    mute: el("button", { type: "button", class: "tog", ic: "control_speaker_mute", onclick: () => setMute(i, !dev.mix.tracks[i].mute) }, t("mute")),
+    panOut: el("span", { class: "v" }),
+    selb: el("button", { type: "button", class: "selb", onclick: () => selectTrack(i) }),
+  };
+  c.strip = el("div", { class: "strip", role: "group", "aria-label": `${t("track")} ${i + 1}` },
+    c.num, c.snd, c.rec, fader, c.lvOut, c.mute, el("span", { class: "v dim", ic: "symbol_pan" }, t("pan")), pan, c.panOut, c.selb);
+  mixCtl[i] = c;
+  return c.strip;
+}
+function updateStrip(i) {
+  const c = mixCtl[i], x = dev && dev.mix && dev.mix.tracks[i];
+  if (!c || !x) return;
+  const sel = i === dev.sel;
+  c.strip.classList.toggle("sel", sel);
+  c.num.setAttribute("aria-pressed", sel ? "true" : "false");
+  const nm = trackName(x);
+  c.snd.textContent = nm;
+  c.snd.title = nm;
+  if (!mixTouched("lv", i)) c.fader.value = String(x.level);
+  const [lt, lu] = fmtValue(c.lvDesc, x.level);
+  c.lvOut.textContent = lu ? `${lt} ${lu}` : lt;
+  c.mute.setAttribute("aria-pressed", x.mute ? "true" : "false");
+  c.strip.classList.toggle("muted", !!x.mute || !x.level);
+  c.pan.disabled = x.pan == null;
+  if (x.pan != null) {
+    if (!mixTouched("pan", i)) c.pan.value = String(x.pan);
+    const [pt, pu] = fmtValue(c.pDesc, x.pan);
+    c.panOut.textContent = pu ? `${pt} ${pu}` : pt;
+  }
+  c.rec.classList.toggle("on", !!x.armed);
+  c.selb.disabled = sel;
+  c.selb.textContent = t(sel ? "selectedTrack" : "selectTrack");
+}
+window.addEventListener("pointerup", () => { mixDrag = null; });
+window.addEventListener("pointercancel", () => { mixDrag = null; });
+
+/* level and mute: TRACK_MIX, one in flight per track and one queued with the latest values (as SET) */
+function setLevel(i, v) {
+  if (!dev || !dev.mix) return;
+  dev.mix.tracks[i].level = v;
+  mixEdit.set("lv:" + i, performance.now());
+  updateStrip(i);
+  mixToSound(i);
+  sendMix(i);
+}
+function setMute(i, on) {
+  if (!dev || !dev.mix) return;
+  dev.mix.tracks[i].mute = on ? 1 : 0;
+  mixEdit.set("lv:" + i, performance.now());
+  updateStrip(i);
+  mixToSound(i);
+  sendMix(i);
+}
+async function sendMix(i) {
+  const d = dev, x = d.mix.tracks[i];
+  try {
+    const r = await mixer.setMix(rq, i, x.level, x.mute, { key: "mix:" + i });
+    if (d !== dev || !d.mix || mixDrag === "lv:" + i || d.link.hasQueued("mix:" + i)) return;
+    const y = d.mix.tracks[i];                      /* the device's values after clamping */
+    y.level = r.level; y.mute = r.mute;
+    updateStrip(i);
+    mixToSound(i);
+  } catch (e) { report(e); }
+}
+/* pan: the selected track as any Sound parameter; another track on release (it is selected for a moment) */
+const panWant = new Map();
+function setPan(i, v, final) {
+  if (!dev || !dev.mix) return;
+  dev.mix.tracks[i].pan = v;
+  mixEdit.set("pan:" + i, performance.now());
+  updateStrip(i);
+  if (i === dev.sel) { userSet(0, pPan(), v, final); return; }
+  if (final) panOther(i, v);
+}
+async function panOther(i, v) {
+  panWant.set(i, v);
+  if (panOther.run) return;
+  panOther.run = true;
+  const d = dev;
+  try {
+    while (busy && d === dev) await sleep(20);      /* not in the middle of another multi-request operation */
+    busy++;
+    panning = true;
+    try {
+      while (panWant.size && d === dev) {
+        const [tr, val] = panWant.entries().next().value;
+        panWant.delete(tr);
+        const r = await mixer.setPan(rq, tr, d.sel, pPan(), val);
+        if (d.mix && !panWant.has(tr)) { d.mix.tracks[tr].pan = r; updateStrip(tr); }
+      }
+    } finally { panning = false; busy--; }
+  } catch (e) { report(e); } finally { panOther.run = false; panWant.clear(); }
+}
+
 /* ------------------------------------------------- live sync / polling --- */
 /* With WATCH (protocol v2) the device pushes CHANGED / RELOAD / STEP_CHANGED; the editor PINGs about
    once a second so the watch stays on (it ends 3 s after the last request), and DUMPs every 5 s as a
-   safety net. Older firmware: DUMP every 400 ms and two steps per round, as before. */
+   safety net. Older firmware: DUMP every 400 ms and two steps per round. */
 function onPush(f) {
   const d = dev;
   if (!d || !d.dump || !d.info) return;
   try {
     if (f.cmd === CMD.CHANGED) {
       const c = parse[CMD.CHANGED](f.a);
+      if (panning && !c.scope) return;              /* about the track selected for a moment, not ours */
       const arr = c.scope ? d.dump.g : d.dump.p;
       if (c.id >= arr.length) return;
       const k = key(c.scope, c.id);
@@ -2073,8 +2645,10 @@ function onPush(f) {
       arr[c.id] = c.value;
       showValue(k, c.value, false);
       blink(k);
+      mixFromDump();
       if (!c.scope && c.id === pSlen() && old !== c.value) { $("steptables").dataset.len = ""; renderSteps(); }
     } else if (f.cmd === CMD.RELOAD) {
+      d.sel = parse[CMD.RELOAD](f.a).track;          /* v3: another track may be selected on the device */
       if (selfReload.n > 0 && Date.now() < selfReload.until) { selfReload.n--; return; }
       needReload = true;
       maybeReload();
@@ -2157,6 +2731,7 @@ setInterval(async () => {
     }
     d.dump = dump;
     if (engineChanged) await rereadEngineDesc();
+    if (hasTracks()) await readMixer();             /* the strips (other tracks push nothing) */
     if (soundChanged) { updateBrowser(); await loadSteps(); sayK("ready"); return; }
     if (dump.p[pSlen()] !== oldLen) { $("steptables").dataset.len = ""; renderSteps(); }
     if (d.watch) return;                            /* steps come as STEP_CHANGED */
@@ -2382,10 +2957,12 @@ function renderLib() {
 
 function renderBank() {
   const pane = $("bankpane");
+  $("bankhint").hidden = !!(dev && dev.bank);
+  $("bankhint").textContent = t(!dev || !dev.dump ? "bankConnect" : "bankNone");
   if (!dev || !dev.bank) { pane.hidden = true; return; }
   pane.hidden = false;
   const b = dev.bank, used = b.slots.filter((x) => x.used).length;
-  $("bankhead").textContent = `${t("bank")} (${used} / ${b.total})`;
+  $("bankhead").textContent = `${used} / ${b.total} ${t("used")}`;
   const tb = el("table", {}, el("colgroup", {}, el("col", { class: "n" }), el("col"), el("col", { class: "e" })),
     el("tr", {}, el("th", { text: "#" }), el("th", { text: t("name") }), el("th", { text: t("engine") })));
   for (const x of b.slots) {
@@ -2630,6 +3207,7 @@ $("connect").addEventListener("click", () => {
   if (dev) { wantConnected = false; disconnect(); } else connect();
 });
 applyLang();
+showTab(tab);
 libInit();
 if (!MOCK && !navigator.requestMIDIAccess) sayK("nomidi");
 })();
