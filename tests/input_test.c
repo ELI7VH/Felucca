@@ -11,14 +11,33 @@
  *     release each, no note ending while the key is held, none hanging 12 ms after the last bounce;
  *   - a stray closed sample (a 150 us glitch) plays nothing;
  *   - fast repeats (40 ms apart) are all heard;
- *   - the encoders still count one step per detent (their decoder is not touched).
+ *   - the encoders still count one step per detent (their decoder is not touched);
+ *   - the LED scan through fm1_input_tick: lit LEDs all of their tick, dim ones a pulse over the start of the
+ *     595 shift (no wait) that settles to FM1_LED_DIM_NS +-30 % on every column whatever the bus speed, every
+ *     frame, each only on its own column, the lines dark at every latch; the cost of a tick.
  * The GPIO / timer helpers of the header are compiled, never called. */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 static uint32_t host_now;                          /* TIMER4 ticks (24 MHz) */
 #define FM1_INPUT_NOW() host_now
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
+#include "../firmware/hal/fm1_time.h"
+#include "../firmware/hal/fm1_gpio.h"
+static volatile uint32_t host_reg[16][64];        /* the GPIO registers, as memory (the LED test below) */
+static uint32_t host_step = 2400u;                /* TIMER4 ticks per read of the clock (the LED test: finer) */
+static uint32_t host_ticks(void) { return host_now += host_step; }
+/* every write of the LED lines (fm1__led_lines), with the time it happened */
+#define LED_NW 8
+static uint32_t led_w[LED_NW], led_wt[LED_NW], led_nw, led_now, latch_lit, latches;
+#define FM1_LED_TRACE(m) (led_now = (m), led_nw < LED_NW ? (led_wt[led_nw] = host_now, led_w[led_nw++] = (m)) : 0u)
+#define FM1_SR_LATCH_TRACE() (latches++, latch_lit |= led_now)   /* the lines at the 595 latch: dark */
+/* the GPIO as memory; each access costs host_bus TIMER4 ticks (the LED test: the bus time of the 595 shift) */
+static uint32_t host_bus;
+#undef FM1_PR
+#define FM1_PR(p, r) (*(host_now += host_bus, &host_reg[(p) & 15u][((r) / 4u) & 63u]))
+#define fm1_ticks host_ticks
 #include "../firmware/hal/fm1_input.h"
 
 #define TICK_US 100u
@@ -287,6 +306,109 @@ int main(void)
         s = fm1_in.enc_steps[0];
         printf("encoder 0: one cycle -> %d step(s)\n", (int)s);
         check("an encoder detent cycle is one step", s == 1 || s == -1);
+    }
+
+    {   /* the LEDs through fm1_input_tick (the GPIO as memory): each tick writes the lines dark (the key read),
+         * then, a dim-only LED on column p: lit | dim of p, the first bits of the shift, dark; the rest of the shift,
+         * the latch (the lines dark), the lit LEDs of column n. Over bus speeds from 0 (the shift shorter than the
+         * pulse: the rest waited) to 4 TIMER4 ticks an access (a bit ~1 us): the pulse within 30 % of
+         * FM1_LED_DIM_NS on every column once settled, nothing of another column, ever */
+        static const uint32_t BUS[] = {0u, 1u, 2u, 4u};
+        uint32_t bi;
+        for (bi = 0; bi < sizeof BUS / sizeof BUS[0]; bi++) {
+            uint32_t t, col, prev, lit[FM1_NCOL][5], dimw[FM1_NCOL][5], frames = 400u, bad = 0, badw = 0, r;
+            uint32_t pulse_min[FM1_NCOL], pulse_max = 0, pulses = 0, waits = 0, kmin = 16u, kmax = 0u, c, pmin = ~0u;
+            const uint32_t T = (FM1_LED_DIM_NS * FM1_TICKS_PER_US + 500u) / 1000u;
+            char what[96];
+            memset(lit, 0, sizeof lit);
+            memset(dimw, 0, sizeof dimw);
+            for (c = 0; c < FM1_NCOL; c++)
+                pulse_min[c] = ~0u;
+            reset();
+            FM1_PR(FM1_PA, FM1_IN) = FM1_PR(FM1_PB, FM1_IN) = 0xFFFFFFFFu;   /* rows open */
+            memset(fm1_led, 0, sizeof fm1_led);
+            memset(fm1_led_dim, 0, sizeof fm1_led_dim);
+            fm1_led[3] = 1u << 2;                     /* lit: column 3 row 2 */
+            fm1_led_dim[3] = 1u << 2 | 1u << 4;       /* dim: column 3 rows 2 (also lit) and 4 */
+            fm1_led_dim[4] = 0x1Eu;                   /* the next column: every row dim */
+            fm1_led_dim[10] = 1u << 1;
+            fm1_led_dim[0] = 1u << 3;
+            fm1_led[7] = 1u << 3;                     /* a column with a lit LED and no dim one */
+            host_step = 1u;                           /* a clock read: 1 tick (~42 ns) */
+            host_bus = BUS[bi];
+            latch_lit = latches = 0;
+            for (t = 0; t < frames * FM1_NCOL; t++) {
+                uint32_t want, d;
+                prev = fm1__tick_col;
+                led_nw = 0;
+                fm1_input_tick();
+                col = fm1__tick_col;
+                want = fm1_led[col];
+                d = fm1_led_dim[prev] & ~fm1_led[prev];
+#if FM1_LED_DIM_DIV > 1
+                if (fm1__dim_ph)                      /* (frames skipped: not the dim LEDs' turn) */
+                    d = 0;
+#endif
+                /* the writes: 0 (the key read), [lit | dim of p, 0 (the pulse)], lit of n */
+                badw += led_nw != (d ? 4u : 2u) || led_w[0] != 0u || led_w[led_nw - 1u] != want ||
+                        (d && (led_w[1] != (fm1_led[prev] | d) || led_w[2] != 0u));
+                if (d) {
+                    uint32_t wt = led_wt[2] - led_wt[1];
+                    bad += (led_w[1] & ~(uint32_t)(fm1_led[prev] | fm1_led_dim[prev])) != 0u;   /* column p's only */
+                    pulses++;
+                    if (t >= 20u * FM1_NCOL) {            /* settled (20 frames; 4 dim columns here) */
+                        pulse_min[prev] = wt < pulse_min[prev] ? wt : pulse_min[prev];
+                        pulse_max = wt > pulse_max ? wt : pulse_max;
+                        pmin = wt < pmin ? wt : pmin;
+                        kmin = fm1__dim_k < kmin ? fm1__dim_k : kmin;
+                        kmax = fm1__dim_k > kmax ? fm1__dim_k : kmax;
+                    }
+                    for (r = 1; r < 5u; r++)
+                        dimw[prev][r] += (d >> r) & 1u;
+                }
+                bad += (want & ~(uint32_t)fm1_led[col]) != 0u;   /* column n's lit only */
+                for (r = 1; r < 5u; r++)
+                    lit[col][r] += (led_w[led_nw - 1u] >> r) & 1u;
+            }
+            waits = kmax == 16u;
+            for (c = 0; c < FM1_NCOL; c++)
+                bad += pulse_min[c] != ~0u && (pulse_min[c] * 10u < T * 7u);
+            snprintf(what, sizeof what, "LEDs, bus %u tick(s) an access: lit every frame, own column only, dark at the latch",
+                     (unsigned)host_bus);
+            check(what, !bad && !badw && !latch_lit && latches == frames * FM1_NCOL && lit[3][2] == frames &&
+                  lit[7][3] == frames && !lit[2][2] && !lit[3][4] && !lit[4][1]);
+            snprintf(what, sizeof what, "  dim: a pulse every frame on its own column, %u..%u ns (target %u +-30 %%)",
+                     (unsigned)(pmin * 1000u / FM1_TICKS_PER_US), (unsigned)(pulse_max * 1000u / FM1_TICKS_PER_US),
+                     (unsigned)FM1_LED_DIM_NS);
+            check(what, pulses == frames / FM1_LED_DIM_DIV * 4u && dimw[3][4] == frames / FM1_LED_DIM_DIV &&
+                  dimw[4][1] == frames / FM1_LED_DIM_DIV && dimw[4][4] == frames / FM1_LED_DIM_DIV &&
+                  dimw[10][1] == frames / FM1_LED_DIM_DIV && dimw[0][3] == frames / FM1_LED_DIM_DIV &&
+                  !dimw[3][2] && !dimw[5][1] && !dimw[9][1] && !dimw[7][3] &&
+                  pmin * 10u >= T * 7u && pulse_max * 10u <= T * 13u);
+            printf("LEDs, bus %u: the pulse spans %u..%u bits of the shift%s\n", (unsigned)host_bus, (unsigned)kmin,
+                   (unsigned)kmax, waits ? " (the shift shorter than the pulse: the rest waited)" : " (no wait)");
+        }
+        host_bus = 0;
+        host_step = 2400u;
+        printf("LEDs: refresh %u Hz lit, %u Hz dim\n", (unsigned)(1000000u / (FM1_NCOL * TICK_US)),
+               (unsigned)(1000000u / (FM1_NCOL * TICK_US * FM1_LED_DIM_DIV)));
+        {   /* the host cost of a tick, the dim LEDs on and off (no bus time: the shift waits out the pulse) */
+            uint32_t k, t, n = 2000000u;
+            double ns[2];
+            host_step = 1000u;                       /* (the clock far ahead on each read: no wait on the host) */
+            for (k = 0; k < 2u; k++) {
+                clock_t c0;
+                memset(fm1_led_dim, k ? 0x1E : 0, sizeof fm1_led_dim);
+                c0 = clock();
+                for (t = 0; t < n; t++) {
+                    led_nw = 0;
+                    fm1_input_tick();
+                }
+                ns[k] = (double)(clock() - c0) * 1e9 / CLOCKS_PER_SEC / n;
+            }
+            host_step = 2400u;
+            printf("LEDs: host %.1f ns per tick without dim LEDs, %.1f ns with\n", ns[0], ns[1]);
+        }
     }
 
     if (fails) {

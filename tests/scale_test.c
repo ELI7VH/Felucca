@@ -129,10 +129,153 @@ static void key_events_test(void)
     puts("scales: silent keys, arp, live recording, MIDI out and held-note changes ok");
 }
 
+/* the voices of t holding a note (gate on), and whether note n is one of them */
+static uint32_t gated(const track_t *t)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < NVOICE; i++)
+        n += t->v[i].gate != 0;
+    return n;
+}
+static int gated_note(const track_t *t, uint32_t note)
+{
+    uint32_t i;
+    for (i = 0; i < NVOICE; i++)
+        if (t->v[i].gate && t->v[i].note == note)
+            return 1;
+    return 0;
+}
+
+/* a voice of t held (gate on) by a note the sequencer does not hold: a note-off that will never come */
+static int stray(const track_t *t)
+{
+    uint32_t i, k;
+    for (i = 0; i < NVOICE; i++) {
+        if (!t->v[i].gate)
+            continue;
+        for (k = 0; k < t->seq_n && t->seq_notes[k] != t->v[i].note; k++)
+            ;
+        if (k == t->seq_n)
+            return 1;
+    }
+    return 0;
+}
+
+/* QNT SEQ (#37): the sequencer's notes snap to the scale as they play, the steps stay as written; a scale
+ * changed while notes ring ends exactly the notes that sounded (no stuck notes); drum kits never snap */
+static void seq_quant_test(void)
+{
+    track_t *t = &trk[0];
+    uint32_t period, i;
+    static const step_t STEPS[] = {
+        {.note = {61, 64}, .n = 2, .time = ST_NOTE},  /* C#4 E4: C major -> C4 E4 */
+        {.note = {66}, .n = 1, .time = ST_NOTE},      /* F#4 -> F4 */
+        {.note = {61}, .n = 1, .time = ST_NOTE},      /* held through two TIEs */
+        {.time = ST_TIE},
+        {.time = ST_TIE},
+        {.note = {61, 60}, .n = 2, .time = ST_NOTE},  /* both snap to C4: one note */
+        {.time = ST_REST},
+    };
+    memset(trk, 0, sizeof trk);
+    memset(&song, 0, sizeof song);
+    host_tracks_init();
+    song.g[G_BPM] = 120;
+    host_preset(t, 0, 0);                          /* ANALOG, POLY */
+    t->engine = t->eng_req = 0;
+    t->p[P_VOICE] = V_POLY;
+    t->p[P_SLEN] = (int16_t)NELEM(STEPS);
+    for (i = 0; i < NELEM(STEPS); i++)
+        t->step[i] = STEPS[i];
+    t->seq_active = 1;
+    t->p[P_SCALE] = 1;                             /* C major */
+    t->p[P_ROOT] = 0;
+    period = div_samples((uint32_t)t->p[P_SDIV]);
+
+    t->p[P_QUANT] = 0;                             /* OFF and SNAP: the sequence plays as written */
+    seq_start();
+    events_block(CTL);
+    assert(t->seq_n == 2 && t->seq_notes[0] == 61 && t->seq_notes[1] == 64 && gated_note(t, 61));
+    seq_stop();
+    t->p[P_QUANT] = 1;
+    seq_start();
+    events_block(CTL);
+    assert(t->seq_n == 2 && t->seq_notes[0] == 61 && gated_note(t, 61));
+    seq_stop();
+    assert(gated(t) == 0);
+
+    t->p[P_QUANT] = 3;                             /* SEQ */
+    seq_start();
+    events_block(CTL);
+    assert(t->seq_n == 2 && t->seq_notes[0] == 60 && t->seq_notes[1] == 64 && gated_note(t, 60) &&
+           gated_note(t, 64) && !gated_note(t, 61) && gated(t) == 2);
+    assert(t->step[0].note[0] == 61 && t->step[0].note[1] == 64);   /* stored as written */
+    t->p[P_SCALE] = 2;                             /* C minor while C4 E4 ring: E4 would be Eb4 now */
+    events_block(period);                          /* the gate ends them, step 2 plays F#4 -> F4 */
+    assert(!gated_note(t, 60) && !gated_note(t, 64) && !gated_note(t, 63));
+    assert(t->seq_idx == 1 && t->seq_n == 1 && t->seq_notes[0] == 65 && gated(t) == 1);
+    events_block(period);                          /* step 3: C#4 -> C4, held into the TIEs */
+    assert(t->seq_idx == 2 && t->seq_n == 1 && t->seq_notes[0] == 60 && gated_note(t, 60) && gated(t) == 1);
+    t->p[P_SCALE] = 0;                             /* CHR while it is held: C#4 itself now, but C4 sounds */
+    events_block(period);
+    t->p[P_ROOT] = 1;                              /* and a new root */
+    t->p[P_SCALE] = 1;
+    events_block(period);
+    assert(t->seq_idx == 4 && gated_note(t, 60) && gated(t) == 1);
+    t->p[P_ROOT] = 0;
+    events_block(period);                          /* step 6: C#4 and C4 both C4 now: one note, C4 retriggered */
+    assert(t->seq_idx == 5 && t->seq_n == 1 && t->seq_notes[0] == 60 && gated(t) == 1);
+    t->p[P_SCALE] = 5;                             /* PEN while it rings */
+    events_block(period);                          /* REST: released */
+    assert(t->seq_idx == 6 && t->seq_n == 0 && gated(t) == 0);
+    events_block(period);                          /* round again, then stop with notes sounding */
+    assert(t->seq_idx == 0 && gated(t) == 2 && gated_note(t, 60) && gated_note(t, 64));
+    t->p[P_SCALE] = 2;
+    seq_stop();
+    assert(gated(t) == 0);
+    for (i = 0; i < NELEM(STEPS); i++)
+        assert(!memcmp(&t->step[i], &STEPS[i], sizeof STEPS[i]));
+
+    /* a scale change on every block for a while, slides and TIEs included: nothing left held */
+    t->step[1].flags = SF_SLIDE;
+    seq_start();
+    for (i = 0; i < 4000u; i++) {
+        t->p[P_SCALE] = (int16_t)(i * 7u % 16u);
+        t->p[P_ROOT] = (int16_t)(i * 5u % 12u);
+        events_block(CTL);
+        assert(!stray(t));
+    }
+    seq_stop();
+    assert(gated(t) == 0 && t->seq_n == 0);
+    t->step[1].flags = 0;
+
+    /* drum kits and the DRUM engine never snap: their notes are GM drums */
+    host_preset(t, ENGI_DRUM, 0);
+    t->engine = t->eng_req = ENGI_DRUM;
+    t->p[P_SCALE] = 1;
+    t->p[P_ROOT] = 0;
+    t->step[0] = (step_t){.note = {37, 39}, .n = 2, .hit = 1u << 0, .time = ST_NOTE};
+    seq_start();
+    events_block(CTL);
+    assert(t->seq_n == 3 && t->seq_notes[0] == 37 && t->seq_notes[1] == 39 && t->seq_notes[2] == DRUM_LANE_NOTE[0]);
+    seq_stop();
+    if (smp_perc_set() >= 0) {
+        host_preset(t, 4, 0);
+        t->engine = t->eng_req = 4;
+        t->p[P_E0] = (int16_t)smp_perc_set();
+        seq_start();
+        events_block(CTL);
+        assert(t->seq_n == 3 && t->seq_notes[0] == 37 && t->seq_notes[1] == 39);
+        seq_stop();
+    }
+    assert(gated(t) == 0);
+    puts("scales: QNT SEQ snaps the sequence as it plays (steps unchanged), no stuck notes over scale changes, kits never");
+}
+
 int main(void)
 {
     host_tracks_init();
     mapping_test();
     key_events_test();
+    seq_quant_test();
     return 0;
 }

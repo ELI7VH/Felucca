@@ -5,7 +5,7 @@
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.0 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
+**TL;DR:** Felucca 1.0.1 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
 open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back.
@@ -41,6 +41,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **Presets:** factory presets, 32 user preset slots and 4 projects, named on the device;
   projects from every earlier version load
 - **Screen:** flat UI with Inter Tight and Fukiai icons, 8 palettes including grayscale and high contrast
+- **LEDs:** idle buttons and keys glow dim so the panel can be found in the dark (MENU > LEDS INV: the
+  official firmware's look); PLAY turns green while playing; the keys show the notes the sequencer plays
 - **USB:** class-compliant MIDI in and out, and a 44.1 kHz stereo audio input ("Felucca") that
   records the master output on the computer, no driver needed
 - **MIDI:** USB and TRS MIDI in; channels 1–4 play tracks 1–4 (other channels the selected track),
@@ -94,7 +96,9 @@ On the **SCL** page, set **QNT** to WHITE to play the selected scale using only 
 white keys (SNAP keeps every key and rounds it down to the scale). C4 plays **ROOT**; consecutive white keys play consecutive scale notes
 above and below it. Black keys are silent, including during live recording and
 step entry. **TRN** transposes the resulting notes; the octave buttons shift them
-by full octaves. Set QNT to OFF for the normal chromatic keyboard.
+by full octaves. Set QNT to OFF for the normal chromatic keyboard. QNT SEQ snaps the keys like SNAP and
+also maps the sequenced notes onto the current ROOT / SCALE as they play (the steps are not changed; drum
+kits are never quantized).
 
 Available scales: chromatic (CHR), major (MAJ), natural minor (MIN), Dorian (DOR),
 Mixolydian (MIX), major pentatonic (PEN), minor pentatonic (MPEN), harmonic minor

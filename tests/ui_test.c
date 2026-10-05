@@ -37,7 +37,7 @@ static uint32_t host_slots[3u * 0x14000u / 4u];          /* USR1..3 (zero: empty
 /* ------------------------------------------------------------ HAL stubs --- */
 #define FM1_NCOL 11u
 static const int8_t FM1_KEYMAP[6][FM1_NCOL];
-static uint8_t fm1_led[FM1_NCOL];
+static uint8_t fm1_led[FM1_NCOL], fm1_led_dim[FM1_NCOL];
 #define FM1_TICKS_PER_US 1u
 static uint32_t host_ticks, host_pressed, host_notes;
 static int32_t host_enc[7];
@@ -1725,8 +1725,8 @@ static int test_product_ux(void)
     memset(led_pos, 0xFF, sizeof led_pos);
     led_pos[panel.btn[B_PLAY]] = 1; led_pos[panel.btn[B_REC]] = 2;
     song.playing = song.rec = 1; ok = 1;
-    for (i = 0; i < 120u; i++) { fm1_ms += 17; ui_leds(); ok &= (fm1_led[0] & 6u) == 6u; }
-    bad += check("PLAY and REC LEDs stay lit across time and audio block phase", ok);
+    for (i = 0; i < 120u; i++) { fm1_ms += 17; ui_leds(); ok &= (fm1_led[0] & 6u) == 4u && (fm1_led[8] & 2u); }
+    bad += check("PLAY's green and REC LEDs stay lit across time and audio block phase", ok);
     led_pos_init();
     ok = 1;
     for (p = 0; p < NPALETTES; p++) for (b = 0; b < 1u; b++) {
@@ -1838,6 +1838,26 @@ static int test_layer(void)
         p.magic = PERSIST_MAGIC; p.panel = panel;
         settings_export(&p); settings_hold = HOLD_DEF;
         bad += check("  HOLD is saved with the settings and read back", settings_import(&p, sizeof p) && settings_hold == 3u);
+    }
+    /* the LEDS setting: KNOB 1 right INV, left DIM; OCT+ toggles; saved in the retired zoom field */
+    ui_power_on();
+    hold(B_HOME); ui.menu_sel = MI_LEDS;
+    ok = settings_leds == LEDS_DIM;
+    turn(EN_K1, 1); ok &= settings_leds == LEDS_INV;
+    turn(EN_K1, 1); ok &= settings_leds == LEDS_INV;
+    turn(EN_K1, -1); ok &= settings_leds == LEDS_DIM;
+    press(B_OCTUP); ok &= settings_leds == LEDS_INV && ui.menu == 1u;
+    hold(B_HOME);
+    bad += check("menu LEDS: DIM by default, KNOB 1 right INV / left DIM, OCT+ toggles", ok && !ui.menu);
+    {
+        persist_t p = {0};
+        p.magic = PERSIST_MAGIC; p.panel = panel;
+        settings_export(&p); settings_leds = LEDS_DIM;
+        ok = p.zoom == (LEDS_TAG | LEDS_INV) && settings_import(&p, sizeof p) && settings_leds == LEDS_INV;
+        settings_leds = LEDS_DIM;
+        settings_export(&p);
+        bad += check("  LEDS is saved with the settings and read back; DIM saves the field as before (0)",
+                     ok && p.zoom == 0u && settings_import(&p, sizeof p) && settings_leds == LEDS_DIM);
     }
     /* combo: a key with FX: at once, silent, no MIDI, no recording, no step */
     ui_power_on();
@@ -3381,6 +3401,170 @@ static int test_fm4_retired(void)
 }
 #endif
 
+/* #38: the keys of the notes the selected track's sequencer and ARP sound light while it plays */
+static int test_play_leds(void)
+{
+    int bad = 0, ok;
+    track_t *t = &trk[0];
+    uint32_t i;
+    ui_power_on();
+    song.sel = 0;
+    t->step[0] = (step_t){.note = {60, 64}, .n = 2, .time = ST_NOTE};
+    t->step[1] = (step_t){.note = {100}, .n = 1, .time = ST_NOTE};
+    trk[1].step[0] = (step_t){.note = {67}, .n = 1, .time = ST_NOTE};
+    t->seq_active = trk[1].seq_active = 1;
+    bad += check("stopped, nothing held: no key lit", key_leds() == 0u && play_leds() == 0u);
+    seq_start();
+    events_block(CTL);
+    bad += check("playing: C4 and E4 of step 1 light keys 8 and 12 (from F3), track 2's G4 does not",
+                 t->seq_n == 2u && trk[1].seq_n == 1u && key_leds() == (1u << 7 | 1u << 11));
+    song.sel = 1;
+    bad += check("the selected track's notes: track 2's G4 on key 15", play_leds() == 1u << 14);
+    song.sel = 0;
+    fm1_in.notes = 1u << 0;
+    bad += check("a key held still lights with them", key_leds() == (1u << 0 | 1u << 7 | 1u << 11));
+    fm1_in.notes = 0;
+    song.octave = -1;
+    ok = play_leds() == (1u << 19 | 1u << 23);
+    song.octave = 1;
+    ok &= play_leds() == 0u;                           /* (C4 and E4 below the keys an octave up) */
+    song.octave = 0;
+    t->p[P_TRANS] = 2;
+    ok &= play_leds() == (1u << 5 | 1u << 9);
+    t->p[P_TRANS] = 0;
+    bad += check("the keys follow the octave and TRN; notes off the keyboard are not shown", ok);
+    t->p[P_QUANT] = 1;                                 /* SNAP in C major: C#4 rounds down to C4 too */
+    t->p[P_SCALE] = 1;
+    t->p[P_ROOT] = 0;
+    ok = kb_map(t, 8) == 60u && play_leds() == (1u << 7 | 1u << 11);
+    t->p[P_QUANT] = t->p[P_SCALE] = 0;
+    bad += check("QNT SNAP: only the key of the note itself lights, not the keys rounding onto it", ok);
+    t->arp_note = 65;
+    bad += check("the ARP's note lights its key too", play_leds() == (1u << 7 | 1u << 11 | 1u << 12));
+    t->arp_note = 0;
+    events_block(div_samples((uint32_t)t->p[P_SDIV]) + CTL);
+    bad += check("a note above the keyboard (G#7) lights nothing", t->seq_n == 1u && t->seq_notes[0] == 100u &&
+                 play_leds() == 0u);
+    transport_req = 2;
+    events_block(CTL);
+    bad += check("stopped: the notes end, their keys go dark", !song.playing && key_leds() == 0u);
+    /* the layer, the grid and NAME keep their keys */
+    seq_start();
+    events_block(CTL);
+    ui.layer = 1;
+    ok = key_leds() == layer_leds();
+    ui.layer = 0;
+    set_engine_of(t, ENGI_DRUM);
+    t->engine = t->eng_req;
+    t->step[0] = (step_t){.hit = 1u << DV_KICK, .time = ST_NOTE};
+    transport_req = 2; events_block(CTL);
+    seq_start(); events_block(CTL);
+    i = play_leds();
+    ok &= t->seq_n == 1u && i != 0u && kb_map(t, (uint32_t)__builtin_ctz(i)) == DRUM_LANE_NOTE[DV_KICK];
+    open_family(FAM_SEQ);
+    frame();
+    ok &= grid_on() && key_leds() == grid_leds();
+    bad += check("the layer's map and the DRUM grid keep their keys; elsewhere a kit's hits light the keys that play them", ok);
+    transport_req = 2; events_block(CTL);
+    return bad;
+}
+
+/* #35: every idle button and key glows dim, the active ones are lit; a map of the keys' own stays lit / dark */
+static int test_idle_glow(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    ui_leds();
+    memset(led_pos, 0xFF, sizeof led_pos);
+    led_pos[panel.btn[B_HOME]] = 0u << 3 | 1u;
+    led_pos[panel.btn[B_ENV]] = 0u << 3 | 2u;
+    led_pos[panel.btn[B_PLAY]] = 0u << 3 | 3u;
+    led_pos[14u + 0u] = 1u << 3 | 1u;              /* keys 1 and 2 */
+    led_pos[14u + 1u] = 1u << 3 | 2u;
+    go_home();
+    ui_leds();
+    bad += check("HOME: its button lit, ENV and PLAY (stopped) glow, the keys glow, none lit",
+                 fm1_led[0] == 2u && fm1_led_dim[0] == 14u && fm1_led[1] == 0u && fm1_led_dim[1] == 6u);
+    fm1_in.notes = 1u;
+    song.playing = 1;
+    ui_leds();
+    ok = fm1_led[0] == 2u && (fm1_led_dim[0] & 8u) == 0u && fm1_led[8] == 2u && fm1_led[1] == 2u && fm1_led_dim[1] == 6u;
+    fm1_in.notes = 0;
+    song.playing = 0;
+    bad += check("a key held lit over the glow; PLAY running: its green, its own LED dark", ok);
+    ui.layer = 1;
+    ui_leds();
+    ok = fm1_led_dim[1] == 0u && fm1_led_dim[0] == 14u;
+    ui.layer = 0;
+    ui_leds();
+    ok &= fm1_led_dim[1] == 6u;
+    bad += check("a layer's map: the keys lit or dark (no glow), the buttons still glow", ok);
+    /* MENU > LEDS INV: the active ones dark, the idle ones lit (stock), no glow; a blink lit / dark; a map of the
+     * keys' own as in DIM */
+    settings_leds = LEDS_INV;
+    ui_leds();
+    ok = fm1_led[0] == 12u && fm1_led_dim[0] == 0u && fm1_led[1] == 6u && fm1_led_dim[1] == 0u;   /* HOME dark */
+    fm1_in.notes = 1u;
+    song.playing = 1;
+    ui_leds();
+    ok &= fm1_led[0] == 4u && fm1_led_dim[0] == 0u && fm1_led[1] == 4u && fm1_led_dim[1] == 0u && fm1_led[8] == 2u;   /* PLAY, key 1 dark; green */
+    fm1_in.notes = 0;
+    song.playing = 0;
+    bad += check("LEDS INV: the page's button, PLAY running and a key held go dark, the rest lit, no glow", ok);
+    ui.layer = 1;
+    led_pos[panel.btn[layer_btn()]] = 0u << 3 | 4u;   /* the layer's button */
+    {
+        uint32_t seen = 0, t;
+        for (t = 0; t < 4u; t++) {                  /* the layer's button blinks: lit, then dark, never dim */
+            fm1_ms = t * 250u;
+            ui_leds();
+            seen |= ((fm1_led[0] >> 4) & 1u ? 1u : 2u) | ((fm1_led_dim[0] >> 4) & 1u ? 4u : 0u);
+        }
+        ok = seen == 3u && fm1_led_dim[1] == 0u && fm1_led[1] == (uint8_t)((layer_leds() & 3u) << 1);
+    }
+    ui.layer = 0;
+    fm1_ms = 0;
+    bad += check("LEDS INV: a blink alternates lit / dark; a layer's map stays lit / dark as in DIM (not inverted)", ok);
+    settings_leds = LEDS_DIM;
+    led_pos_init();
+    return bad;
+}
+
+/* #37: QNT SEQ on the SCL page: the keys as SNAP, the sequence snapped as it plays, saved with the project */
+static int test_seq_quant(void)
+{
+    int bad = 0, ok;
+    track_t *t = &trk[0];
+    char val[16];
+    const char *unit = 0;
+    ui_power_on();
+    song.sel = 0;
+    open_family(FAM_SCL);
+    frame();
+    ok = cur_page()->id[2] == P_QUANT && t->p[P_QUANT] == 0;
+    turn(EN_K3, 10);
+    param_format(&TP[P_QUANT], t->p[P_QUANT], val, &unit);
+    bad += check("SCL KNOB 3 QNT: OFF SNAP WHITE SEQ, SEQ last (default OFF)", ok && t->p[P_QUANT] == 3 &&
+                 str_eq(val, "SEQ"));
+    t->p[P_SCALE] = 1;
+    t->p[P_ROOT] = 0;
+    ok = kb_map(t, 8) == 60u && kb_map(t, 7) == 60u;   /* C#4 key -> C4, as SNAP */
+    t->step[0] = (step_t){.note = {61, 66}, .n = 2, .time = ST_NOTE};
+    t->seq_active = 1;
+    seq_start();
+    events_block(CTL);
+    ok &= t->seq_n == 2u && t->seq_notes[0] == 60u && t->seq_notes[1] == 65u && t->step[0].note[0] == 61u &&
+          t->step[0].note[1] == 66u;
+    transport_req = 2;
+    events_block(CTL);
+    bad += check("QNT SEQ: the keys snap as SNAP; C#4 F#4 of a step play C4 F4 in C major, the step keeps C#4 F#4", ok);
+    project_save(1);
+    t->p[P_QUANT] = 0;
+    project_load(1);
+    bad += check("QNT SEQ saved and loaded with the project", trk[0].p[P_QUANT] == 3);
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -3414,6 +3598,9 @@ int main(void)
     bad += test_bughunt_ui();
     bad += test_bughunt_ui2();
     bad += test_piano_roll();
+    bad += test_play_leds();
+    bad += test_seq_quant();
+    bad += test_idle_glow();
     bad += test_fm6_charts();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */

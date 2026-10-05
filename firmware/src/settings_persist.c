@@ -3,7 +3,8 @@
  * the other feature's saved preferences when either is built independently.
  * PER1/PER2 are upstream; PER3 added bold; PER4 added favorites.
  * palette: UI_PAL_TAG + index; an old id (below 20, earlier firmware) is migrated on import.
- * bold: no longer used (one font weight); kept as it was saved, unless it holds the HOLD setting (panel.c). */
+ * bold: no longer used (one font weight); kept as it was saved, unless it holds the HOLD setting (panel.c).
+ * zoom: no longer used (the large readout); kept as it was saved, unless it holds the LEDS setting (panel.c). */
 typedef struct {
     uint32_t magic, palette, lowcut, zoom;
     panel_t panel;
@@ -35,6 +36,7 @@ static int settings_import(persist_t *p, int n)
     settings.lowcut = p->lowcut;
     settings.zoom = p->zoom;
     settings_hold = (uint8_t)hold_from_stored(p->bold);
+    settings_leds = (uint8_t)leds_from_stored(p->zoom);
 #ifdef FELUCCA_FAVORITES
     memcpy(&favorites, &p->favorites, sizeof favorites);
     favorites.filter = favorites.filter == 1u;
@@ -59,7 +61,7 @@ static void settings_export(persist_t *p)
     p->magic = PERSIST_MAGIC;
     p->palette = palette_to_stored(settings.palette);
     p->lowcut = settings.lowcut;
-    p->zoom = settings.zoom;
+    p->zoom = settings.zoom = leds_to_stored(settings.zoom, settings_leds);
     p->panel = panel;
     p->bold = hold_to_stored(p->bold, settings_hold);
 #ifdef FELUCCA_FAVORITES

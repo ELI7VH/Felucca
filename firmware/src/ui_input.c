@@ -26,6 +26,15 @@ static void led_put(uint8_t *nl, uint32_t id, int on)
         nl[q >> 3] |= (uint8_t)(1u << (q & 7u));
 }
 
+/* PLAY's second, green LED: not in the key matrix (no key there), found on the hardware at column 8, row PA9 (bit 1) */
+#define LED_PLAY_GREEN ((8u << 3) | 1u)
+static void led_clear(uint8_t *nl, uint32_t id)
+{
+    uint8_t q = led_pos[id];
+    if (q != 0xFF)
+        nl[q >> 3] &= (uint8_t)~(1u << (q & 7u));
+}
+
 static const uint8_t FAM_BTN[FAM_COUNT] = {B_HOME, B_ENV, B_LFO, B_FX, B_SCL, B_EDIT, B_GLO, B_SAVE,
                                            B_ARP, B_SEQ, B_GLO};   /* GLO: mixer + global settings; REC is transport */
 
@@ -78,11 +87,69 @@ static uint32_t arp_led(void)
     return !on ? 2u : beat_pos < (beat_n ? b / 6u : b / 2u);
 }
 
+/* the keys of the notes the selected track's sequencer and ARP sound now (#38), bit k = key k: where the keys
+ * play that note (kb_map: the octave, TRN, QNT, an engine's own map), the lowest key that gives it (QNT SNAP
+ * rounds the keys above down onto it); a note no key plays is not shown. A snapshot of the ISR's seq_notes /
+ * arp_note: no state of its own, nothing to do while nothing sounds */
+static uint32_t play_leds(void)
+{
+    const track_t *t = TSEL;
+    uint8_t s[4 + NLANE + 1];
+    uint32_t n = t->seq_n < 4u + NLANE ? t->seq_n : 4u + NLANE, i, k, note, used = 0, m = 0, hit;
+    for (i = 0; i < n; i++)
+        s[i] = t->seq_notes[i];
+    if (t->arp_note)
+        s[n++] = t->arp_note;
+    for (k = 0; n && k < 27u; k++) {
+        note = kb_map(t, k);
+        for (i = 0, hit = 0; i < n; i++)
+            if (s[i] == note && !((used >> i) & 1u)) {
+                used |= 1u << i;
+                hit = 1;
+            }
+        m |= hit << k;
+    }
+    return m;
+}
+
+/* 1: the keys show a map of their own (NAME, a layer's map: SCL's scale, FX; the DRUM grid, SLICES), lit or
+ * dark; 0: the keys held and the notes playing, over the idle glow */
+static int keys_own(void)
+{
+    return (name_on() && !ui.menu) || ui.layer || grid_on()
+#if FELUCCA_SLICE
+           || (!ui.menu && !name_on() && slice_page_on())
+#endif
+        ;
+}
+
+/* the key LEDs, bit k = key k: NAME's keys, the layer's map, the DRUM grid, else the keys held and the notes
+ * the selected track's sequencer and ARP play (and on SLICES the keys of the selected slice) */
+static uint32_t key_leds(void)
+{
+    uint32_t c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds() : grid_on() ? grid_leds() :
+                 (fm1_in.notes & ~kb_layer) | play_leds();
+#if FELUCCA_SLICE
+    if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
+        c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
+#endif
+    return c;
+}
+
+/* The LEDs: lit = active (the page's family, PLAY / REC running, the keys held or playing, a map's keys), the
+ * blinking ones blink (the layer's button, the ARP beat, OCT+), every other button and key glows dim (#35: the
+ * buttons of the black FM-1 can be found in the dark; hal/fm1_input.h fm1_led_dim, a short pulse each frame).
+ * MENU > LEDS INV turns it around, as the stock firmware: the idle ones fully lit, the active ones dark, no glow
+ * (a blink: lit / dark). The keys' own maps (keys_own) stay lit or dark in both, no glow: their dark keys read
+ * as dark. Each picture is
+ * built off-line and copied one byte per column, the glow first: an LED going from lit to dim never has a dark
+ * frame */
 static void ui_leds(void)
 {
-    uint8_t nl[FM1_NCOL] = {0};
+    uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0};
     uint32_t k, c;
     uint32_t fam = cur_fam();
+    int keys_map = keys_own();
     static uint8_t ready;
     if (!ready) {
         led_pos_init();
@@ -94,19 +161,30 @@ static void ui_leds(void)
         led_put(nl, panel.btn[B_ARP], FAM_BTN[fam] == B_ARP ? !k : (int)k);   /* (on ARP's page: dark flashes) */
     if (ui.layer)                                       /* the layer's button blinks while its map is up */
         led_put(nl, panel.btn[layer_btn()], ((fm1_ms / 250u) & 1u) == 0u);
-    led_put(nl, panel.btn[B_PLAY], song.playing != 0u); /* steady transport state, independent of audio block rate */
     led_put(nl, panel.btn[B_REC], song.rec != 0u);
     k = oct_leds();
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)(k >> 1));
-    c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds() : grid_on() ? grid_leds() :
-        fm1_in.notes & ~kb_layer;                       /* NAME's keys, the map, the grid, the keys held */
-#if FELUCCA_SLICE
-    if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
-        c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
-#endif
+    c = key_leds();
     for (k = 0; k < 27u; k++)
-        led_put(nl, 14u + k, (int)((c >> k) & 1u));
+        led_put(keys_map ? own : nl, 14u + k, (int)((c >> k) & 1u));
+    for (k = 0; k < NB; k++)
+        led_put(nd, panel.btn[k], 1);
+    for (k = 0; !keys_map && k < 27u; k++)
+        led_put(nd, 14u + k, 1);
+    if (song.playing)                                   /* playing: PLAY's green, its own LED dark in both modes */
+        led_clear(nd, panel.btn[B_PLAY]);
+    for (c = 0; c < FM1_NCOL; c++) {
+        if (settings_leds == LEDS_INV) {                /* INV: the active ones dark, the rest lit */
+            nl[c] = (uint8_t)(nd[c] & ~nl[c]);
+            nd[c] = 0;
+        }
+        nl[c] |= own[c];
+    }
+    if (song.playing)
+        nl[LED_PLAY_GREEN >> 3] |= (uint8_t)(1u << (LED_PLAY_GREEN & 7u));
+    for (c = 0; c < FM1_NCOL; c++)
+        fm1_led_dim[c] = nd[c];
     for (c = 0; c < FM1_NCOL; c++)
         fm1_led[c] = nl[c];
 }

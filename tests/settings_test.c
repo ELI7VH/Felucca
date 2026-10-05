@@ -81,7 +81,29 @@ int main(void)
         settings_hold = 2;
         assert(settings_import(&p, 8 + sizeof(panel_t)) == 2 && settings_hold == HOLD_DEF);
     }
+    {   /* LEDS: in the retired zoom field; older records (zoom 0 / 1) are DIM, and stay as saved; idempotent */
+        persist_t q;
+        p = original;                                   /* zoom 1: an older record's large readout */
+        assert(settings_import(&p, sizeof p) == 1 && settings_leds == LEDS_DIM);
+        q = p; settings_export(&q); assert(q.zoom == 1u);                  /* DIM: kept as saved */
+        settings_leds = LEDS_INV;
+        settings_export(&p);
+        assert(p.zoom == (LEDS_TAG | LEDS_INV) && leds_stored_ok(p.zoom));
+        q = p; settings_export(&q); assert(!memcmp(&q, &p, sizeof q));   /* a second save: the same record */
+        settings_leds = LEDS_DIM;
+        assert(settings_import(&p, sizeof p) == 1 && settings_leds == LEDS_INV);
+        q = p; assert(settings_import(&q, sizeof q) == 1 && !memcmp(&q, &p, sizeof q));   /* import twice: the same */
+        settings_leds = LEDS_DIM;
+        settings_export(&p);
+        assert(p.zoom == 0u && settings_import(&p, sizeof p) == 1 && settings_leds == LEDS_DIM);
+        assert(leds_stored_ok(0u) && leds_stored_ok(1u) && !leds_stored_ok(2u) && !leds_stored_ok(LEDS_TAG | 2u) &&
+               !leds_stored_ok(LEDS_TAG + 4u) && leds_from_stored(LEDS_TAG | 3u) == LEDS_DIM && leds_from_stored(7u) == LEDS_DIM);
+        p = original; p.magic = 0x50455231u;           /* PER1: no zoom field, DIM */
+        memcpy((uint8_t *)&p + 8, &PANEL_DEFAULT, sizeof(panel_t));
+        settings_leds = LEDS_INV;
+        assert(settings_import(&p, 8 + sizeof(panel_t)) == 2 && settings_leds == LEDS_DIM);
+    }
     assert(settings_import(&p, 3) == 0 && settings_import(&p, -1) == 0);
     assert(settings_import(&p, sizeof p - 1) == 0);
-    puts("Settings: PER1/PER2/PER3 migration, palette ids, calibration, HOLD and independent feature preservation passed.");
+    puts("Settings: PER1/PER2/PER3 migration, palette ids, calibration, HOLD, LEDS and independent feature preservation passed.");
 }

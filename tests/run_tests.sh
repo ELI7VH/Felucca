@@ -45,7 +45,8 @@
 #                   demos in build/slice_demo/.
 # INPUT (tests/input_test.c): the key / button debounce of hal/fm1_input.h against the TIMER5 scan and bouncing
 #                   contacts: a press within 2 scans (<= 2.3 ms), one note per bouncy press, no early or hanging
-#                   release, stray samples ignored, fast repeats, the encoders' detents.
+#                   release, stray samples ignored, fast repeats, the encoders' detents; the LED scan: lit LEDs every
+#                   frame, dim ones a short pulse (the second line write) every frame, each only on its own column.
 # USB audio (tests/uac_test.c): the UAC1 descriptors as a host parses them (with and without CDC), the
 #                   ring and packetiser: 44.1 frames per packet, every frame in order, underrun / overrun, restart.
 # web (web/test_web.mjs): the editor protocol against its mock device, whose tables must equal the

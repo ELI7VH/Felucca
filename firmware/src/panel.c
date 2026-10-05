@@ -82,6 +82,19 @@ static uint32_t hold_to_stored(uint32_t old, uint32_t i)
 }
 static int hold_stored_ok(uint32_t v) { return v <= 1u || (v & ~3u) == HOLD_TAG; }
 
+/* LEDS (menu): DIM, the idle buttons and keys glow dim and the active ones are lit (#35); INV, the idle ones
+ * lit and the active ones dark, as the stock firmware (ui_input.c ui_leds). Saved in the settings record's retired zoom field
+ * as LEDS_TAG | mode; any other value there (0 or 1 from older firmware) is DIM */
+#define LEDS_TAG 0x4C454400u                    /* "LED" */
+enum { LEDS_DIM, LEDS_INV, LEDS_COUNT };
+static uint8_t settings_leds = LEDS_DIM;
+static uint32_t leds_from_stored(uint32_t v) { return (v & ~3u) == LEDS_TAG && (v & 3u) < LEDS_COUNT ? v & 3u : LEDS_DIM; }
+static uint32_t leds_to_stored(uint32_t old, uint32_t m)
+{
+    return m != LEDS_DIM && m < LEDS_COUNT ? LEDS_TAG | m : old > 1u ? 0u : old;
+}
+static int leds_stored_ok(uint32_t v) { return v <= 1u || ((v & ~3u) == LEDS_TAG && (v & 3u) < LEDS_COUNT); }
+
 static void settings_init(void)
 {
     if (settings.magic == SETTINGS_MAGIC_OLD && settings.palette < 20u) {
@@ -92,7 +105,7 @@ static void settings_init(void)
         settings.magic = SETTINGS_MAGIC;
         settings.palette = UI_MONO_INDEX;      /* MONO (default) */
         settings.lowcut = 0;
-        settings.zoom = 0;                     /* large readout of the touched value: off */
+        settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
     }
     palette_set(settings.palette);
     fx_lowcut = (uint8_t)(settings.lowcut % 3u);
