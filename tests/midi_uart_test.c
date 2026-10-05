@@ -111,7 +111,7 @@ int main(void)
         0x80, 60, 0,
     };
     static const uint32_t want[] = {
-        0x643C9009u, 0x653E9009u, 0x66409009u, 0x0005C10Cu, 0x0006C10Cu, 0x7F07B00Bu, 0x003C8008u,
+        0x643C9009u, 0x653E9009u, 0x0000F80Fu, 0x66409009u, 0x0005C10Cu, 0x0006C10Cu, 0x7F07B00Bu, 0x003C8008u,
     };
     uint32_t i, bad = 0, n = sizeof want / sizeof want[0];
     for (i = 0; i < sizeof in; i++)
@@ -126,6 +126,16 @@ int main(void)
             bad = 1;
         }
     bad += (uint32_t)check("uart: running status, realtime, SysEx, system common", !bad);
+    {
+        uint32_t w0 = mi_w;
+        fm1_ms = 1234u;
+        um_byte(0xFAu);
+        midi_in_event(0x0000FB0Fu);
+        midi_in_event(0x0000FE0Fu);                  /* active sensing ignored */
+        bad += (uint32_t)check("clock: timestamps and USB/TRS source, no active sensing",
+            mi_w == w0 + 2u && midi_in_ms[w0 % MQ] == 1234u && midi_in_source[w0 % MQ] == 2u &&
+            midi_in_source[(w0 + 1u) % MQ] == 1u);
+    }
     {   /* 4-track routing reads the channel from the packet as for USB-MIDI: cable 0, CIN = status >> 4 */
         static const uint8_t chs[] = {0x90, 60, 1, 0x91, 61, 2, 0x92, 62, 3, 0x99, 36, 4, 0x9F, 63, 5, 0x89, 36, 0};
         uint32_t w0 = mi_w, ok = 1;

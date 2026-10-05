@@ -10,7 +10,8 @@ The build makes three files in `build/`:
 
 ## Prerequisites (macOS)
 
-- Python 3 with Pillow: `pip3 install Pillow`
+- Python 3 with Pillow and fontTools: `pip3 install Pillow fonttools` (the UI font and icons are
+  rasterised at build time)
 - Docker Desktop. The JieLi toolchain is Linux x86-64 only; the build runs each tool in a
   `linux/amd64` `debian:bookworm-slim` container (Rosetta on Apple silicon). Keep the source
   tree in a folder Docker can share, e.g. under `/Users`.
@@ -41,17 +42,24 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
-`./build.sh --release 0.9-beta` makes a release build: the package identity becomes
-`FM-1_909` and the version string `0.9-BETA`; the package is `build/felucca-0.9-beta.fwsc`.
+`./build.sh --release 1.0` makes a release build: the package identity becomes `FM-1_910`
+and the version string `v1.0`; the package is `build/felucca-1.0.fwsc`, and
+`build/release-1.0/` holds what a release ships: the package, the app
+(`felucca-1.0-app.bin`), `SHA256SUMS`, the sample attribution, `LICENSE`, `LICENSING.md` and
+`LICENSES/` (the package contains Apache-2.0 SDK files, so the licence texts travel with it).
 
-Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`):
+Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `core.h` and `icons.c`):
 
 | Flag | Default | |
 | --- | --- | --- |
 | `FELUCCA_FLASH` | 1 | settings, presets and projects in flash |
 | `FELUCCA_OTA` | 1 | update entry (needs `FELUCCA_FLASH`) |
 | `FELUCCA_CDC` | 1 | USB serial console |
-| `FELUCCA_UART` | 0 | TRS MIDI IN (not tested on hardware) |
+| `FELUCCA_UAC` | 1 | USB audio input (the master output, 44.1 kHz stereo) |
+| `FELUCCA_UART` | 1 | TRS MIDI IN |
+| `FELUCCA_SLICE` | 1 | the SLICE engine |
+| `FELUCCA_ICONS` | 1 | parameter icons on the knob cards |
+| `FELUCCA_FM4` | 0 | the retired DIGITAL engine (4-operator FM) instead of its FM6 conversion |
 
 ## Samples
 
@@ -66,10 +74,15 @@ SAMPLE engine has only the generated drum kit.
 tests/run_tests.sh
 ```
 
-Runs the host tests (flash storage, user presets, MIDI parser, update entry, update
-loader, a DSP render, the 4-track mix, project formats, the SLICER, the regression suite,
-the command-line installer) and, with Node.js, the web page tests. Run it after `./build.sh`
-(it uses `build/` and needs `AC79_SDK` set as for the build).
+Runs the host tests and, with Node.js, the web page tests. Run it after `./build.sh`
+(it uses `build/` and needs `AC79_SDK` set as for the build). The suites cover flash storage,
+user presets, projects of every format, backup, the keys and knobs, MIDI (USB, TRS, clock,
+control), USB audio, the update entry and loader, the command-line installer, the UI (the real
+drawing code against stubs: every screen in every palette is rendered and checked for clipped or
+overlapping text; PNGs land in `build/ui_new/`), every engine (DRUM, NOISE, PHYS, FM6, SLICE, the
+DIGITAL conversion), the chord keys, the modulation matrix, the FX layer, the reverbs, the SLICER
+and swing. With `DAISYSP` pointing at a DaisySP checkout, the PHYS models are also compared with
+their floating-point originals; without it that test is skipped.
 
 The regression suite (`tests/regress.c`) renders every engine and preset and compares a
 hash of each render with `tests/golden.txt`; it also checks levels, voices and the CPU

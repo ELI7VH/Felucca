@@ -61,15 +61,11 @@ static void mapping_test(void)
     for (k = 0; k < 27u; k++)
         assert(kb_map(t, k) == 48u + k);
     t->p[P_QUANT] = 2;
-    for (k = 0; k < 27u; k++) {
-        TDRUM->p[P_QUANT] = 2;
-        assert(kb_map(TDRUM, k) == DRUM_KEYS[k]);
-    }
-    t->engine = t->eng_req = 4;
-    if (drum_set() >= 0) {
-        t->p[P_E0] = (int16_t)drum_set();
+    t->engine = t->eng_req = 4;                /* SAMPLE PERC (the GM kit, any part): the first C is the kick */
+    if (smp_perc_set() >= 0) {
+        t->p[P_E0] = (int16_t)smp_perc_set();
         for (k = 0; k < 27u; k++)
-            assert(kb_map(t, k) == 36u + k);
+            assert(kb_map(t, k) == 29u + k);
     }
     t->engine = t->eng_req = 0;                /* SNAP (QNT 1, the old ON): every key, rounded down */
     t->p[P_QUANT] = 1;
@@ -106,6 +102,8 @@ static void key_events_test(void)
     fm1_in.notes = (1u << 11) | (1u << 10); /* E and D#: only Eb sounds/records */
     keyboard_block();
     assert(t->arp_phys == 1 && t->nheld == 1 && t->held[0] == 63);
+    assert(t->step[0].n == 0);             /* ARP on: the arp's notes are recorded, not the keys */
+    arp_tick(t, 1);
     assert(t->step[0].n == 1 && t->step[0].note[0] == 63);
     assert(mo_w == 1 && ((midi_out_q[0] >> 16) & 127u) == 63);
     t->p[P_SCALE] = 9;
