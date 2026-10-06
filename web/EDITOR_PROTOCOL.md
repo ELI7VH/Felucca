@@ -111,7 +111,7 @@ The chord keys (SCL > CHORD on the device, `firmware/src/chord.c`) are two track
 | 82 | VOIC | enum: 0 CLOSE, 1 OPEN (1-5-3), 2 INV1, 3 INV2, 4 +OCT (the root an octave down; a seventh drops its fifth) |
 
 With CHRD on, a key, a MIDI note of that track and so the arp's held notes play the chord (at most 4 notes),
-and live recording writes it into one step; MONO / LEGATO / UNISON play its root; a kit (DRUM, SAMPLE PERC)
+and live recording writes it into one step; MONO / LEGATO / UNISON play its root; a kit (DRUM, SLICE)
 ignores it. Both defaults are 0: nothing changes until CHRD is set. They are the track's, like ARP and SCL: a
 sound load (a factory preset, `UP_LOAD`, an audition) keeps them, and motion never records them.
 
@@ -123,14 +123,14 @@ global `G_CLOCK` (id 2, label "CLK") 3 (INT, USB, TRS). `G_MIDI` (id 12) is an e
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
-| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01` and `42 01 3` (below); older firmware ends earlier |
+| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank` and `53 01 3` (below); older firmware ends earlier |
 | 2 GET | scope, id | scope, id, v14 |
 | 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine: its defaults, then its first preset (as on the device) |
 | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |
 | 5 DESC | scope, id | scope, id, fmt, min v14, max v14, def v14, label string, unit string, then for an enum (fmt 8) one name string per value (at most 24; firmware before the matrix: at most 16) |
 | 6 STEP_GET | index 0..NSTEP−1 | index, n (0..4 notes), note0..note3, time (0 NOTE, 1 TIE, 2 REST), flags (1 accent, 2 slide), vel, then (v5) hits (3 bytes, below), then (v7) chance 0..100 |
 | 7 STEP_SET | index, n, note0..3, time, flags, vel [, hits (3 bytes, v5) [, chance 0..100 (v7)]] | same as STEP_GET (after the write). Without the hits the step keeps its own; without the chance it keeps its own. The chance can only follow the hits |
-| 8 PRESET | engine, preset | engine, preset (applies the preset's sound and sends; the steps and the track's own parameters stay, see "Sound loads and undo") |
+| 8 PRESET | engine, preset | engine, preset (applies the preset's sound to the selected track and sends; the steps and the track's own parameters stay, see "Sound loads and undo"). For another track, select it with `TRACK` first |
 | 9 PROJECT | op (0 load, 1 save, 2 query), slot 0..3 | op, slot, used (1/0). Save writes flash: allow ~2 s; it stops the transport first (see "Saves while playing") |
 | 10 NAMES | engine | engine, count, count preset-name strings, then the two edit-page titles |
 | 11 SMP_BEGIN | slot 0..2 | slot, rc (0 ok). Erases the slot's header sector: the slot is empty from now on |
@@ -229,6 +229,11 @@ numbered 0..31 (the device shows U01..U32).
   10; E1..E8 {MODEL, TUNE, TONE, DECY, SNAP, ACC, KICK 0..127, PERC 0..127} become {KIT = PERC / 32, TUNE,
   TONE, DECY, SNAP, ACC, KICK 0 PUNCH / 1 ROUND (old ≥ 64), DRV 0}), and `UP_GET` / `UP_LIST` give it so.
   Projects do the same. PHYS's MODEL is 0..3 (MODAL STRNG MEMB SYMP) now.
+- **SAMPLE SET 4** was PERC, the General MIDI drum kit, until 1.0.2. A record of SAMPLE (engine 4) with E1 (SET)
+  = 4, stored then or sent by `UP_PUT`, is the DRUM engine with its default kit: the device rewrites it (engine 10,
+  E1..E8 = DRUM KIT's {0, 64, 70, 64, 64, 100, 0, 0}, the other values and the pattern as they were). Projects
+  and `PRESET` 4 / 4 do the same (a project's track keeps its steps). SET 4 itself stays (`DESC` names it "PIANO":
+  an alias, as SET 1; a `SET` of 4 lands on 0), and USR1..USR3 stay 5..7; GRAIN's SRC 4 plays PIANO.
 - `UP_STORE`: name "" stores with the automatic name the device uses (engine name + slot number,
   "ANALOG 07"). rc 1 for a bad slot or name.
 - rc 2 = the flash write failed or there is no flash. A failed flash write keeps the previous
@@ -266,7 +271,7 @@ grid lives in the steps themselves, so every engine has it:
   lanes that hit). The lanes and the General MIDI note each plays: 0 KICK 36, 1 SNARE 38, 2 CLAP 39,
   3 HAT CL 42, 4 HAT OP 46, 5 TOM 45, 6 RIM 37, 7 BELL 56 (KIT HAND plays CONGA / CLAVE on lanes 5 / 6, KIT
   CYM a cymbal on lane 8). A NOTE step plays its notes and then its hits, on any engine (DRUM strikes its
-  lanes, SAMPLE PERC its GM kit, a synth plays the pitches); an accented hit at velocity 127, the others at
+  lanes, a synth plays the pitches); an accented hit at velocity 127, the others at
   the step's velocity (0 = 96). A TIE or REST step plays no hits.
 - **On the wire** (after `vel`): `hit & 127`, `acc & 127`, then `(hit >> 7) | (acc >> 7) << 1`. A
   `STEP_SET` / `TRACK_STEP` of 8 step bytes (an editor of before v5) leaves the step's hits as they are;
@@ -299,7 +304,16 @@ grid lives in the steps themselves, so every engine has it:
   latest value.
 - **RELOAD** (engine, preset): the engine, a preset, a user preset or a project was loaded; re-read
   `DESC` of the engine parameters, `DUMP` and the steps. It is also sent after loads the editor asked
-  for (`SET` of G_ENGSEL, `PRESET`, `PROJECT` load, `UP_LOAD`).
+  for with `PROJECT` load and `UP_LOAD`. After the editor's own `PRESET` and `SET` of G_ENGSEL it is not
+  (firmware with INFO `53 01`, bit 1): the device takes the load as known (the engine, the preset and the
+  parameters the load changed), since the editor re-reads `DUMP` after the reply; a device change still
+  pending at that moment (a load or another track selected on the device, a knob turned) is pushed as before.
+  Older firmware sends `RELOAD` after those too; an editor that skips its own echoes should do so only when
+  bit 1 is clear.
+- **WATCH while watching** (firmware with INFO `53 01`, bit 0): `WATCH 1` (or 3) while already watching on
+  the same USB connection keeps what has not been pushed yet, so a change made just before is still pushed.
+  Older firmware takes everything as known again (re-read `DUMP` after a re-`WATCH` there). `WATCH 0`, the 3 s
+  timeout and a USB reset end watching; the next `WATCH` starts from the values as they are.
 - **STEP_CHANGED** (index): a sequencer step changed on the device (record, clear, step edit,
   pattern load); not after the editor's own `STEP_SET`.
 - Push frames have the normal header. Accept them at any time, also while waiting for a reply:
@@ -309,11 +323,11 @@ grid lives in the steps themselves, so every engine has it:
 ## v3: tracks
 
 - **Track 4 since 1.0** is a synth part like tracks 1..3: `DUMP` / `RELOAD` / `TRACK` / `TRACK_DUMP`
-  give its real engine byte (power-on: SAMPLE, preset PERC, the General MIDI kit), and `PRESET`, `SET` of
+  give its real engine byte (power-on: DRUM, preset DRUM KIT, the General MIDI map), and `PRESET`, `SET` of
   `G_ENGSEL`, `UP_LOAD` and `UP_STORE` work on it; its level is its `P_LEVEL`. The commands are byte for
   byte as before; only the meaning changed. Firmware before 1.0 had a GM drum track there: engine byte
   NENGINES, no presets (`UP_LOAD` / `UP_STORE` rc 1), its level the global `G_DRLVL`. Drums are now the
-  SAMPLE engine's PERC set and the DRUM engine on any part: the first C key is the kick (C2 = 36), notes are GM numbers.
+  DRUM engine on any part: the first C key is the kick (C2 = 36), notes are GM numbers.
 - The globals `G_DRCH`, `G_DRLVL`, `G_DRREV` (ids 24..26: the old drum track's MIDI channel, level and
   reverb send) keep their ids, and `G_COUNT` stays 27. `G_DRLVL` and `G_DRREV` are inert: `DESC` gives
   label "-", range 0..0, and no page shows them. Id 24 (`G_DRCH`, never read since 1.0) is `G_RTYPE`
@@ -328,7 +342,7 @@ grid lives in the steps themselves, so every engine has it:
   others. Presets and user presets change a part's sound but keep its `P_LEVEL`, `P_PAN`, `P_MUTE`.
 - Projects (`PROJECT`) save and load all four tracks, the selection, the song chain and the motion (FUN7;
   FUN5 added the drum grid, FUN6 the chain). Formats 6..1 are converted; a format 1 project loads into track 1. A project saved before
-  1.0 loads its drum track as track 4 with the power-on sound (SAMPLE PERC), its steps kept.
+  1.0 loads its drum track as track 4 with DRUM's kit (SAMPLE PERC until 1.0.2), its steps kept.
 - Older firmware (no NTRK in `INFO`): one instrument; skip the track UI.
 
 ## v4: any track's parameters
@@ -347,8 +361,16 @@ grid lives in the steps themselves, so every engine has it:
 
 ## Notes for the editor
 
-- **One request at a time.** Wait for the reply, about 10–50 ms, before sending the next.
-  The device holds only one incoming SysEx frame.
+- **One request at a time.** Wait for the reply, about 10–50 ms, before sending the next, from one queue
+  for every request, keep-alive `PING` included. The device holds one incoming SysEx frame until the main
+  loop has answered it; a frame that arrives before then is dropped whole (no reply). A frame is never
+  taken in part: USB delivers every packet (acknowledged, retried), and a dropped frame leaves nothing.
+  Any frame size up to the largest request (a 256-byte `BACKUP_PUT` / `SMP_WRITE` piece: 306 bytes on the
+  wire, 640 bytes of buffer) is safe at full speed; pacing between bytes is not needed. With a second
+  request in flight (pipelined, or a keep-alive from another thread) the second is lost: no reply, and a
+  following `BACKUP_PUT` / `SMP_WRITE` piece is then refused (rc 1, the offset). Measured on an FM-1 with
+  1.0 over USB: 256-byte pieces one at a time, the next sent from the reply callback, 560 of 560 taken
+  (about 10 ms each); with the next piece sent before the reply, every second piece was dropped.
 - **Following the device.** With v2 firmware, `WATCH` and `PING` (above). Older firmware pushes
   nothing (no reply to `PING`): poll `DUMP` about every 300–500 ms while the page is visible.
 - **Port.** The device's MIDI port is named "Felucca" (USB 1209:0001). Updates use the same
@@ -502,7 +524,8 @@ or `SMP_ERASE` for an empty slot). Begin: `0, id, size u32, crc u32`: size is 35
 the settings record's size for id 1, 3584, 3388 or 0 (empty the slot) for ids 2..5, the bank's size or 0 for 6 and 7,
 3472 or 0 for 8 (the FM6 bank: its magic, layout and every byte below 128 are checked). FUN7 and FUN6 become FUN8.
 An archive without id 8 (written before FM6) still restores; the web editor reads both. Data: `1, id, offset u32, pack7` with the next offset (they must follow each other)
-and at most 256 decoded bytes. Commit: `2, id`: the device checks the length and the CRC, validates the
+and at most 256 decoded bytes (256-byte pieces are fine at full speed, one request at a time: see "Notes for
+the editor"; a piece that gets no reply was not taken: abort and begin the object again). Commit: `2, id`: the device checks the length and the CRC, validates the
 content, and then writes. Abort: `3, id`. Id 0 replaces the music now playing (RAM only, no flash);
 ids 1..7 are written to flash (settings and presets are applied too). Nothing is written before the commit.
 The web editor sends ids 2..7 and the samples first, then 1, then 0 last. A failed restore can leave
@@ -527,6 +550,8 @@ The FM6 engine (12) plays a 6-operator patch per track; its eight EDIT parameter
 the factory patches, then B1..B27 the bank: setting PTCH loads that patch into the track). The patch itself
 only travels through these commands. INFO advertises `46 01 nfactory nbank` after the backup tag (this
 firmware: `46 01 08 1B`); firmware without it has no FM6 and does not answer 68..71.
+After it, `53 01 caps` (live sync, v2 above): bit 0 = `WATCH` while watching keeps what is not pushed yet,
+bit 1 = no `RELOAD` after the editor's own `PRESET` / `SET` of G_ENGSEL. This firmware sends 3.
 
 A patch is the 128-byte packed record of the generic 6-operator voice (the 32-voice bank's record; every byte is
 7-bit, so it travels as it is, no pack7). Operators come sixth first: per operator 17 bytes (R1..R4, L1..L4,
@@ -572,8 +597,8 @@ advertises 9 (palette and favorites).
 | 37 FAV_GET | engine, start v14, count 1..32 | rc; on success: engine, start v14, count, count × on/off |
 | 38 FAV_SET | engine, preset v14, on/off | rc; when applied: engine, preset v14, on/off |
 
-UI_SET ids: 0 palette (0..count-1, the order of UI_PALETTES: MONO GREEN AMBER ICE VIOLET ROSE PAPER
-HI-CON), 1 font (retired: rc 2), 2 reserved, 3 preset filter (0 all, 1 favorites). Unsupported state
+UI_SET ids: 0 palette (0..count-1, the order of UI_PALETTES: GREY GREEN AMBER ICE VIOLET ROSE PAPER
+HI-CON NIGHT MONO; 1.0.2: GREY is the MONO of 1.0.1, MONO a new black and white palette), 1 font (retired: rc 2), 2 reserved, 3 preset filter (0 all, 1 favorites). Unsupported state
 fields are 127.
 Both u28 signatures are four least-significant-first 7-bit bytes; compare them
 to refresh changed favorites and user slots. Factory references use stable

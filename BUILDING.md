@@ -65,8 +65,8 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `c
 
 The CC0 instrument samples that the SAMPLE engine uses are in `assets/samples-cc0/`
 (Versilian Studios, see `ATTRIBUTION.txt` there). `tools/fetch_cc0.py` downloads them
-again from the source repositories. Without that folder the build still works and the
-SAMPLE engine has only the generated drum kit.
+again from the source repositories. Without that folder the build still works, with no
+instrument sets in the SAMPLE engine.
 
 ## Tests
 

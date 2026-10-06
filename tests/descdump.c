@@ -219,6 +219,27 @@ int main(void)
             putchar(']');
         }
     }
+    printf("],\n\"SHOWN\":[");                         /* #48: the values as a knob steps them (params.c param_turn), */
+    {                                                   /* every F_ENUM: [scope, index, the names from the left end] */
+        for (k = 0, e = 0; k < (uint32_t)P_E0 + G_COUNT; k++) {
+            const param_desc_t *d = k < (uint32_t)P_E0 ? &TP[k] : &GP[k - P_E0];
+            int32_t v = d->def, n;
+            if (d->fmt != F_ENUM || !d->names || d->max <= d->min)
+                continue;
+            for (n = 0; n < 64; n++)
+                v = param_turn(d, v, -1);
+            printf("%s[%d,%d,[", e++ ? "," : "", k < (uint32_t)P_E0 ? 0 : 1, k < (uint32_t)P_E0 ? (int)k : (int)(k - P_E0));
+            for (n = 0; n < 64; n++) {
+                int32_t w = param_turn(d, v, 1);
+                js_str(d->names[v - d->min]);
+                if (w == v)
+                    break;
+                putchar(',');
+                v = w;
+            }
+            printf("]]");
+        }
+    }
     printf("]}\n");
     return 0;
 }

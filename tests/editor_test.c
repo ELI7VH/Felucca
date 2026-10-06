@@ -112,13 +112,14 @@ static int preferences(void)
     uint32_t n = request(ED_INFO, a, 0);
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
-        host_wire[n - 16] == CHAIN_ROWS && host_wire[n - 15] == 0x55 &&
-        host_wire[n - 14] == 1 && host_wire[n - 13] == 9 &&
-        host_wire[n - 12] == 0x4d && host_wire[n - 11] == 1 &&
-        host_wire[n - 10] == MOTION_MAX && host_wire[n - 9] == 1 &&
-        host_wire[n - 8] == 0x42 && host_wire[n - 7] == 1 && host_wire[n - 6] == 3 &&
-        host_wire[n - 5] == 0x46 && host_wire[n - 4] == 1 && host_wire[n - 3] == FM6_NFACTORY &&
-        host_wire[n - 2] == FM6_BANK_N);
+        host_wire[n - 19] == CHAIN_ROWS && host_wire[n - 18] == 0x55 &&
+        host_wire[n - 17] == 1 && host_wire[n - 16] == 9 &&
+        host_wire[n - 15] == 0x4d && host_wire[n - 14] == 1 &&
+        host_wire[n - 13] == MOTION_MAX && host_wire[n - 12] == 1 &&
+        host_wire[n - 11] == 0x42 && host_wire[n - 10] == 1 && host_wire[n - 9] == 3 &&
+        host_wire[n - 8] == 0x46 && host_wire[n - 7] == 1 && host_wire[n - 6] == FM6_NFACTORY &&
+        host_wire[n - 5] == FM6_BANK_N &&
+        host_wire[n - 4] == 0x53 && host_wire[n - 3] == 1 && host_wire[n - 2] == 3);
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -439,10 +440,173 @@ static int user_preset_roundtrip(void)
     return bad;
 }
 
+/* the frames of cmd in host_wire: how many, and the args of the last (into *args) */
+static uint32_t wire_frames(uint32_t cmd, const uint8_t **args)
+{
+    uint32_t i, k = 0;
+    for (i = 0; i + 5u < host_wire_n; i++)
+        if (host_wire[i] == 0xF0 && host_wire[i + 1] == ED_HDR0 && host_wire[i + 4] == cmd) {
+            k++;
+            if (args) *args = host_wire + i + 5;
+        }
+    return k;
+}
+static uint32_t sync_pass(void)                          /* one main-loop pass of the pushes */
+{
+    host_wire_n = 0;
+    fm1_ms += 30u;
+    ed_sync();
+    host_drain();
+    return host_wire_n;
+}
+
+/* #65: WATCH while watching keeps what is not pushed yet; the editor's own sound load is not echoed as RELOAD */
+static int live_sync(void)
+{
+    int bad = 0;
+    uint8_t a[4] = {1, 0, 0, 0};
+    uint32_t i, other = 0;
+    const uint8_t *x = 0;
+    reset();
+    usb.resets = 0;
+    request(ED_WATCH, a, 1);
+    bad += check("WATCH 1 starts watching", host_wire[5] == 1 && ed_w.on && !sync_pass());
+    TSEL->p[P_LEVEL] = 77;                               /* a device change, not pushed yet */
+    request(ED_WATCH, a, 1);
+    bad += check("WATCH 1 while watching keeps a pending change: CHANGED still goes out",
+                 sync_pass() && wire_frames(ED_CHANGED, &x) == 1u && x[1] == P_LEVEL && ed_rv(x + 2) == 77);
+    TSEL->p[P_LEVEL] = 66;
+    a[0] = 0; request(ED_WATCH, a, 1);
+    a[0] = 1; request(ED_WATCH, a, 1);
+    bad += check("WATCH 0 then WATCH 1 starts from the values as they are (no push)", !sync_pass());
+    TSEL->p[P_LEVEL] = 55; trk[1].p[P_PAN] = 3;
+    a[0] = 3; request(ED_WATCH, a, 1);
+    sync_pass();
+    bad += check("WATCH 3 while watching: CHANGED kept, TRACK_CHANGED from the mix as it is",
+                 host_wire_n && wire_frames(ED_CHANGED, 0) == 1u && !wire_frames(ED_TRACK_CHANGED, 0) && ed_w.v4);
+    usb.resets++;
+    TSEL->p[P_LEVEL] = 44;
+    request(ED_WATCH, a, 1);
+    bad += check("WATCH after a USB reset starts over", !sync_pass());
+
+    /* PRESET */
+    TSEL->p[P_LEVEL] = 33;                               /* pending; a sound load keeps P_LEVEL */
+    a[0] = 0; a[1] = 2;
+    request(ED_PRESET, a, 2);
+    sync_pass();
+    bad += check("the editor's own PRESET: no RELOAD, no CHANGED for what it loaded, a pending CHANGED stays",
+                 TSEL->preset == 2 && !wire_frames(ED_RELOAD, 0) && wire_frames(ED_CHANGED, &x) == 1u &&
+                 x[1] == P_LEVEL && !sync_pass());
+    for (i = 0; i < 3u; i++) {                           /* any preset of any engine */
+        a[0] = (uint8_t)(i ? 12u : 4u); a[1] = (uint8_t)i;
+        request(ED_PRESET, a, 2);
+        other += sync_pass() != 0;
+    }
+    bad += check("PRESET of other engines: no push at all", !other && ed_w.eng == ed_eng(TSEL));
+    a[0] = 1; a[1] = G_ENGSEL; a[2] = (8192 + 5) & 127; a[3] = (8192 + 5) >> 7;
+    request(ED_SET, a, 4);
+    bad += check("SET of G_ENGSEL: no RELOAD", ed_eng(TSEL) == 5u && !sync_pass());
+    sync_reload = 1;                                     /* a load on the device, not pushed yet */
+    a[0] = 0; a[1] = 1;
+    request(ED_PRESET, a, 2);
+    sync_pass();
+    bad += check("a RELOAD due before the editor's PRESET still goes out", wire_frames(ED_RELOAD, 0) == 1u);
+    a[0] = 0; request(ED_WATCH, a, 1);
+    sync_reload = 0;
+    a[0] = 0; a[1] = 3;
+    request(ED_PRESET, a, 2);
+    a[0] = 1; request(ED_WATCH, a, 1);
+    bad += check("not watching: PRESET as before, WATCH then starts from it", !sync_pass() && TSEL->preset == 3);
+    return bad;
+}
+
+/* #64: SysEx through the USB packet path (ep1_take) at full speed: a 256-byte BACKUP_PUT piece (293 pack7 bytes, 101
+ * event packets, 7 USB packets) arrives whole; one request at a time always works, a frame sent before the reply
+ * to the one before is dropped whole (no reply; never a partial frame) */
+static uint32_t usb_frame(const uint8_t *f, uint32_t n, uint8_t *usbp)   /* F0..F7 -> USB-MIDI event packets */
+{
+    uint32_t i = 0, o = 0;
+    while (i < n) {
+        uint32_t k = n - i >= 3u ? 3u : n - i, cin = k == 3u && i + 3u < n ? 4u : k == 3u ? 7u : 4u + k;
+        usbp[o++] = (uint8_t)cin;
+        usbp[o++] = f[i];
+        usbp[o++] = k > 1u ? f[i + 1] : 0;
+        usbp[o++] = k > 2u ? f[i + 2] : 0;
+        i += k;
+    }
+    return o;
+}
+static uint32_t usb_feed(const uint8_t *p, uint32_t n)   /* whole 64-byte USB packets, as the host sends them */
+{
+    uint32_t o, refused = 0;
+    for (o = 0; o < n; o += 64u)
+        while (!ep1_take(p + o, n - o > 64u ? 64u : n - o))
+            refused++;                                  /* NAK: the host sends it again */
+    return refused;
+}
+static uint32_t put_frame(uint8_t *f, uint32_t op, uint32_t off, uint32_t count)
+{
+    static const uint8_t zero[256];
+    uint32_t n = 0, i;
+    f[n++] = 0xF0; f[n++] = ED_HDR0; f[n++] = ED_HDR1; f[n++] = ED_HDR2; f[n++] = ED_BACKUP_PUT;
+    f[n++] = (uint8_t)op; f[n++] = 2;
+    if (op == 0u) {
+        for (i = 0; i < 5u; i++) f[n++] = (uint8_t)((sizeof(project_store_t) >> (7u * i)) & (i == 4u ? 15u : 127u));
+        for (i = 0; i < 5u; i++) f[n++] = 0;
+    } else if (op == 1u) {
+        for (i = 0; i < 5u; i++) f[n++] = (uint8_t)((off >> (7u * i)) & (i == 4u ? 15u : 127u));
+        n += pack7(zero, count, f + n);
+    }
+    f[n++] = 0xF7;
+    return n;
+}
+static int usb_burst(void)
+{
+    static uint8_t f[700], u[1000], u2[2000];
+    uint32_t off, n, k, ok = 1, max = 0;
+    const uint8_t *x = 0;
+    int bad = 0;
+    reset();
+    usb.rx_pend = 0;
+    n = put_frame(f, 0, 0, 0);
+    usb_feed(u, usb_frame(f, n, u)); host_wire_n = 0; ed_service(); host_drain();
+    bad += check("BACKUP_PUT begin through ep1_take", wire_frames(ED_BACKUP_PUT, &x) == 1u && !x[2]);
+    for (off = 0; off < sizeof(project_store_t); off += 256u) {
+        uint32_t c = sizeof(project_store_t) - off > 256u ? 256u : sizeof(project_store_t) - off;
+        n = put_frame(f, 1, off, c);
+        if (n > max) max = n;
+        k = usb_frame(f, n, u);
+        usb_feed(u, k);
+        host_wire_n = 0; ed_service(); host_drain();
+        ok &= wire_frames(ED_BACKUP_PUT, &x) == 1u && !x[2] && sx_ready == 0;
+    }
+    bad += check("256-byte pieces in 64-byte USB packets at full speed: every piece taken (rc 0)",
+                 ok && ed_bk_pos == sizeof(project_store_t) && max == 4u + 1u + 7u + 293u + 1u && max <= sizeof sx_frame);
+    n = put_frame(f, 3, 0, 0);
+    usb_feed(u, usb_frame(f, n, u)); host_wire_n = 0; ed_service(); host_drain();
+    bad += check("abort through ep1_take", wire_frames(ED_BACKUP_PUT, &x) == 1u && !x[2] && !ed_bk_put);
+
+    /* two frames back to back, before the reply: the second is dropped whole, the first answered intact */
+    n = put_frame(f, 0, 0, 0);
+    usb_feed(u, usb_frame(f, n, u)); host_wire_n = 0; ed_service(); host_drain();
+    k = usb_frame(f, put_frame(f, 1, 0, 256), u2);
+    k += usb_frame(f, put_frame(f, 1, 256, 256), u2 + k);
+    usb_feed(u2, k);
+    host_wire_n = 0; ed_service(); ed_service(); host_drain();
+    bad += check("pipelined: the first piece is taken, the second (sent before its reply) dropped whole",
+                 wire_frames(ED_BACKUP_PUT, &x) == 1u && !x[2] && ed_bk_pos == 256u && !sx_ready);
+    n = put_frame(f, 1, 512, 256);
+    usb_feed(u, usb_frame(f, n, u)); host_wire_n = 0; ed_service(); host_drain();
+    bad += check("... so the next piece is refused (rc 1, offset), as a host that waits never sees",
+                 wire_frames(ED_BACKUP_PUT, &x) == 1u && x[2] == 1u && ed_bk_pos == 256u);
+    request(ED_BACKUP_PUT, (const uint8_t[]){3, 2}, 2);
+    return bad;
+}
+
 int main(void)
 {
     int bad = preferences() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
-              fm6_patches() + user_preset_roundtrip();
+              fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
     return bad != 0;
 }

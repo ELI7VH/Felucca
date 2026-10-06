@@ -5,7 +5,7 @@
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.0.1 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
+**TL;DR:** Felucca 1.0.2 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
 open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back.
@@ -20,12 +20,12 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 ## Features
 
 - **Thirteen engines** (below), each with its own factory presets
-- **Four tracks**, one synth part each with its own engine and sound (drums are the DRUM engine or
-  the SAMPLE engine's GM kit); 8 voices shared between them. ALGORITHM selects the track on every page
+- **Four tracks**, one synth part each with its own engine and sound (drums are the DRUM engine);
+  8 voices shared between them. ALGORITHM selects the track on every page
 - **Sequencer:** 64 steps per track with chords, ties, accent, slide and per-step chance; a piano
   roll of the steps; a drum grid (white keys = steps, black keys = lanes); motion recording of knob
-  moves; live loop recording with overdub; divisions from 1/32 to 4 bars; loading a sound never
-  touches your patterns
+  moves (a motion icon marks the cards it drives); live loop recording with overdub; divisions listed
+  by length, 4 bars to 1/32; loading a sound never touches your patterns
 - **Songs:** chain patterns A–D
 - **Chord keys:** one finger plays an in-key chord (triads or sevenths of the scale, or fixed chord
   shapes), with voicings; on the keys, MIDI in, recording and the arpeggiator
@@ -35,16 +35,19 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **Effects:** distortion and the SLICER per track; chorus, delay and reverb sends (the reverb as
   ROOM or SPRING); master limiter
 - **FX layer:** hold FX for repeat, reverse, filter sweeps, tape stop, freeze and a harmonizer
-  (OCT UP / OCT DN with shimmer), and mutes on the black keys
+  (OCT UP / OCT DN with shimmer), and mutes on the black keys; MENU > FX LATCH makes them toggle, so
+  nothing has to stay held
 - **Quick layers:** hold FX, GLO, SCL or EDIT for shortcuts on the keys and knobs; one-step undo
   (SAVE held); REC on every page; OCT+ confirms, OCT- goes back
 - **Presets:** factory presets, 32 user preset slots and 4 projects, named on the device;
   projects from every earlier version load
-- **Screen:** flat UI with Inter Tight and Fukiai icons, 8 palettes including grayscale and high contrast
-- **LEDs:** idle buttons and keys glow dim so the panel can be found in the dark (MENU > LEDS INV: the
-  official firmware's look); PLAY turns green while playing; the keys show the notes the sequencer plays
+- **Screen:** flat UI with Inter Tight and Fukiai icons, FLAT or LINE style, 10 palettes including
+  grayscale, black and white, high contrast and NIGHT; tracks numbered 1–4 on small cushions
+- **LEDs:** idle buttons and keys glow dim so the panel can be found in the dark (MENU > LEDS: OFF,
+  DIM LO, DIM HI or INV, the official firmware's look); PLAY turns green while playing; the keys show
+  the notes the sequencer plays
 - **USB:** class-compliant MIDI in and out, and a 44.1 kHz stereo audio input ("Felucca") that
-  records the master output on the computer, no driver needed
+  records the master output on the computer, no driver needed (at a fixed level with MENU > USB LEVEL FIXED)
 - **MIDI:** USB and TRS MIDI in; channels 1–4 play tracks 1–4 (other channels the selected track),
   and the keys send on the track's channel; pitch bend, sustain, panic; clock from internal, USB or TRS
 - **Web:** editor for every parameter (with a 6-operator FM patch editor), step grid, mixer,
@@ -55,7 +58,7 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 
 ![FM-1 controls with Felucca 1.0](docs/panel.jpg)
 
-- **SELECT** sets the BPM, **MASTER** the volume, **ALGORITHM** picks the track (T1–T4) and
+- **SELECT** sets the BPM (unless MENU > BPM LOCK is ON), **MASTER** the volume, **ALGORITHM** picks the track (T1–T4) and
   **PRESETS** its sound. **KNOB 1–4** edit the four columns of the page
 - FX, SCL, ENV, LFO, EDIT, GLO, SAVE, ARP and SEQ open their pages; press again for the next page.
   HOME returns home
@@ -64,6 +67,31 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - OCT− / OCT+ shift the octave (both: reset). On action pages, in dialogs and the menu, OCT+ does it
   and OCT− goes back
 - Save a sound: stop, tap SAVE, pick a slot with KNOB 1, then OCT+ and OCT+ again (name it with the keys)
+
+## Menu
+
+Hold **HOME** for the menu. PRESETS moves through the rows, KNOB 1 or OCT+ changes the value, hold HOME
+again to leave. Every new setting defaults to the earlier behaviour.
+
+- **COLOR:** the palette. GREY (grayscale, called MONO up to 1.0.1), GREEN, AMBER, ICE, VIOLET, ROSE,
+  PAPER (light), HI-CON (high contrast), NIGHT (the 0.9 look: true black, green-tinted text) and MONO
+  (black and white)
+- **STYLE:** FLAT (filled cards) or LINE (areas divided by thin lines)
+- **ANIM:** ON or OFF; OFF shows every change at once, without rolling digits or a gliding piano roll
+- **LEDS:** OFF (no glow), DIM LO, DIM HI (default) or INV (the idle LEDs lit, the active ones dark)
+- **HOLD:** how long FX, GLO, SCL or EDIT is held before its map shows
+- **KNOB ACCEL:** OFF (one step per click) or ON: a fast, steady turn of a wide value moves 2 to 4 steps
+  per click; lists never jump
+- **FX LATCH:** ON, FX + an effect key turns the effect on until pressed again, the knob macros stay
+  where you leave them, and FX + OCT− turns everything off
+- **BPM LOCK:** ON, SELECT no longer changes the tempo; hold GLO and turn SELECT, tap F4 in the GLO
+  layer or use GLO > GLOBAL instead
+- **SPEAKER EQ:** FLAT, LOWCUT or BASS+, a tone setting for the built-in speaker (not a switch). It also
+  shapes the headphone out and USB audio, so keep it on FLAT when recording. The firmware cannot turn
+  the speaker off, but headphones in the jack do
+- **USB LEVEL:** MASTER (the MASTER knob sets the USB audio level too) or FIXED (USB always at full
+  level, MASTER sets only the speaker and headphones)
+- **HARDWARE CALIBRATION** and **ABOUT**
 
 ## Engines
 
@@ -74,7 +102,7 @@ In the order the device lists them:
   web editor, macros on the device, an algorithm chart on screen
 - **PHASE**: phase distortion (ported from CrispyZebra)
 - **LOFI**: chiptune; pulse, triangle, saw, noise and a 4-bit wave RAM, stepped envelope, sweep, arpeggio
-- **SAMPLE**: multisampled instruments, a GM percussion set and 3 user sample slots
+- **SAMPLE**: multisampled instruments and 3 user sample slots
 - **VOICE**: formant oscillator, sung vowels
 - **TRIO**: 3 oscillators with ring modulation and sync, multimode filter
 - **WHEEL**: tonewheel-style organ; drawbar registrations, percussion, key click, drive, rotary speaker
@@ -86,7 +114,8 @@ In the order the device lists them:
 - **DRUM**: an 8-lane kit of Felucca's own drum voices on the General MIDI key map
 
 The DIGITAL engine of 0.9 has been replaced by FM6: projects and presets with DIGITAL sounds load
-as FM6 sounds converted from them.
+as FM6 sounds converted from them. The SAMPLE engine's PERC kit was removed in 1.0.2: sounds and
+projects that used it load as the DRUM engine's kit, on the same key map.
 
 **SLICER** (FX page, every track): a tempo-synced 16-step gate or stutter, with 16 patterns.
 
@@ -121,6 +150,18 @@ sevenths, or a fixed shape) and VOIC the voicing.
 | `web/` | web installer and editor sources |
 | `tests/` | tests that run on the build machine |
 | `LICENSES/` | licence texts of the bundled font, icons, ported DSP and SDK files |
+
+## If the FM-1 does not start
+
+If an update is interrupted and the FM-1 stays black, check whether a computer sees it as a USB device named
+**WL80UBOOT** (or a USB mass-storage device with ID 4C4A:8057). That is the chip's built-in boot mode, and
+the FM-1 can be brought back:
+
+- First try another USB data cable, and close every other app that uses MIDI, then run the web installer again.
+- If it stays in boot mode, [FM-1 Transporter](https://github.com/kurogedelic/FM-1-transporter) reads and
+  writes the FM-1's flash from a Mac through a Seeed XIAO RP2040 (three wires to the FM-1's USB lines). Back up
+  the flash first, then write the official firmware (M-VAVE's FM-1.fwsc).
+- Questions: [Issues](https://github.com/hugelton/Felucca/issues).
 
 ## Support
 
