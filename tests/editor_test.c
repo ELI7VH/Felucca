@@ -112,14 +112,15 @@ static int preferences(void)
     uint32_t n = request(ED_INFO, a, 0);
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
-        host_wire[n - 19] == CHAIN_ROWS && host_wire[n - 18] == 0x55 &&
-        host_wire[n - 17] == 1 && host_wire[n - 16] == 9 &&
-        host_wire[n - 15] == 0x4d && host_wire[n - 14] == 1 &&
-        host_wire[n - 13] == MOTION_MAX && host_wire[n - 12] == 1 &&
-        host_wire[n - 11] == 0x42 && host_wire[n - 10] == 1 && host_wire[n - 9] == 3 &&
-        host_wire[n - 8] == 0x46 && host_wire[n - 7] == 1 && host_wire[n - 6] == FM6_NFACTORY &&
-        host_wire[n - 5] == FM6_BANK_N &&
-        host_wire[n - 4] == 0x53 && host_wire[n - 3] == 1 && host_wire[n - 2] == 3);
+        host_wire[n - 22] == CHAIN_ROWS && host_wire[n - 21] == 0x55 &&
+        host_wire[n - 20] == 1 && host_wire[n - 19] == 9 &&
+        host_wire[n - 18] == 0x4d && host_wire[n - 17] == 1 &&
+        host_wire[n - 16] == MOTION_MAX && host_wire[n - 15] == 1 &&
+        host_wire[n - 14] == 0x42 && host_wire[n - 13] == 1 && host_wire[n - 12] == 3 &&
+        host_wire[n - 11] == 0x46 && host_wire[n - 10] == 1 && host_wire[n - 9] == FM6_NFACTORY &&
+        host_wire[n - 8] == 0 &&                         /* (no bank since 1.0.3) */
+        host_wire[n - 7] == 0x53 && host_wire[n - 6] == 1 && host_wire[n - 5] == 3 &&
+        host_wire[n - 4] == 0x50 && host_wire[n - 3] == 1 && host_wire[n - 2] == 3);   /* FM6 v2: no bank, preset patches */
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -338,65 +339,122 @@ static int malformed_saves(void)
     return bad;
 }
 
-/* FM6 patches (cmds 68..71): a track's own patch, the bank (RAM here), the factory patches, malformed frames */
+/* FM6 patches (cmds 68..71): a track's own patch, the retired bank ("no bank"), the factory patches, the user presets'
+ * patches (target 3), malformed frames */
 static int fm6_patches(void)
 {
     int bad = 0;
     uint8_t a[2 + FM6_PACKED], pk[FM6_PACKED];
     uint32_t n, i;
     reset();
-    fm6_bank_check(-1);
+    upf_empty();
     a[0] = ED_FM6_FACTORY; a[1] = 3;
     n = request(ED_FM6_GET, a, 2);
     bad += check("FM6_GET factory 4: the packed record", n == 5u + 3u + FM6_PACKED + 1u && host_wire[7] == 0 &&
                  !memcmp(host_wire + 8, FM6_FACTORY[3], FM6_PACKED));
     memcpy(pk, FM6_FACTORY[3], FM6_PACKED);
     memcpy(pk + 118, "MY PATCH  ", 10);
+    trk[2].eng_req = ENGI_FM6;
+    trk[2].p[P_E7] = 3;
     a[0] = ED_FM6_TRACK; a[1] = 2; memcpy(a + 2, pk, FM6_PACKED);
     n = request(ED_FM6_PUT, a, sizeof a);
-    bad += check("FM6_PUT track 3: rc 0, the track's patch", n == 9u && host_wire[7] == 0 &&
-                 !memcmp(fm6_patch[2] + FP_NAME, "MY PATCH  ", 10));
+    bad += check("FM6_PUT track 3: rc 0, the track's patch, SLOT OWN (not F4: the name differs)", n == 9u &&
+                 host_wire[7] == 0 && !memcmp(fm6_patch[2] + FP_NAME, "MY PATCH  ", 10) &&
+                 trk[2].p[P_E7] == FM6_OWN && fm6_slot[2] == FM6_OWN);
+    fm6_poll();
+    bad += check("  .. the main loop keeps it", !memcmp(fm6_patch[2] + FP_NAME, "MY PATCH  ", 10));
     a[1] = 2;
     n = request(ED_FM6_GET, a, 2);
     bad += check("FM6_GET track 3: as sent", host_wire[7] == 0 && !memcmp(host_wire + 8, pk, FM6_PACKED));
-    a[0] = ED_FM6_BANK; a[1] = 4;
-    n = request(ED_FM6_GET, a, 2);
-    bad += check("FM6_GET of an empty bank slot: rc 2, no record", n == 9u && host_wire[7] == 2);
-    a[0] = ED_FM6_BANK; a[1] = 4; memcpy(a + 2, pk, FM6_PACKED);
-    a[2 + 14] = 120;                                      /* OP6 output level 120: stored as 99 */
-    n = request(ED_FM6_PUT, a, sizeof a);
-    a[0] = ED_FM6_BANK; a[1] = 4;
-    request(ED_FM6_GET, a, 2);
-    bad += check("FM6_PUT bank B5, then GET: stored in range (a level of 120 -> 99)", host_wire[7] == 0 &&
-                 host_wire[8 + 14] == 99 && !memcmp(host_wire + 8 + 118, "MY PATCH  ", 10) && fm6_bank_used(4));
+    a[0] = ED_FM6_TRACK; a[1] = 2; memcpy(a + 2, FM6_FACTORY[5], FM6_PACKED);
+    request(ED_FM6_PUT, a, sizeof a);
+    bad += check("FM6_PUT of a factory patch unchanged: SLOT shows it (F6)", trk[2].p[P_E7] == 5 && fm6_slot[2] == 5u);
+    trk[2].p[P_E7] = FM6_OWN;                            /* (back to MY PATCH for the SLOT trip below) */
+    a[0] = ED_FM6_TRACK; a[1] = 2; memcpy(a + 2, pk, FM6_PACKED);
+    request(ED_FM6_PUT, a, sizeof a);
+    trk[2].p[P_E7] = 1;
+    fm6_poll();
+    bad += check("SLOT OWN -> F2 loads the factory patch", !memcmp(fm6_patch[2] + FP_NAME, FM6_FACTORY[1] + 118, 10));
+    trk[2].p[P_E7] = 6;
+    fm6_poll();
+    trk[2].p[P_E7] = FM6_OWN;
+    fm6_poll();
+    bad += check("  .. and back to OWN brings the own patch back", !memcmp(fm6_patch[2] + FP_NAME, "MY PATCH  ", 10) &&
+                 fm6_slot[2] == FM6_OWN);
+    trk[2].p[P_E7] = 20;                                 /* (a 1.0.2 B slot that escaped a clamp) */
+    fm6_poll();
+    bad += check("a SLOT past OWN is OWN: the patch stays, nothing reloads", trk[2].p[P_E7] == FM6_OWN &&
+                 !memcmp(fm6_patch[2] + FP_NAME, "MY PATCH  ", 10));
+    for (i = 0; i < 3u; i++) {                           /* the bank: GET, PUT, ERASE answer "no bank" (3) */
+        a[0] = ED_FM6_BANK; a[1] = 4; memcpy(a + 2, pk, FM6_PACKED);
+        if (i < 2u)
+            request(i ? ED_FM6_PUT : ED_FM6_GET, a, i ? sizeof a : 2u);
+        else {
+            a[0] = 4;
+            request(ED_FM6_ERASE, a, 1);
+        }
+        bad += check(i == 0u ? "FM6_GET of the bank: rc 3, no bank" : i == 1u ? "FM6_PUT to the bank: rc 3, no bank" :
+                               "FM6_ERASE: rc 3, no bank", host_wire[i == 2u ? 6 : 7] == 3u);
+    }
     n = request(ED_FM6_LIST, a, 0);
-    {   /* factory 8, bank 27, then used + name per slot */
-        uint32_t p = 7, k, ok = host_wire[5] == FM6_NFACTORY && host_wire[6] == FM6_BANK_N, named = 0;
-        for (k = 0; k < FM6_NFACTORY + FM6_BANK_N && p < n; k++) {
-            uint32_t used = host_wire[p++];
-            if (k == FM6_NFACTORY + 4u) named = used && !memcmp(host_wire + p, "MY PATCH", 9);
-            if (k < FM6_NFACTORY) ok &= used == 1u;
+    {   /* factory 8, bank 0, then used + name per factory slot */
+        uint32_t p = 7, k, ok = host_wire[5] == FM6_NFACTORY && host_wire[6] == 0;
+        for (k = 0; k < FM6_NFACTORY && p < n; k++) {
+            ok &= host_wire[p++] == 1u;
             while (host_wire[p]) p++;
             p++;
         }
-        bad += check("FM6_LIST: 8 factory names, the bank's used slots by name", ok && named && k == FM6_NSLOT);
+        bad += check("FM6_LIST: 8 factory names, nbank 0", ok && k == FM6_NFACTORY && p == n - 1u);
     }
-    trk[1].eng_req = ENGI_FM6;
-    trk[1].p[P_E7] = FM6_NFACTORY + 4;
-    fm6_poll();
-    bad += check("PTCH B5 loads the bank patch into the track", !memcmp(fm6_patch[1] + FP_NAME, "MY PATCH  ", 10));
-    a[0] = 4;
-    n = request(ED_FM6_ERASE, a, 1);
-    bad += check("FM6_ERASE B5: empty; PTCH B5 plays the init voice", host_wire[6] == 0 && !fm6_bank_used(4) &&
-                 (fm6_poll(), !memcmp(fm6_patch[1] + FP_NAME, "INIT VOICE", 10)));
+    /* target 3: an FM6 user preset's patch */
+    song.sel = 2;
+    up_store(5, "MINE");                                 /* track 3 (MY PATCH, OWN) -> slot 6 */
+    a[0] = ED_FM6_USER; a[1] = 5;
+    request(ED_FM6_GET, a, 2);
+    bad += check("UP_STORE of an FM6 track: FM6_GET user 6 gives its patch", host_wire[7] == 0 &&
+                 !memcmp(host_wire + 8 + 118, "MY PATCH  ", 10));
+    memcpy(a + 2, pk, FM6_PACKED);
+    memcpy(a + 2 + 118, "EDITOR    ", 10);
+    a[2 + 14] = 120;                                     /* OP6 output level 120: stored as 99 */
+    request(ED_FM6_PUT, a, sizeof a);
+    i = host_wire[7];
+    request(ED_FM6_GET, a, 2);
+    bad += check("FM6_PUT user 6, then GET: stored in range (a level of 120 -> 99)", i == 0u && host_wire[7] == 0 &&
+                 host_wire[8 + 14] == 99 && !memcmp(host_wire + 8 + 118, "EDITOR    ", 10));
+    fm6_load_slot(2, 0);
+    up_load(5);
+    bad += check("  .. UP_LOAD 6 plays it, SLOT OWN", !memcmp(fm6_patch[2] + FP_NAME, "EDITOR    ", 10) &&
+                 trk[2].p[P_E7] == FM6_OWN);
+    up_rename(5, "RENAMED");
+    a[0] = ED_FM6_USER; a[1] = 5;
+    request(ED_FM6_GET, a, 2);
+    bad += check("  .. a rename keeps it", host_wire[7] == 0 && !memcmp(host_wire + 8 + 118, "EDITOR    ", 10));
+    trk[0].eng_req = ENGI_DRUM;
+    song.sel = 0;
+    up_store(6, "KIT");
+    a[0] = ED_FM6_USER; a[1] = 6; memcpy(a + 2, pk, FM6_PACKED);
+    request(ED_FM6_GET, a, 2);
+    i = host_wire[7];
+    request(ED_FM6_PUT, a, sizeof a);
+    bad += check("a DRUM user preset has no patch: GET rc 2, PUT rc 1", i == 2u && host_wire[7] == 1u);
+    a[1] = 9;                                            /* an empty slot */
+    request(ED_FM6_PUT, a, sizeof a);
+    i = host_wire[7];
+    a[1] = UP_SLOTS;
+    request(ED_FM6_GET, a, 2);
+    bad += check("an empty user slot: PUT rc 1; past the slots: GET rc 1", i == 1u && host_wire[7] == 1u);
+    up_put(5, 0);
+    a[1] = 5;
+    request(ED_FM6_GET, a, 2);
+    bad += check("an erased preset's patch is gone (GET rc 2)", host_wire[7] == 2u);
     a[0] = ED_FM6_TRACK; a[1] = 4;
     request(ED_FM6_PUT, a, sizeof a);
     i = host_wire[7];
     request(ED_FM6_PUT, a, 20);
     bad += check("FM6_PUT: a fifth track or a short record: rc 1", i == 1u && host_wire[7] == 1u);
-    a[0] = ED_FM6_BANK; a[1] = FM6_BANK_N;
+    a[0] = 4; a[1] = 0;
     request(ED_FM6_GET, a, 2);
-    bad += check("FM6_GET past the bank: rc 1", host_wire[7] == 1u);
+    bad += check("FM6_GET of an unknown target: rc 1", host_wire[7] == 1u);
     return bad;
 }
 

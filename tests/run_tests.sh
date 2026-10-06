@@ -23,7 +23,8 @@
 #                   the alignment: every text / icon / keycap meant to be centred, or on its neighbours' line, by its
 #                   ink against its box (cells, chips, buttons, rows, knobs, the roll's strip, the keycaps' pills), every
 #                   screen in FLAT and LINE and every palette, over every value it can show; 1 px off or more fails
-#                   (build/ui_new/align.txt).
+#                   (build/ui_new/align.txt). MENU > LARGE: every screen again (FLAT, LINE, every palette) and the page / value
+#                   sweep with the tall cards, the same lint and alignment; sheet_LARGE_GREY.png, sheet_LARGE_MONO.png.
 # UI (tests/ui_test.c): the UI sources against stub display / buttons / knobs: sound loads keep the steps and
 #                   the track's ARP / SCL / SLICER, the SEQ > PATTERNS loader and its REPLACE? dialog, the
 #                   one-step undo of both (SAVE held), REC on TRACKS / SEQ / ARP, STEP and ARP while recording,
@@ -101,6 +102,15 @@ $CC -DT_CDC=1 -DHALF_FRAMES=$HALF -o "$OUT/uac_test" tests/uac_test.c
 run "USB audio input: descriptors (with CDC), ring and packets" "$OUT/uac_test"
 $CC -DT_CDC=0 -DHALF_FRAMES=$HALF -o "$OUT/uac_test_nocdc" tests/uac_test.c
 run "USB audio input: descriptors (without CDC), ring and packets" "$OUT/uac_test_nocdc"
+# USB descriptor layouts (#67): CDC UAC LAYOUT CDC-presented; layout 0 and the console left out = 1.0's bytes
+for v in 1.1.0.1 1.1.1.1 1.1.2.1 1.1.3.1 1.1.0.0 1.1.2.0 1.0.0.1 1.0.1.1 1.0.0.0 0.1.0.1 0.0.0.1; do
+    IFS=. read -r t_cdc t_uac t_lay t_on <<EOF
+$v
+EOF
+    $CC -DT_CDC="$t_cdc" -DT_UAC="$t_uac" -DT_LAYOUT="$t_lay" -DT_ON="$t_on" -o "$OUT/usb_desc_test" \
+        tests/usb_desc_test.c
+    run "USB descriptors: CDC $t_cdc (presented $t_on), UAC $t_uac, layout $t_lay" "$OUT/usb_desc_test"
+done
 
 [ -f build/felucca.fwsc ] || { echo "run ./build.sh first"; exit 1; }
 

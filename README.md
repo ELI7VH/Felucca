@@ -5,7 +5,7 @@
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.0.2 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
+**TL;DR:** Felucca 1.0.3 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
 open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back.
@@ -14,7 +14,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 [Issues](https://github.com/hugelton/Felucca/issues).
 
 - Install: [web installer](https://hugelton.github.io/Felucca/) (Chrome or Edge, USB), or `tools/fm1_install.py` from a terminal
-- Editor: [web editor](https://hugelton.github.io/Felucca/webapp/editor/)
+- Editor: [web editor](https://hugelton.github.io/Felucca/webapp/editor/); its development has moved to
+  [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp)
 - Build: [BUILDING.md](BUILDING.md)
 
 <a href="https://hugelton.itch.io/felucca"><img src="https://static.itch.io/images/badge-color.svg" alt="Available on itch.io" width="74"></a>
@@ -39,19 +40,22 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **FX layer:** hold FX for repeat, reverse, filter sweeps, tape stop, freeze and a harmonizer
   (OCT UP / OCT DN with shimmer), and mutes on the black keys; MENU > FX LATCH makes them toggle, so
   nothing has to stay held
-- **Quick layers:** hold FX, GLO, SCL or EDIT for shortcuts on the keys and knobs; one-step undo
-  (SAVE held); REC on every page; OCT+ confirms, OCT- goes back
-- **Presets:** factory presets, 32 user preset slots and 4 projects, named on the device;
-  projects from every earlier version load
+- **Quick layers:** hold FX, GLO, SCL or EDIT for shortcuts on the keys and knobs, or double-tap it to
+  keep the layer open; one-step undo (SAVE held); REC on every page; OCT+ confirms, OCT- goes back
+- **Presets:** factory presets, 32 user preset slots and 4 projects, named on the device (an FM6
+  sound keeps its own patch in both); projects from every earlier version load
 - **Screen:** flat UI with Inter Tight and Fukiai icons, FLAT or LINE style, 10 palettes including
-  grayscale, black and white, high contrast and NIGHT; tracks numbered 1–4 on small cushions
+  grayscale, black and white, high contrast and NIGHT; tracks numbered 1–4 on small cushions;
+  MENU > LARGE for tall knob cards with larger labels and values
 - **LEDs:** idle buttons and keys glow dim so the panel can be found in the dark (MENU > LEDS: OFF,
   DIM LO, DIM HI or INV, the official firmware's look); PLAY turns green while playing; the keys show
-  the notes the sequencer plays
+  the notes the sequencer and MIDI IN play
 - **USB:** class-compliant MIDI in and out, and a 44.1 kHz stereo audio input ("Felucca") that
-  records the master output on the computer, no driver needed (at a fixed level with MENU > USB LEVEL FIXED)
-- **MIDI:** USB and TRS MIDI in; channels 1–4 play tracks 1–4 (other channels the selected track),
-  and the keys send on the track's channel; pitch bend, sustain, panic; clock from internal, USB or TRS
+  records the master output on the computer, no driver needed (at a fixed level with MENU > USB LEVEL FIXED;
+  on macOS 13–15, set MENU > USB SERIAL to OFF so the audio input appears)
+- **MIDI:** USB and TRS MIDI in; with ROUT CH1-4, channels 1–4 play tracks 1–4 and 5–16 are ignored
+  (ROUT SEL: every channel plays the selected track), and the keys send on the track's channel; pitch
+  bend, sustain, panic; clock from internal, USB or TRS
 - **Web:** editor for every parameter (with a 6-operator FM patch editor), step grid, mixer,
   preset library, sample upload and recording with trim; full backup and restore; return to the
   official firmware
@@ -62,6 +66,7 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 
 - Tap a page button for its page, again for the next; HOME returns home
 - Hold FX, GLO, SCL or EDIT for its quick layer; hold SAVE to undo, HOME for the menu, SEQ for the song
+- Double-tap FX, GLO, SCL or EDIT to keep its layer open without holding; tap it again to close
 - On action pages, in dialogs and the menu, OCT+ does it and OCT− goes back
 - Save a sound: stop, tap SAVE, pick a slot with KNOB 1, then OCT+ and OCT+ again (name it with the keys)
 
@@ -74,6 +79,9 @@ again to leave. Every new setting defaults to the earlier behaviour.
   PAPER (light), HI-CON (high contrast), NIGHT (the 0.9 look: true black, green-tinted text) and MONO
   (black and white)
 - **STYLE:** FLAT (filled cards) or LINE (areas divided by thin lines)
+- **LARGE:** OFF or ON: on HOME and the value pages the four knob cards grow tall, marked K1–K4, with
+  larger labels and values about twice the size; the graph below becomes a strip. Lists, the piano roll,
+  the drum grid and the quick layers keep their layout with larger labels
 - **ANIM:** ON or OFF; OFF shows every change at once, without rolling digits or a gliding piano roll
 - **LEDS:** OFF (no glow), DIM LO, DIM HI (default) or INV (the idle LEDs lit, the active ones dark)
 - **HOLD:** how long FX, GLO, SCL or EDIT is held before its map shows
@@ -88,6 +96,9 @@ again to leave. Every new setting defaults to the earlier behaviour.
   the speaker off, but headphones in the jack do
 - **USB LEVEL:** MASTER (the MASTER knob sets the USB audio level too) or FIXED (USB always at full
   level, MASTER sets only the speaker and headphones)
+- **USB SERIAL:** ON or OFF, applied when the menu closes (the FM-1 reconnects). OFF leaves out the
+  serial console, a developer tool, so the FM-1 is a plain audio + MIDI device; this lets macOS 13–15
+  see its USB audio input. MIDI, the editor and the installer work either way
 - **HARDWARE CALIBRATION** and **ABOUT**
 
 ## Engines
@@ -96,7 +107,8 @@ In the order the device lists them:
 
 - **ANALOG**: virtual analog; two oscillators, noise, drive, resonant low-pass filter
 - **FM6**: classic 6-operator FM (Dexed-based): 32 algorithms, a full patch per track edited in the
-  web editor, macros on the device, an algorithm chart on screen
+  web editor (which imports .syx files), macros on the device, an algorithm chart on screen; SLOT
+  picks a factory patch (F1–F8) or the track's own (OWN)
 - **PHASE**: phase distortion (ported from CrispyZebra)
 - **LOFI**: chiptune; pulse, triangle, saw, noise and a 4-bit wave RAM, stepped envelope, sweep, arpeggio
 - **SAMPLE**: multisampled instruments and 3 user sample slots
@@ -112,7 +124,9 @@ In the order the device lists them:
 
 The DIGITAL engine of 0.9 has been replaced by FM6: projects and presets with DIGITAL sounds load
 as FM6 sounds converted from them. The SAMPLE engine's PERC kit was removed in 1.0.2: sounds and
-projects that used it load as the DRUM engine's kit, on the same key map.
+projects that used it load as the DRUM engine's kit, on the same key map. FM6's patch bank (the B
+slots) was removed in 1.0.3: user presets keep their own FM6 patch, and presets that used a B slot get
+that patch on the first start of 1.0.3.
 
 **SLICER** (FX page, every track): a tempo-synced 16-step gate or stutter, with 16 patterns.
 
@@ -144,7 +158,7 @@ sevenths, or a fixed shape) and VOIC the voicing.
 | `firmware/` | firmware sources: `src/` app, `hal/` hardware layer, `loader/` update loader |
 | `tools/` | build script, generators, package maker, installer and sample uploader |
 | `assets/` | UI font, icon names, CC0 instrument samples |
-| `web/` | web installer and editor sources |
+| `web/` | the web installer and the editor the site serves (the new editor: [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp)) |
 | `tests/` | tests that run on the build machine |
 | `LICENSES/` | licence texts of the bundled font, icons, ported DSP and SDK files |
 

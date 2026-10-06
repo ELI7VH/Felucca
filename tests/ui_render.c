@@ -217,8 +217,33 @@ static void hk_ink(uint16_t ink, uint16_t bg);
 #define UI_FILL_HOOK(x, y, w, h) hk_fill(x, y, w, h)
 static void fm6_hook(uint32_t kind, uint32_t a, uint32_t b);
 #define FM6_CHART_HOOK(kind, a, b) fm6_hook(kind, a, b)
+/* MENU > LARGE: the tall cards' values by the face they got (ui_draw.c LARGE_HOOK), the characters L lacked */
+static uint64_t lg_n[4];
+static char lg_miss[96], lg_wide[16][12], lg_small[16][12];
+static uint32_t lg_nwide, lg_nsmall;
+static void lg_hook(const char *s, int why);
+#define LARGE_HOOK(s, why) lg_hook(s, why)
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
+
+static uint8_t large_on;                         /* the LARGE pass: every scene with MENU > LARGE ON */
+static void lg_hook(const char *s, int why)
+{
+    uint32_t i;
+    lg_n[why & 3]++;
+    if (why == 1)
+        for (; *s; s++) {
+            uint32_t c = fold(&AF_L, (uint8_t)*s);
+            if (glyph_at(&AF_L, c) < 0 && !strchr(lg_miss, (int)c) && strlen(lg_miss) + 1u < sizeof lg_miss)
+                lg_miss[strlen(lg_miss)] = (char)c;
+        }
+    if (why == 2 || why == 3) {                     /* a few of each, distinct */
+        char (*l)[12] = why == 2 ? lg_wide : lg_small;
+        uint32_t *n = why == 2 ? &lg_nwide : &lg_nsmall;
+        for (i = 0; i < *n && strcmp(l[i], s); i++) ;
+        if (i == *n && *n < 16u) snprintf(l[(*n)++], 12, "%s", s);
+    }
+}
 
 /* an icon drawn: its ink, read from its cell's nibbles here (not icons.c icon_ink's table: measured, not trusted) */
 static void hk_icon(int32_t x, int32_t y, uint32_t size, uint32_t id)
@@ -543,6 +568,7 @@ static void state(void)                          /* a playing song with steps on
 {
     uint32_t i;
     ui_power_on();
+    if (large_on) ui_prefs |= PREF_LARGE;
     song.playing = 1;
     song.g[G_BPM] = 124;
     for (i = 0; i < NTRK; i++) trk[i].seq_idx = 5;
@@ -595,7 +621,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_PRESETS, S_PRESETS_NOFAV
        S_MENU, S_MENU_SPEAKER, S_ABOUT, S_ABOUT_REC, S_ABOUT_CREDITS, S_ABOUT_END, S_UBOOT, S_CALIBRATION,
        S_BATT0, S_BATT1, S_BATT2, S_BATT3, S_BATT_USB, S_MOTION_REC, S_MOTION_OFF, S_MOTION_CARD, S_SONG_HOME,
        S_FX_PEEK, S_FX_HELD, S_FX_WAIT, S_FX_HARM, S_MENU_HOLD, S_MENU_LEDS, S_MENU_END, S_REVERB,
-       S_GLO_PEEK, S_GLO_ACTIVE, S_GLO_EXT, S_SCL_PEEK, S_SCL_ACTIVE, S_EDIT_PEEK, S_EDIT_ACTIVE, S_EDIT_USER, S_LAYER_HINT,
+       S_GLO_PEEK, S_GLO_ACTIVE, S_GLO_EXT, S_SCL_PEEK, S_SCL_ACTIVE, S_EDIT_PEEK, S_EDIT_ACTIVE, S_EDIT_USER, S_LAYER_HINT, S_LAYER_LOCK, S_LAYER_LOCK_FX,
        S_NAME_USER, S_NAME_TYPING, S_NAME_123, S_NAME_EMPTY, S_NAME_FULL, S_NAME_PLAYING, S_PROJECT_NAMED, S_SONG_NAMED,
        S_USER_FOOT, S_SLICES_BREAK, S_SLICES_USR,
        S_ROLL_EMPTY, S_ROLL_ACID, S_ROLL_CHORDS, S_ROLL_TIES, S_ROLL_LEN32, S_ROLL_HIGH, S_ROLL_LOW, S_ROLL_WIDE, S_ROLL_PLAYING,
@@ -609,7 +635,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "batt_0", "batt_1", "batt_2", "batt_3", "batt_usb", "motion_rec", "motion_off", "motion_card", "song_home",
     "perform_peek", "perform_held", "perform_wait", "perform_harm", "menu_hold", "menu_leds", "menu_end", "reverb_spring",
     "layer_glo_peek", "layer_glo_active", "layer_glo_ext", "layer_scl_peek", "layer_scl_active", "layer_edit_peek",
-    "layer_edit_active", "layer_edit_user", "layer_hint",
+    "layer_edit_active", "layer_edit_user", "layer_hint", "layer_lock", "layer_lock_fx",
     "name_user", "name_typing", "name_123", "name_empty", "name_full", "name_playing", "project_named", "song_named",
     "user_foot", "slices_break", "slices_usr",
     "roll_empty", "roll_acid", "roll_chords", "roll_ties", "roll_len32_p2", "roll_high", "roll_low", "roll_wide", "roll_playing",
@@ -622,6 +648,7 @@ static void mock_state(int s)
 {
     uint32_t i;
     ui_power_on();
+    if (large_on) ui_prefs |= PREF_LARGE;
     usb.config = 0;
     song.batt_raw = 600;
     for (i = 0; i < SCOPE_N; i++) {                  /* a saw with a little second harmonic */
@@ -929,6 +956,9 @@ static void setup(int s)
     case S_EDIT_USER: song.playing = 0; eng(6); up_store(6, "MY LONG TRIO NAME"); up_load(6); favorite_set(NENGINES, 6, 1);
         go_home(); ui.layer = LAYER_EDIT; break;
     case S_LAYER_HINT: go_page(GR_TRK); ui.msg_t = 0; layer_tap(LAYER_GLO); break;
+    /* #83: locked open by a double tap (the lock after the header's name): EDIT and FX */
+    case S_LAYER_LOCK: go_title("ENV"); ui.layer = ui.lock = LAYER_EDIT; break;
+    case S_LAYER_LOCK_FX: go_title("ENV"); ui.layer = ui.lock = LAYER_FX; break;
     /* NAME (ui_name.c): USER SAVE prefilled; a letter cycling (RS: S, R next); 123 on a project; an empty project name
      * (the placeholder); 12 of the widest letters, the cursor past them; playing (OCT+ dim) */
     case S_NAME_USER: song.playing = 0; go_page(GR_USER); ui.uslot = 6; name_open(NK_USER_SAVE, 6); break;
@@ -1021,7 +1051,7 @@ static void sweep_columns(void)
             eng(e);
             ui.home = 0; ui.page = (uint8_t)i; page_entered();
             if (!page_visible(i)) continue;
-            snprintf(name, sizeof name, "%s/%s", ENGINES[e]->name, PAGES[i].title);
+            snprintf(name, sizeof name, "%s%s/%s", large_on ? "LARGE " : "", ENGINES[e]->name, PAGES[i].title);
             cur_name = name;
             for (c = 0; c < 4u; c++) {
                 int16_t *vp;
@@ -1046,7 +1076,7 @@ static void sweep_columns(void)
             sweep_motion();
         }
         state(); pal(UI_GREY_INDEX); eng(e); go_home();   /* HOME's four knobs of this engine */
-        snprintf(name, sizeof name, "%s/HOME", ENGINES[e]->name);
+        snprintf(name, sizeof name, "%s%s/HOME", large_on ? "LARGE " : "", ENGINES[e]->name);
         cur_name = name;
         draw(-1);
         lint();
@@ -1055,7 +1085,7 @@ static void sweep_columns(void)
     for (e = 0; e < 4u; e++) {                           /* the MOD page: every source and destination */
         int32_t v;
         state(); pal(UI_GREY_INDEX); go_title("MOD");
-        cur_name = "MOD sweep";
+        cur_name = large_on ? "LARGE MOD sweep" : "MOD sweep";
         for (v = 0; v < MD_N; v++) {
             TSEL->p[P_M1SRC] = (int16_t)(v % MS_N); TSEL->p[P_M1DST] = (int16_t)v; TSEL->p[P_M1AMT] = (int16_t)(e * 40 - 64);
             mod_ui_slot = (uint8_t)(v & 3u);
@@ -1208,6 +1238,20 @@ static void align_sweeps(void)
             draw_column(i & 3u, "LVL", "64", "", T_THEME, 500, i);
             ui.col[i & 3u][0] = 0;
         }
+        cur_name = st ? "sweep LINE: LARGE card icons" : "sweep FLAT: LARGE card icons";
+        ui_prefs = PREF_LARGE; ui.home = 1;             /* (tall: HOME) */
+        for (i = 0; i < ICON_COUNT; i++) {
+            ui.force = 1; ui.hot_col = (uint8_t)(i & 3u); ui.hot_t = (uint8_t)(i & 4u);
+            draw_column(i & 3u, "LVL", i & 8u ? "OFF" : "64", i & 16u ? "%" : "", T_THEME, 500, i);
+            ui.col[i & 3u][0] = 0;
+        }
+        ui.layer = LAYER_FX;                            /* (the labels in M: a layer's cards) */
+        for (i = 0; i < ICON_COUNT; i++) {
+            ui.force = 1; ui.hot_col = (uint8_t)(i & 3u); ui.hot_t = (uint8_t)(i & 4u);
+            draw_column(i & 3u, "LVL", "64", "", T_THEME, 500, i);
+            ui.col[i & 3u][0] = 0;
+        }
+        ui.layer = 0; ui.hot_t = 0; ui_prefs = 0;
         cur_name = st ? "sweep LINE: dialogs" : "sweep FLAT: dialogs";
         for (i = CF_CLEAR_SEQ; i <= CF_ERASE_USER; i++)
             for (k = 0; k < 4u; k++) {
@@ -1264,12 +1308,15 @@ static void align_sweeps(void)
         state(); pal(UI_GREY_INDEX);
         cur_name = st ? "sweep LINE: mixer" : "sweep FLAT: mixer";
         go_page(GR_TRK);
-        for (v = 0; v < 128; v++) {
-            trk[0].p[P_LEVEL] = (int16_t)v; trk[0].p[P_PAN] = (int16_t)(v - 64); trk[0].p[P_REV] = (int16_t)v;
-            trk[1].p[P_MUTE] = (int16_t)(v & 1); song.rec = v & 2 ? 2u : 0u;
+        for (v = 0; v < 256; v++) {                    /* (then with LARGE: the strip) */
+            ui_prefs = v >= 128 ? PREF_LARGE : 0u;
+            trk[0].p[P_LEVEL] = (int16_t)(v & 127); trk[0].p[P_PAN] = (int16_t)((v & 127) - 64); trk[0].p[P_REV] = (int16_t)(v & 127);
+            trk[1].p[P_MUTE] = (int16_t)(v & 1); song.rec = v & 2 ? 2u : 0u; ui.hot_t = (uint8_t)(v & 4); ui.hot_col = 3;
+            ts.meter[0] = (uint8_t)(v % (TS_MH - 1));
             ui.force = 1;
             draw_tracks();
         }
+        ui_prefs = 0; ui.hot_t = 0;
         ui.force = 0;
     }
     ui_style = ST_FLAT; style_apply();
@@ -1424,6 +1471,47 @@ int main(int argc, char **argv)
         if (nruled < 100u) { fprintf(stderr, "ui_render: dividers on %u STYLE screens only\n", nruled); return 1; }
         fprintf(rep, "STYLE LINE (every palette): %u lint findings\n", nfind - n0);
     }
+    {   /* MENU > LARGE (ui.c large_kind): every screen in every palette in FLAT and LINE, linted (GREY: gray, MONO:
+         * neutral); GREY MONO in FLAT as OUTDIR/ppm/LARGE_<PALETTE>_<screen>.ppm (ui_render.py: sheet_LARGE_<PALETTE>.png),
+         * LINE GREY as LARGE-LINE_GREY; the tall cards' value faces counted (lg_hook) */
+        static const char *const ST_N[2] = {"LARGE", "LARGE-LINE"};
+        uint32_t st, n0 = nfind, ntall = 0;
+        large_on = 1;
+        for (st = ST_FLAT; st <= ST_LINE; st++)
+            for (p = 0; p < NPALETTES; p++)
+                for (s = 0; s < S_COUNT; s++) {
+                    char name[64], tag[24];
+                    if (!FELUCCA_FM4 && (s == S_OP_ENV || (s >= S_ALG1 && s <= S_OP_LEVEL)))
+                        continue;
+                    snprintf(tag, sizeof tag, "%s_%s", ST_N[st], UI_PALETTES[p].name);
+                    snprintf(name, sizeof name, "%s/%s", tag, S_NAME[s]);
+                    cur_name = name;
+                    setup((int)s);
+                    ui_prefs |= PREF_LARGE;
+                    pal(p);
+                    ui_style = (uint8_t)st; style_apply();
+                    draw((int)s);
+                    ntall += !ui.menu && !ui.confirm && !name_on() && large_kind() == LK_TALL;
+                    lint();
+                    mono_check();
+                    if ((p == UI_GREY_INDEX || (!st && p == UI_BW_INDEX)))
+                        write_ppm(out, tag, S_NAME[s]);
+                }
+        ui_style = ST_FLAT; style_apply();
+        sweep_columns();                                /* every value of every column, tall */
+        large_on = 0;
+        if (ntall < 100u) { fprintf(stderr, "ui_render: LARGE drew %u screens with tall cards only\n", ntall); return 1; }
+        fprintf(rep, "MENU > LARGE (FLAT and LINE, every palette, the page / value sweep): %u lint findings; %u screens with tall"
+                " cards\n", nfind - n0, ntall);
+        fprintf(rep, "  tall card values: %llu in L, %llu in M (a glyph not in L: \"%s\"), %llu in M (L too wide), %llu in S\n",
+                (unsigned long long)lg_n[0], (unsigned long long)lg_n[1], lg_miss, (unsigned long long)lg_n[2],
+                (unsigned long long)lg_n[3]);
+        fprintf(rep, "  too wide for L, e.g.:");
+        for (s = 0; s < lg_nwide; s++) fprintf(rep, " '%s'", lg_wide[s]);
+        fprintf(rep, "\n  in S, e.g.:");
+        for (s = 0; s < lg_nsmall; s++) fprintf(rep, " '%s'", lg_small[s]);
+        fprintf(rep, "\n");
+    }
     {   /* every FM6 chart (the lint above, fmp_check, runs on each), in GREY: gray */
         uint32_t a, c0 = fmp_charts;
         for (a = 1; a <= 32u; a++) {
@@ -1486,6 +1574,39 @@ int main(int argc, char **argv)
             }
         }
         roll_cost();
+        {   /* MENU > LARGE: the same full redraws, tall cards and the strip */
+            static const int LC[] = {S_HOME, S_EDIT_ANALOG, S_ENV, S_LFO, S_MIXER, S_FX, S_PATTERN};
+            fprintf(rep, "  MENU > LARGE:\n");
+            large_on = 1;
+            for (k = 0; k < sizeof LC / sizeof LC[0]; k++) {
+                clock_t c0;
+                uint64_t px, nt;
+                setup(LC[k]); pal(1);
+                draw(LC[k]);
+                px_visited = n_text = 0;
+                c0 = clock();
+                for (i = 0; i < N; i++) draw(LC[k]);
+                px = px_visited / N; nt = n_text / N;
+                fprintf(rep, "  %-16s %15.1f %13llu %15llu\n", S_NAME[LC[k]], (double)(clock() - c0) / CLOCKS_PER_SEC / N * 1e6,
+                        (unsigned long long)nt, (unsigned long long)px);
+            }
+            {
+                clock_t c0;
+                setup(S_HOME); pal(1); draw(S_HOME);
+                px_visited = n_text = 0;
+                c0 = clock();
+                for (i = 0; i < N * 4; i++) { ui_draw(); nscr = npend = 0; }
+                fprintf(rep, "  LARGE HOME, a frame without force (lazy strips): %.1f us, %llu texts\n",
+                        (double)(clock() - c0) / CLOCKS_PER_SEC / (N * 4) * 1e6, (unsigned long long)(n_text / (N * 4)));
+                setup(S_ENV); pal(1); draw(S_ENV);
+                px_visited = n_text = 0;
+                c0 = clock();
+                for (i = 0; i < N * 4; i++) { ui_draw(); nscr = npend = 0; }
+                fprintf(rep, "  LARGE ENV, a frame without force (lazy strips): %.1f us, %llu texts\n",
+                        (double)(clock() - c0) / CLOCKS_PER_SEC / (N * 4) * 1e6, (unsigned long long)(n_text / (N * 4)));
+            }
+            large_on = 0;
+        }
     }
     al_off = 0;
     al_keycaps();

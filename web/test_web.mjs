@@ -23,6 +23,13 @@ const ok = (cond, what) => { console.log(`${what.padEnd(64)} ${cond ? "ok" : "FA
 const eq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const py = (code, ...args) => execFileSync("python3", ["-c", code, ...args], { maxBuffer: 1 << 26 });
 const HERE = new URL(".", import.meta.url).pathname;
+/* what lives outside web/, each overridable (a web-only checkout passes them, or the checks skip):
+   FELUCCA_DESC  the firmware's parameter / protocol table (tests/descdump.c -> build/host/desc.json)
+   FELUCCA_TOOLS the firmware's tools (tools/fm1_sample_upload.py, the sample format's reference)
+   FELUCCA_ROOT  the Felucca tree with a ./build.sh build (the package check) */
+const DESC = process.env.FELUCCA_DESC || join(HERE, "../build/host/desc.json");
+const TOOLS = process.env.FELUCCA_TOOLS || join(HERE, "../tools");
+const FW_ROOT = process.env.FELUCCA_ROOT || join(HERE, "..");
 
 /* ------------------------------------------------------------ editor protocol --- */
 const html = readFileSync(join(HERE, "editor.html"), "utf8");
@@ -250,7 +257,7 @@ function mockTables() {
        dr.presets.length === 1 && dr.presets.every((p) => p.pat === 12),
        "editor: DRUM engine 10 (KIT TUNE TONE DECY SNAP ACC KICK DRV), one kit suggesting BEAT");
   }
-  const dj = join(HERE, "../build/host/desc.json");
+  const dj = DESC;
   if (!existsSync(dj)) { console.log("editor: mock tables == firmware (no build/host/desc.json)        skip"); return; }
   const fw = JSON.parse(readFileSync(dj, "utf8"));
   const m = E.makeMockDevice({ auto: false }), T = m.tables;
@@ -317,7 +324,7 @@ function mockTables() {
    single-patch files too) import as FM6 with the converted patch, a converted sound put to the device keeps its
    DIGITAL values in an engine 1 slot (UP_LOAD converts it), the device's DIGITAL slot reads back as FM6 */
 async function editorFm4() {
-  const dj = join(HERE, "../build/host/desc.json");
+  const dj = DESC;
   if (existsSync(dj)) {
     const fw = JSON.parse(readFileSync(dj, "utf8")).FM4;
     let bad = 0;
@@ -351,15 +358,16 @@ async function editorFm4() {
   let d0 = E.parse[C.DUMP](await rq(E.req.dump()), info);
   await rq(E.req.set(1, 20, 1));
   let d = E.parse[C.DUMP](await rq(E.req.dump()), info);
+  const owned = (p) => p.map((v, i) => (i === info.pe0 + 7 ? 8 : v));   /* (1.0.3: the converted patch is the track's own: SLOT OWN) */
   let want = E.FM4.convert(digital(0, d0.p), info.pe0);
-  ok(d.engine === 12 && d.preset === 0 && eq(d.p, want.p) && eq(await fm6Of(), E.FM6.pack(want.voice)),
-    "DIGITAL retired: SET G_ENGSEL 1 -> FM6 with E.PIANO converted (its own patch, PTCH TINE EP)");
+  ok(d.engine === 12 && d.preset === 0 && eq(d.p, owned(want.p)) && eq(await fm6Of(), E.FM6.pack(want.voice)),
+    "DIGITAL retired: SET G_ENGSEL 1 -> FM6 with E.PIANO converted (its own patch, SLOT OWN, preset TINE EP)");
   d0 = d;
   await rq(E.req.preset(1, 5));
   d = E.parse[C.DUMP](await rq(E.req.dump()), info);
   want = E.FM4.convert(digital(5, d0.p), info.pe0);
-  ok(d.engine === 12 && d.preset === 4 && eq(d.p, want.p) && E.FM6.name(E.FM6.unpack(await fm6Of())) === "PAD",
-    "DIGITAL retired: PRESET 1 5 (its PAD) -> FM6, the converted patch named PAD, PTCH / preset FM6 PAD");
+  ok(d.engine === 12 && d.preset === 4 && eq(d.p, owned(want.p)) && E.FM6.name(E.FM6.unpack(await fm6Of())) === "PAD",
+    "DIGITAL retired: PRESET 1 5 (its PAD) -> FM6, the converted patch named PAD, SLOT OWN, preset FM6 PAD");
   /* library files of DIGITAL sounds: today's 91 parameters, 89 (P_E0 81), 69 (P_E0 61, no OP ENV) */
   const base = Array.from({ length: 91 }, (_, i) => (i < 83 ? pdesc[i].def : 0));
   const pad = E.FM4.presetValues(base.slice(), 5, 83);
@@ -678,7 +686,10 @@ async function editorLive() {
       "live: firmware before the sync tag echoes the editor's PRESET as RELOAD (the editor skips it)");
     o.done();
     const fw = E.parse[C.INFO]([88, 0, 0, 91, 27, 64, 83, 4, 16, 0x55, 1, 9, 0x4d, 1, 64, 1, 0x42, 1, 3, 0x46, 1, 8, 27, 0x53, 1, 3]);
-    ok(fw.backupCaps === 3 && fw.fm6 && fw.fm6.bank === 27 && fw.syncCaps === 3, "live: the firmware's INFO trailer: backup, FM6, then the sync tag");
+    ok(fw.backupCaps === 3 && fw.fm6 && fw.fm6.bank === 27 && !fw.fm6.caps && fw.syncCaps === 3,
+      "live: the INFO trailer of 1.0.2: backup, FM6 (a bank), then the sync tag; no FM6 v2");
+    const f3 = E.parse[C.INFO]([88, 0, 0, 91, 27, 64, 83, 4, 16, 0x55, 1, 9, 0x4d, 1, 64, 1, 0x42, 1, 3, 0x46, 1, 8, 0, 0x53, 1, 3, 0x50, 1, 3]);
+    ok(f3.fm6 && f3.fm6.bank === 0 && f3.fm6.caps === 3 && f3.syncCaps === 3, "live: the INFO trailer of 1.0.3: FM6 v2 after the sync tag (no bank, preset patches)");
   }
 
   /* PING keeps the watch on; without requests it ends */
@@ -915,6 +926,7 @@ async function editorFm6() {
   ok(F6.parseSysex(bad).badSum === 1, "FM6: a wrong checksum is reported (the voice still read)");
   ok(F6.parseSysex(bank.subarray(6, 4102)).voices.length === 32 && F6.parseSysex(one.subarray(6, 161)).voices.length === 1,
     "FM6: raw 4096 / 155-byte files read too");
+  fm6Tolerant(F6, voices, bank, one);
   ok(F6.carriers(0).join() === "1,3" && F6.carriers(31).length === 6 && F6.feedbackOp(0) === 6 && F6.feedbackOp(1) === 2,
     "FM6: carriers and the feedback operator of an algorithm");
 
@@ -923,37 +935,132 @@ async function editorFm6() {
   [...m.access.inputs.values()][0].onmidimessage = (e) => link.receive(e.data);
   const rq = (x) => link.request(x), C = E.CMD;
   const info = E.parse[C.INFO](await rq(E.req.info()));
-  ok(info.fm6 && info.fm6.factory === 8 && info.fm6.bank === 27, "FM6: INFO tag (8 factory, 27 bank slots)");
+  ok(info.fm6 && info.fm6.factory === 8 && info.fm6.bank === 0 && info.fm6.caps === 3, "FM6: INFO tag (8 factory, no bank; FM6 v2 caps 3)");
   let list = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  ok(list.slots.length === 35 && list.slots[0].name === "TINE EP" && !list.slots[8].used, "FM6: LIST names the factory patches, the bank empty");
+  ok(list.factory === 8 && list.bank === 0 && list.slots.length === 8 && list.slots[0].name === "TINE EP", "FM6: LIST names the factory patches, nbank 0");
   const mine = F6.setName(F6.factory(2), "my bass");
   let p = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(1, 4, F6.pack(mine))));
-  list = E.parse[C.FM6_LIST](await rq(E.req.fm6List()));
-  ok(!p.rc && list.slots[12].used && list.slots[12].name === "MY BASS", "FM6: PUT into bank B5, listed by name");
   let g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(1, 4)));
-  ok(!g.rc && eq(g.packed, F6.pack(mine)), "FM6: GET bank B5 as stored");
-  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(1, 5)));
-  ok(g.rc === 2 && !g.packed, "FM6: GET of an empty slot: rc 2");
-  /* the selected track to FM6, PTCH B5 (at the pe0 INFO gives): the track plays that patch */
-  const eng = info.engines.indexOf("FM6");
+  const e0 = E.parse[C.FM6_ERASE](await rq(E.req.fm6Erase(4)));
+  ok(p.rc === 3 && g.rc === 3 && !g.packed && e0.rc === 3, "FM6: the bank (target 1): GET / PUT / ERASE answer rc 3, no bank");
+  /* the selected track to FM6; send a voice: the track's own patch, SLOT OWN; F2 and back to OWN */
+  const eng = info.engines.indexOf("FM6"), slotId = info.pe0 + 7;
   await rq(E.req.set(1, 20, eng));
-  await rq(E.req.set(0, info.pe0 + 7, 8 + 4));
+  p = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(0, 0, F6.pack(mine))));
   g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(0, 0)));
-  ok(!g.rc && F6.name(F6.unpack(g.packed)) === "MY BASS", `FM6: PTCH (P_E0 + 7 = ${info.pe0 + 7}) B5 loads the bank patch into the track`);
+  let sv = E.parse[C.GET](await rq(E.req.get(0, slotId))).value;
+  ok(!p.rc && F6.name(F6.unpack(g.packed)) === "MY BASS" && sv === 8, `FM6: send to the track: its own patch, SLOT (P_E0 + 7 = ${slotId}) OWN`);
+  await rq(E.req.set(0, slotId, 1));
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(0, 0)));
+  ok(eq(g.packed, F6.FACTORY_PK[1]), "FM6: SLOT F2 loads the factory patch");
+  await rq(E.req.set(0, slotId, 8));
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(0, 0)));
+  ok(F6.name(F6.unpack(g.packed)) === "MY BASS", "FM6: SLOT back to OWN brings the own patch back");
   const edited = F6.unpack(g.packed); edited[F6.VI.ALG] = 31;
   p = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(0, 0, F6.pack(edited))));
   g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(0, 0)));
   ok(!p.rc && F6.unpack(g.packed)[F6.VI.ALG] === 31, "FM6: PUT to the track: its own patch changed");
-  const e = E.parse[C.FM6_ERASE](await rq(E.req.fm6Erase(4)));
-  ok(!e.rc && !E.parse[C.FM6_LIST](await rq(E.req.fm6List())).slots[12].used, "FM6: ERASE empties B5");
+  /* a user preset carries it (target 3, the librarian's bank.get / put) */
+  E.parse[C.UP_STORE](await rq(E.req.upStore(20, "KEEP ME")));
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(3, 20)));
+  ok(!g.rc && eq(g.packed, F6.pack(edited)), "FM6: UP_STORE of an FM6 track keeps its patch (FM6_GET user 21)");
+  await rq(E.req.fm6Put(0, 0, F6.FACTORY_PK[0]));
+  await rq(E.req.upLoad(20));
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(0, 0)));
+  sv = E.parse[C.GET](await rq(E.req.get(0, slotId))).value;
+  ok(eq(g.packed, F6.pack(edited)) && sv === 8, "FM6: UP_LOAD plays it again, SLOT OWN");
+  const u = await E.bank.get(rq, info, 20);
+  ok(u.used && eq(u.fm6, F6.pack(edited)), "FM6: the librarian reads a user preset with its patch");
+  const other = F6.pack(F6.setName(F6.factory(5), "OTHER"));
+  let rc = await E.bank.put(rq, 21, { ...u, name: "COPY", fm6: other }, info);
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(3, 21)));
+  ok(rc === 0 && !g.rc && eq(g.packed, other), "FM6: the librarian writes a user preset with its patch (UP_PUT, then FM6_PUT user)");
+  rc = await E.bank.put(rq, 22, { ...u, name: "OLD FW", fm6: other }, { ...info, fm6: { ...info.fm6, caps: 0 } });
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(3, 22)));
+  ok(rc === 0 && g.rc === 2, "FM6: firmware without preset patches (1.0.2): UP_PUT only");
+  const lf = E.readLibraryFile(JSON.parse(JSON.stringify(E.libraryFile("library", [{ ...u, fm6: other }], { engines: info.engines }))), { engines: info.engines });
+  ok(lf.patches.length === 1 && eq(lf.patches[0].fm6, other) && !("fm4" in lf.patches[0]), "FM6: a library file keeps an FM6 sound's patch (fm6)");
+  g = E.parse[C.FM6_GET](await rq(E.req.fm6Get(3, 0)));
+  p = E.parse[C.FM6_PUT](await rq(E.req.fm6Put(3, 0, other)));
+  ok(g.rc === 2 && p.rc === 1, "FM6: a user preset of another engine: GET rc 2, PUT rc 1");
   p = E.parse[C.FM6_PUT](await rq([C.FM6_PUT, [0, 9, 1, 2, 3]]));
   ok(p.rc === 1, "FM6: a short record or a fifth track: rc 1");
   link.close(); m.stop();
   const old = E.makeMockDevice({ auto: false, noFm6: true });
   const l2 = new E.Link((d) => [...old.access.outputs.values()][0].send(d));
   [...old.access.inputs.values()][0].onmidimessage = (ev) => l2.receive(ev.data);
-  ok(E.parse[C.INFO](await l2.request(E.req.info())).fm6 === null, "FM6: firmware without it: no tag, no FM6 tab");
+  ok(E.parse[C.INFO](await l2.request(E.req.info())).fm6 === null, "FM6: firmware without it: no tag (the tab shows a hint)");
   l2.close(); old.stop();
+}
+
+/* the variants real 6-operator voice files have (parseSysex), every one built here byte by byte */
+function fm6Tolerant(F6, voices, bank, one) {
+  const U = (...xs) => Uint8Array.from(xs.flatMap((x) => Array.from(x)));
+  const names = (r) => r.voices.map((x) => x.name);
+  const bankOk = (r, n = 32) => r.voices.length === n && r.voices.slice(0, 8).every((x, k) => eq(F6.pack(x.v), F6.FACTORY_PK[k]))
+    && r.voices[1].name === "GLASS BELL" && r.voices[8].name === "INIT VOICE";
+  const msg = (hdr, n, fill = 0) => { const d = new Array(n).fill(fill); return U(hdr, d, [F6.checksum(d), 0xF7]); };
+  const otherMaker = U([0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0, 0x7F, 0, 0x41, 0xF7]);
+  let r = F6.parseSysex(U(bank.subarray(0, 4102), [0xF7]));
+  ok(bankOk(r) && !r.badSum && !r.short, "FM6 import: bank without its checksum (4103 bytes)");
+  r = F6.parseSysex(bank.subarray(0, 4102));
+  ok(bankOk(r) && !r.short, "FM6 import: bank without checksum and F7 (EOF)");
+  r = F6.parseSysex(U(bank.subarray(0, 4103), [0x00], [0xF7]));
+  ok(bankOk(r) && !r.badSum, "FM6 import: bank with a stray byte before F7 (4105 bytes)");
+  r = F6.parseSysex(U(bank.subarray(0, 4103), one));
+  ok(r.voices.length === 33 && bankOk({ voices: r.voices.slice(0, 32) }) && r.voices[32].name === "BRASS SECT",
+    "FM6 import: bank without F7, a single voice right after");
+  r = F6.parseSysex(bank.subarray(0, 4000));
+  ok(r.voices.length === 31 && r.short === 1 && r.voices[30].name === F6.name(F6.init()), "FM6 import: bank cut at EOF: its 31 whole voices");
+  r = F6.parseSysex(one.subarray(0, 6 + 150));
+  ok(r.voices.length === 1 && r.short === 1 && r.voices[0].name === "BRASS", "FM6 import: single voice cut in its name");
+  r = F6.parseSysex(one.subarray(0, 6 + 120));
+  ok(r.voices.length === 0, "FM6 import: single voice cut before its voice bytes: none");
+  const b10 = Uint8Array.from(bank); b10[4] = 0x10; b10[2] = 0x05;
+  r = F6.parseSysex(b10);
+  ok(bankOk(r), "FM6 import: byte count written 10 00, device 6");
+  const one0 = Uint8Array.from(one); one0[4] = 0; one0[5] = 0;
+  ok(names(F6.parseSysex(one0)).join() === "BRASS SECT", "FM6 import: single voice with an odd byte count");
+  r = F6.parseSysex(U([0x00, 0x13, 0x55, 0xF7, 0x80], otherMaker, bank, [0xFE, 0x00, 0x00], one, [0x0A, 0x0D]));
+  ok(r.voices.length === 33 && r.skipped === 1 && r.kinds.join() === "maker:41", "FM6 import: junk and another maker's message around the voices");
+  r = F6.parseSysex(U(bank, bank));
+  ok(r.voices.length === 64 && bankOk({ voices: r.voices.slice(32) }), "FM6 import: two banks in one file: 64 voices");
+  const raw = bank.subarray(6, 4102);
+  r = F6.parseSysex(U(raw, raw, raw));
+  ok(r.voices.length === 96 && bankOk({ voices: r.voices.slice(64) }) && !r.sysex, "FM6 import: raw 3 x 4096 bytes: 96 voices");
+  ok(names(F6.parseSysex(Uint8Array.from(F6.FACTORY_PK[1]))).join() === "GLASS BELL", "FM6 import: raw 128-byte packed voice");
+  /* a file of the format's second generation: the supplement bank (format 6, 1120 bytes), the voices, a performance (format 1, 94 bytes),
+     a universal LM block: only the voices kept */
+  const lm = U([0xF0, 0x43, 0x00, 0x7E, 0x01, 0x28], Array.from("LM  8973PM", (c) => c.charCodeAt(0)), new Array(30).fill(0), [0, 0xF7]);
+  r = F6.parseSysex(U(msg([0xF0, 0x43, 0, 6, 0x08, 0x60], 1120), bank, msg([0xF0, 0x43, 0, 1, 0, 0x5E], 94), lm));
+  ok(bankOk(r) && r.skipped === 3 && r.kinds.join() === "other43", "FM6 import: supplement / performance blocks skipped, voices kept");
+  r = F6.parseSysex(msg([0xF0, 0x43, 0, 4, 0x20, 0], 4096));
+  ok(!r.voices.length && r.kinds.join() === "fm4", "FM6 import: a 4-operator 32-voice bank: none, named as such");
+  r = F6.parseSysex(otherMaker);
+  ok(!r.voices.length && r.kinds.join() === "maker:41" && r.sysex, "FM6 import: another maker's SysEx: none, its id");
+  r = F6.parseSysex(U([0xF0, 0x00, 0x20, 0x29, 0x02, 0xF7]));
+  ok(r.kinds.join() === "maker:00 20 29", "FM6 import: a 3-byte maker id");
+  r = F6.parseSysex(U([0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7]));
+  ok(!r.voices.length && r.kinds.join() === "universal", "FM6 import: a universal message: none");
+  r = F6.parseSysex(Uint8Array.from({ length: 1000 }, (_, k) => k & 0x7F));
+  ok(!r.voices.length && !r.sysex && !r.kinds.length, "FM6 import: 1000 bytes, no SysEx: none");
+  r = F6.parseSysex(msg([0xF0, 0x43, 0, 9, 0x20, 0], 4096, 0x7F));
+  let inrange = r.voices.length === 32;
+  for (const { v } of r.voices) for (let i = 0; i < F6.SIZE; i++) inrange &&= i >= F6.NAME ? v[i] >= 32 && v[i] <= 126 : v[i] <= F6.max(i);
+  ok(inrange, "FM6 import: every voice sanitized (all 7F bank)");
+}
+
+/* the 6-OP FM tab without the bank (1.0.3): import -> pick -> edit -> send to track; factory patches into the editor */
+function fm6TabNoBank() {
+  const tab = html.slice(html.indexOf('<section class="panel" id="p-fm6"'), html.indexOf("</section>", html.indexOf('id="p-fm6"')));
+  const code = html.slice(html.indexOf("let fm6v = FM6.init();"), html.indexOf('$("connect").addEventListener'));
+  ok(["fm6import", "fm6file", "fm6imported", "fm6send", "fm6read", "fm6slot", "fm6load", "fm6keep"].every((id) => tab.includes(`id="${id}"`))
+    && !["fm6store", "fm6erase", "fm6bankexp"].some((id) => html.includes(`"${id}"`)), "FM6 tab: import, voices, send, factory load and the hint; no store / erase / bank export");
+  ok(!/TARGET\.BANK|fm6Erase|fm6Store|defaultSlot/.test(code), "FM6 tab: no bank requests");
+  const tb = html.slice(html.indexOf("const TEXT = {"), html.indexOf("\n};", html.indexOf("const TEXT = {")) + 2);
+  const T = vm.runInNewContext(tb.replace("const TEXT =", "(") + ")"), en = T.en, ja = T.ja;
+  ok(/send it to a track, then save a user preset \(SAVE\) or a project/.test(en.fm6Keep) && ja.fm6Keep && !/B1|B27|bank/i.test(en.fm6Help + en.fm6NeedDevice),
+    "FM6 tab: the hint (send to a track, then SAVE on the device), no B slots in the help");
 }
 
 /* ------------------------------------------------- editor tabs and strings --- */
@@ -1144,9 +1251,11 @@ function samplesMatch() {
     return { s, root: E.rootFromName(p.split("/").pop().replace(/\.[^.]*$/, "")) };
   });
   const js = E.buildSlot("Mix ä 12345", zones);
-  execFileSync("python3", [join(HERE, "../tools/fm1_sample_upload.py"), "build", "Mix ä 12345", join(dir, "slot"), ...files]);
-  const pyHdr = readFileSync(join(dir, "slot.hdr")), pyData = readFileSync(join(dir, "slot.bin"));
-  ok(eq(js.hdr, pyHdr) && eq(js.data, pyData), `samples: editor == sampleio.py (${files.length} WAV formats, ${js.data.length} B)`);
+  if (existsSync(join(TOOLS, "fm1_sample_upload.py"))) {
+    execFileSync("python3", [join(TOOLS, "fm1_sample_upload.py"), "build", "Mix ä 12345", join(dir, "slot"), ...files]);
+    const pyHdr = readFileSync(join(dir, "slot.hdr")), pyData = readFileSync(join(dir, "slot.bin"));
+    ok(eq(js.hdr, pyHdr) && eq(js.data, pyData), `samples: editor == sampleio.py (${files.length} WAV formats, ${js.data.length} B)`);
+  } else console.log("samples: editor == sampleio.py (no FELUCCA_TOOLS)                skip");
   /* recording / trimming: takeSample (a cut of the raw input, faded at the cuts, normalised), autoTrim */
   const R = E.SMP.RATE, raw = new Float64Array(R);       /* 1 s: silence, a tone from 0.25 to 0.6 s, silence */
   for (let i = Math.round(R * 0.25); i < Math.round(R * 0.6); i++) raw[i] = Math.sin(i * 0.2) * 0.3;
@@ -1182,7 +1291,7 @@ function samplesMatch() {
 
 /* ------------------------------------------------------- packages: JS == Python --- */
 async function packages() {
-  const pkg = join(HERE, "../build/felucca.fwsc");
+  const pkg = join(FW_ROOT, "build/felucca.fwsc");
   if (!existsSync(pkg)) {
     console.log("packages: skipped (run ./build.sh first)");
     return;
@@ -1289,6 +1398,7 @@ await editorTrackParam();
 await editorSong();
 await editorSessions();
 await editorFm6();
+fm6TabNoBank();
 await editorFm4();
 editorTabs();
 editorIcons();
