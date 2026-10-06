@@ -3,6 +3,8 @@
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/hugelton)
 
+[![Available on itch.io](https://static.itch.io/images/badge-color.svg)](https://hugelton.itch.io/felucca)
+
 ![Felucca 1.0](docs/felucca-1.0.png)
 
 **TL;DR:** Felucca 1.0.2 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
