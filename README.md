@@ -165,8 +165,9 @@ the FM-1 can be brought back:
 If Felucca is useful to you, [sponsoring on GitHub](https://github.com/sponsors/hugelton) or a donation
 on [itch.io](https://hugelton.itch.io/felucca) helps keep its development going.
 
-Pull requests are welcome, and so are ideas and requests: post them in
-[Discussions](https://github.com/hugelton/Felucca/discussions) or on X ([@kurogedelic](https://x.com/kurogedelic)).
+Issues are for reproducible bugs (one per issue). Ideas and requests go to
+[Discussions](https://github.com/hugelton/Felucca/discussions), and feature requests posted as issues will be
+moved there. Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 
