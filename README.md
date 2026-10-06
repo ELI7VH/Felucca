@@ -56,16 +56,11 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 
 ## Controls
 
-![FM-1 controls with Felucca 1.0](docs/panel.jpg)
+![FM-1 controls with Felucca](docs/controls.jpg)
 
-- **SELECT** sets the BPM (unless MENU > BPM LOCK is ON), **MASTER** the volume, **ALGORITHM** picks the track (T1–T4) and
-  **PRESETS** its sound. **KNOB 1–4** edit the four columns of the page
-- FX, SCL, ENV, LFO, EDIT, GLO, SAVE, ARP and SEQ open their pages; press again for the next page.
-  HOME returns home
-- **Held:** FX, GLO, SCL and EDIT open their quick layers; SAVE is undo, HOME the menu, SEQ the song
-- PLAY starts and stops all four tracks; REC arms the selected track, on every page
-- OCT− / OCT+ shift the octave (both: reset). On action pages, in dialogs and the menu, OCT+ does it
-  and OCT− goes back
+- Tap a page button for its page, again for the next; HOME returns home
+- Hold FX, GLO, SCL or EDIT for its quick layer; hold SAVE to undo, HOME for the menu, SEQ for the song
+- On action pages, in dialogs and the menu, OCT+ does it and OCT− goes back
 - Save a sound: stop, tap SAVE, pick a slot with KNOB 1, then OCT+ and OCT+ again (name it with the keys)
 
 ## Menu
