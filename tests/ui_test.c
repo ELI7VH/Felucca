@@ -1321,6 +1321,7 @@ static int test_display_preferences(void)
  * KNOB 1..4 and OCT+ / OCT- change a value, OCT+ opens CALIBRATION and ABOUT, HOME closes (OCT- not); reopened at the
  * same tab and row; the tabs slide with ANIM ON (only their strip drawn again), snap with ANIM OFF */
 static void wdt_ms(void) { fm1_ms++; }
+static void wdt_key(void) { fm1_ms++; if (fm1_ms % 50u == 0u) fm1_in.notes = 1u; }   /* a key pressed after a moment */
 static int test_menu_tabs(void)
 {
     int bad = 0, ok = 1;
@@ -1467,6 +1468,15 @@ static int test_menu_tabs(void)
         host_wdt_hook = 0;
         ok &= !memcmp(&p0, &panel, sizeof panel) && msg_is("SETUP CANCELLED") && ui.menu == 1;
     }
+    {   /* CALIBRATION: a piano key cancels at once (no 30 s wait), the table kept */
+        panel_t p0 = panel;
+        uint32_t t = fm1_ms;
+        host_wdt_hook = wdt_key;
+        press(B_OCTUP);
+        host_wdt_hook = 0;
+        fm1_in.notes = 0;
+        ok &= !memcmp(&p0, &panel, sizeof panel) && msg_is("SETUP CANCELLED") && ui.menu == 1 && fm1_ms - t < 1000u;
+    }
     bad += check("MENU SYSTEM: OCT+ opens ABOUT (OCT- back to the tab) and CALIBRATION; OCT- does nothing on them", ok);
     turn(EN_PRESET, 1); press(B_OCTUP);                /* ABOUT, HOME: closed, from the document */
     ok = ui.menu == 2;
@@ -1474,9 +1484,17 @@ static int test_menu_tabs(void)
     ok &= !ui.menu && ui.home;
     hold(B_HOME); ok &= ui.menu == 1 && ui.menu_sel == MI_ABOUT;   /* (opened at the tabs, ABOUT's row) */
     turn(EN_ALGO, -1); frame();
-    ok &= oct_leds() == (1u | OCT_BREATH);              /* (a value row: OCT- lit, OCT+ breathing) */
+    {   /* a value row: OCT- and OCT+ both breathe, each while that way has a value to go to; none lit */
+        uint32_t r = ui.menu_sel, want = (menu_step(r, -1) != menu_get(r) ? OCT_BREATH_DN : 0u) |
+                                         (menu_step(r, 1) != menu_get(r) ? OCT_BREATH : 0u);
+        ok &= r < MI_VALUES && oct_leds() == want && want != 0u;
+        menu_put(MI_HOLD, 0u); ui.menu_sel = MI_HOLD;   /* HOLD at its first value: OCT- dark, OCT+ breathing */
+        ok &= oct_leds() == OCT_BREATH;
+        menu_put(MI_HOLD, 1u);                          /* in between: both breathe */
+        ok &= oct_leds() == (OCT_BREATH | OCT_BREATH_DN);
+    }
     menu_close();
-    bad += check("MENU: HOME closes ABOUT too; reopened at the tabs; a value row lights OCT- and breathes OCT+", ok);
+    bad += check("MENU: HOME closes ABOUT too; reopened at the tabs; a value row breathes OCT- / OCT+ where they can go", ok);
 
     /* the slide: ANIM ON, a few frames from DISPLAY to CONTROL drawing only the tab strip; ANIM OFF, at once */
     ui_power_on();

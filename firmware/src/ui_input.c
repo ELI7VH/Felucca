@@ -43,9 +43,10 @@ static uint32_t cur_fam(void) { return ui.home ? FAM_HOME : cur_page()->fam; }
 static int layer_set_open(void);                       /* (ui_layer.c) */
 /* the OCT LEDs, bit 0 OCT- lit, bit 1 OCT+ lit, OCT_BREATH OCT+ breathing (can be pressed: dark .. ~60 %,
  * hal/fm1_input.h fm1_led_breath, #119). In the dialogs and on action pages OCT- (back) is lit and OCT+ breathes
- * while it would do something; the menu: on a value row OCT- lit (the previous value) and OCT+ breathing (the next),
+ * while it would do something; the menu: on a value row OCT- and OCT+ both breathe while that way has a value to go to,
  * on CALIBRATION / ABOUT OCT+ breathing alone (opens), in ABOUT OCT- lit (back); elsewhere the octave shift */
 #define OCT_BREATH 4u
+#define OCT_BREATH_DN 8u                                /* OCT- breathing (the menu: the previous value) */
 static uint32_t oct_leds(void)
 {
     if (name_on() && !ui.confirm && !ui.menu)           /* NAME: OCT- cancels, OCT+ (breathing) writes */
@@ -53,7 +54,10 @@ static uint32_t oct_leds(void)
     if (layer_set_open())                               /* a SET layer: OCT- puts back (UNDO), OCT+ nothing */
         return 1u;
     if (ui.menu && !ui.confirm)
-        return ui.menu >= 2u ? 1u : (ui.menu_sel < MI_VALUES ? 1u : 0u) | OCT_BREATH;
+        return ui.menu >= 2u ? 1u :                    /* (ABOUT: OCT- back, lit) */
+               ui.menu_sel >= MI_VALUES ? OCT_BREATH :  /* CALIBRATION / ABOUT: OCT+ opens */
+               (menu_step(ui.menu_sel, -1) != menu_get(ui.menu_sel) ? OCT_BREATH_DN : 0u) |   /* a value: each */
+               (menu_step(ui.menu_sel, 1) != menu_get(ui.menu_sel) ? OCT_BREATH : 0u);         /* way it can go */
     if (ui.confirm || act_cols())
         return 1u | (ui.confirm || act_ready() ? OCT_BREATH : 0u);
     return (song.octave < 0 ? 1u : 0u) | (song.octave > 0 ? 2u : 0u);
@@ -237,6 +241,7 @@ static void ui_leds(void)
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)((k >> 1) & 1u));
     led_put(nb, panel.btn[B_OCTUP], (int)(k & OCT_BREATH));
+    led_put(nb, panel.btn[B_OCTDN], (k & OCT_BREATH_DN) != 0u);
     c = key_leds(&br);
     g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? grid_glow() : 0u;   /* (key_leds: the grid's map) */
     for (k = 0; k < 27u; k++) {
@@ -1145,8 +1150,10 @@ static void ui_input(void)
 }
 
 /* ---------------------------------------------------- panel setup --- */
-/* 30 s without input: give up and keep the old table (a stuck key cannot hang the boot) */
+/* 30 s without input: give up and keep the old table (a stuck key cannot hang the boot). A piano key cancels at
+ * any time: the keys are not part of what is taught, so one works whatever the buttons' table says */
 #define SETUP_IDLE_MS 30000u
+#define SETUP_GIVE_UP(t0) (fm1_ms - (t0) > SETUP_IDLE_MS || fm1_in.notes != 0u)
 static void setup_title(void)
 {
     lcd_fill(0, 0, 240, 240, T_BG);
@@ -1163,6 +1170,7 @@ static void setup_title(void)
     }
     draw_text_box(0, 32, 240, &AF_S, "TEACH EACH BUTTON AND KNOB", T_MID, 1);
     lcd_fill(16, 56, 208, 1, T_LINE);
+    draw_text_box(0, 206, 240, &AF_S, "ANY KEY: CANCEL", T_DIM, 1);
 }
 static void setup_show(const char *what, const char *name)     /* "PRESS" / "TURN RIGHT", the control */
 {
@@ -1176,7 +1184,7 @@ static void panel_setup(void)
     setup_title();
     while (fm1_in.buttons) {                             /* wait for OCT-/OCT+ release */
         fm1_wdt_feed();
-        if (fm1_ms - t0 > SETUP_IDLE_MS)
+        if (SETUP_GIVE_UP(t0))
             goto timeout;
     }
     fm1_input_edges(0);
@@ -1187,7 +1195,7 @@ static void panel_setup(void)
         while (!(p & ~used)) {
             fm1_wdt_feed();
             p |= fm1_input_edges(0);
-            if (fm1_ms - t0 > SETUP_IDLE_MS)
+            if (SETUP_GIVE_UP(t0))
                 goto timeout;
         }
         for (id = 0; id < 14u; id++)
@@ -1206,7 +1214,7 @@ static void panel_setup(void)
         t0 = fm1_ms;
         for (;;) {
             fm1_wdt_feed();
-            if (fm1_ms - t0 > SETUP_IDLE_MS)
+            if (SETUP_GIVE_UP(t0))
                 goto timeout;
             for (e = 0; e < 7u; e++)
                 if (!((used >> e) & 1u) && (st = fm1_enc_take(e)) != 0)

@@ -5,7 +5,7 @@
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.0.5 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
+**TL;DR:** Felucca 1.0.5.1 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
 open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back. Want to look around first?
