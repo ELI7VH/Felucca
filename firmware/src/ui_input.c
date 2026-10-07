@@ -735,7 +735,7 @@ static void ui_input(void)
     uint32_t seq = btn_hold(&ui.seq_t0, B_SEQ, now, !ui.menu && !ui.confirm);
     uint32_t save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
     uint32_t oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open());
-    uint32_t lay, combo = 0, lytap, lkeys, glo;
+    uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
@@ -786,7 +786,7 @@ static void ui_input(void)
         panel_enc(EN_ALGO);                             /* (another track: OCT- puts back the layer's track only) */
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
             combo = 1;
-    } else if (layer_knobs_quiet()) {                   /* a layer letting go: KNOB 1..4 are nobody's (#39) */
+    } else if ((kq = (uint32_t)layer_knobs_quiet()) != 0) {   /* a layer letting go: KNOB 1..4 are nobody's (#39) */
         for (k = 0; k < 4u; k++)
             if (panel_enc(EN_K1 + k) != 0)
                 combo = 1;                              /* (with the button let go this frame: no tap) */
@@ -977,15 +977,19 @@ static void ui_input(void)
             ui_message("STOP TO EDIT");
     }
 
-    if ((s = panel_enc(EN_PRESET)) != 0 && (ui.home || cur_page()->graph == GR_BROWSE)) {
+    /* #102: the knobs a layer took above are not read again here. The TIMER5 scan (10 kHz) counts detents while this
+     * pass runs, so one landing after the layer's read went to the page as well: KNOB 1..4 edited the layer's control
+     * and the page under it (HOME's sound, motion recorded), PRESETS could load a sound. They stay for the next pass */
+    kq |= lay;
+    if (!lay && (s = panel_enc(EN_PRESET)) != 0 && (ui.home || cur_page()->graph == GR_BROWSE)) {
         /* PRESETS browses the selected part's sounds (all engines, then user presets) on HOME and the
          * PRESETS page only (never the steps); elsewhere (TRACKS too, where one records) a stray turn
          * would throw away the sound being edited */
         preset_step(s);                                  /* past the factory ones: user presets */
     }
-    if ((s = panel_enc(EN_ALGO)) != 0)             /* ALGORITHM: the selected track, on every page */
+    if (!lay && (s = panel_enc(EN_ALGO)) != 0)     /* ALGORITHM: the selected track, on every page */
         track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
-    if ((s = sel ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
+    if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
         if (glo || !(ui_prefs & PREF_BPM_LOCK)) {
             song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
             ui.bpm_t = 40;                              /* the header's BPM lights up; no message over the header */
@@ -996,7 +1000,7 @@ static void ui_input(void)
             lock_ms = fm1_ms | 1u;
         }
     }
-    for (k = 0; k < 4u; k++) {
+    for (k = 0; k < 4u && !kq; k++) {
         const page_t *pg = cur_page();
         int16_t *hv;
         if ((s = panel_enc(EN_K1 + k)) == 0)

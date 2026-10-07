@@ -53,7 +53,15 @@ static int32_t host_enc[7];
 static uint32_t fm1_ticks(void) { return host_ticks; }
 static uint32_t fm1_input_edges(int x) { uint32_t p = host_pressed; (void)x; host_pressed = 0; return p; }
 static uint32_t fm1_input_note_edges(void) { uint32_t n = host_notes; host_notes = 0; return n; }
-static int32_t fm1_enc_take(uint32_t e) { int32_t s = host_enc[e % 7u]; host_enc[e % 7u] = 0; return s; }
+/* host_enc_late: detents the TIMER5 scan counts just after a read (#102: while ui_input runs); the next read has them */
+static int32_t host_enc_late[7];
+static int32_t fm1_enc_take(uint32_t e)
+{
+    int32_t s = host_enc[e % 7u];
+    host_enc[e % 7u] = host_enc_late[e % 7u];
+    host_enc_late[e % 7u] = 0;
+    return s;
+}
 static void fm1_wdt_feed(void) {}
 static void fm1_irq_off(void) {}
 static void fm1_irq_on(void) {}
@@ -4090,6 +4098,175 @@ static int test_layer_knob_leak(void)
     return bad;
 }
 
+/* #102: the TIMER5 scan counts the knobs' detents while ui_input runs; one that came after the layer's read of
+ * KNOB 1..4 (host_enc_late) was read again by the page's: the layer's control and the page under it both moved
+ * (HOME's KNOB 1 with FX's FILTER). Every layer (FX GLO SCL EDIT) x KNOB 1..4 x held past HOLD / a combo / locked
+ * by a double tap, over every page and HOME, with late detents on the knob, PRESETS and ALGORITHM while it is open
+ * and on the knob as it closes: the same state as with the detents read in time (the layer gets them all, one a
+ * frame later), the layer's own control moved, and nothing under the layer changed (lk_same) */
+typedef struct {
+    int16_t p[NTRK][P_COUNT], g[G_COUNT];
+    int8_t k[4];
+    uint32_t sel, snd[NTRK], mot[NTRK];
+    uint8_t home, page;
+} rc_state_t;
+static uint32_t rc_snd(const track_t *t) { return t->eng_req | (uint32_t)t->preset << 8 | (uint32_t)t->user << 16; }
+static uint32_t rc_snd0;
+static void rc_take(rc_state_t *st)
+{
+    uint32_t i;
+    memset(st, 0, sizeof *st);
+    for (i = 0; i < NTRK; i++) {
+        memcpy(st->p[i], trk[i].p, sizeof st->p[i]);
+        st->snd[i] = rc_snd(&trk[i]);
+        st->mot[i] = motion_count(&trk[i]);
+    }
+    memcpy(st->g, song.g, sizeof st->g);
+    memcpy(st->k, perf_k, sizeof st->k);
+    st->sel = song.sel;
+    st->home = ui.home;
+    st->page = ui.page;
+}
+static void rc_enc(uint32_t role, int32_t s, int late)
+{
+    if (late)
+        host_enc_late[panel.enc[role]] += s * panel.dir[role];
+    else
+        host_enc[panel.enc[role]] += s * panel.dir[role];
+}
+/* one run: layer button lb, mode (0 held past HOLD, 1 a combo, 2 locked), knob k, page pg (NPAGES: HOME); late:
+ * the detents come after the reads. a: the state with the layer open, b: after it closed */
+static void rc_run(uint32_t lb, uint32_t mode, uint32_t k, uint32_t pg, int late, rc_state_t *a, rc_state_t *b)
+{
+    int32_t d = (lb == B_GLO || (lb == B_FX && k == 3u)) ? -1 : 1;   /* (GLO LEVEL, FX DEPTH: room to move) */
+    uint32_t i;
+    ui_power_on();
+    if (pg < NPAGES) { ui.home = 0; ui.page = (uint8_t)pg; page_entered(); }
+    frames(64);
+    lk_snap();
+    rc_snd0 = rc_snd(TSEL);
+    if (mode == 2u) {
+        press(lb); frames(64); press(lb); frames(64);
+    } else {
+        btn_down(lb);
+        frame();
+        if (mode == 0u)
+            frames(560);                                /* (past HOLD: the map, a peek) */
+    }
+    for (i = 0; i < 3u; i++) {
+        rc_enc(EN_K1 + k, d, late && (mode != 1u || i));   /* (a combo: the first in time, it opens the map) */
+        if (i == 1u) {
+            rc_enc(EN_PRESET, 1, late);                 /* (in time: the layer's read drops them) */
+            rc_enc(EN_ALGO, 1, late);
+        }
+        frame();
+    }
+    frame();                                            /* (the last late one) */
+    rc_take(a);
+    if (mode == 2u) {
+        press(lb);
+    } else {
+        btn_up(lb);
+        frame();
+    }
+    for (i = 0; i < 3u; i++) {                          /* turning on as it closes (#39: KNOB 1..4 quiet) */
+        rc_enc(EN_K1 + k, d, late);
+        frame();
+    }
+    frames(400);
+    rc_take(b);
+}
+static int test_layer_knob_race(void)
+{
+    static const uint8_t LB[4] = {B_FX, B_GLO, B_SCL, B_EDIT};
+    static const uint8_t LL[4] = {LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT};
+    static rc_state_t a0, b0, a1, b1;
+    uint32_t l, mode, k, pg, fails = 0, runs = 0;
+    int bad = 0, ok;
+    for (l = 0; l < 4u; l++)
+        for (mode = 0; mode < 3u; mode++)
+            for (k = 0; k < 4u; k++)
+                for (pg = 0; pg <= NPAGES; pg++) {
+                    if (pg < NPAGES && !page_visible(pg))
+                        continue;
+                    if (mode == 2u && LB[l] == B_EDIT && pg < NPAGES &&   /* (EDIT's tap acts there: no lock) */
+                        (PAGES[pg].graph == GR_USER || PAGES[pg].graph == GR_SLOTS || PAGES[pg].graph == GR_ROLL))
+                        continue;
+                    rc_run(LB[l], mode, k, pg, 0, &a0, &b0);
+                    rc_run(LB[l], mode, k, pg, 1, &a1, &b1);
+                    ok = !memcmp(&a0, &a1, sizeof a0) && !memcmp(&b0, &b1, sizeof b0) &&
+                         lk_same(LL[l] == LAYER_EDIT && k == 2u ? 0u : LL[l]) && song.sel == 0u &&
+                         !perf_k[0] && !perf_k[1] && !perf_k[2] && !perf_k[3];
+                    if (LL[l] == LAYER_FX)                  /* the layer's own control moved */
+                        ok &= a1.k[k] == 3;
+                    else if (LL[l] == LAYER_GLO)
+                        ok &= a1.p[k][P_LEVEL] == lk_p[k][P_LEVEL] - 3;
+                    else if (LL[l] == LAYER_SCL)
+                        ok &= a1.p[0][LY_SCL.id[k]] != lk_p[0][LY_SCL.id[k]];
+                    else if (k < 2u)                        /* (EDIT KNOB 3 FAV: a mark, KNOB 4 nothing) */
+                        ok &= a1.snd[0] != rc_snd0;
+                    runs++;
+                    if (!ok) {
+                        fails++;
+                        if (fails < 6u)
+                            printf("ui:   race: %s mode %u KNOB %u page %s\n", B_NAME[LB[l]], mode, k + 1u,
+                                   pg < NPAGES ? PAGES[pg].title : "HOME");
+                    }
+                }
+    bad += check("#102 FX GLO SCL EDIT (held, combo, locked) x KNOB 1..4, detents counted mid-pass: the layer's only",
+                 !fails && runs > 400u);
+    /* HOME, REC armed and playing: FX's macros and GLO's T2..T4 levels record nothing into T1's automation */
+    ok = 1;
+    for (l = 0; l < 2u; l++)
+        for (k = l; k < 4u; k++) {
+            int16_t *vp, c;
+            uint32_t i;
+            ui_power_on();
+            song.rec = 1; seq_start(); go_home(); frames(64);
+            home_param(k, &vp);
+            c = *vp;
+            btn_down(LB[l]); frames(560);
+            for (i = 0; i < 4u; i++) { rc_enc(EN_K1 + k, l ? -1 : 1, 1); frame(); }
+            frame();
+            btn_up(LB[l]); frames(400);
+            ok &= !motion_count(TSEL) && *vp == c;
+            stop_transport();
+            song.rec = 0;
+        }
+    bad += check("  HOME with REC: FX's KNOB 1..4, GLO's KNOB 2..4 record no automation, HOME's sound stays", ok);
+    /* FX LATCH: the macro stays when FX is let go, HOME's KNOB 1 never moved; FX + OCT- turns it off */
+    ui_power_on();
+    fx_latch = 1;
+    go_home(); frames(64);
+    {
+        int16_t *vp, c;
+        uint32_t i;
+        home_param(0, &vp);
+        c = *vp;
+        btn_down(B_FX); frames(560);
+        for (i = 0; i < 5u; i++) { rc_enc(EN_K1, 1, 1); frame(); }
+        frame();
+        btn_up(B_FX); frames(400);
+        ok = perf_k[0] == 5 && *vp == c;
+        btn_down(B_FX); frames(560); press(B_OCTDN); btn_up(B_FX); frames(400);
+        ok &= !perf_k[0] && *vp == c;
+    }
+    fx_latch = 0;
+    bad += check("  FX LATCH: FILTER stays after FX is let go, HOME's KNOB 1 never moves; FX + OCT- turns it off", ok);
+    /* no layer: a late detent is HOME's KNOB 1's, once (the next pass) */
+    ui_power_on();
+    go_home(); frames(64);
+    {
+        int16_t *vp, c;
+        home_param(0, &vp);
+        c = *vp;
+        rc_enc(EN_K1, 1, 1); frame(); frame();
+        ok = *vp == c + 1;
+    }
+    bad += check("  no layer: a detent counted mid-pass is HOME's KNOB 1, once", ok);
+    return bad;
+}
+
 /* Discussion #83: the layer lock. A double tap of FX / GLO / SCL / EDIT (within LY_DTAP_MS, both let go before HOLD)
  * opens the map with no button held, over the page the first tap left (put back); the keys and KNOB 1..4 act as held;
  * a tap closes it (no page), so does another page button (which opens its page), HOME, the menu, a dialog; OCT- puts
@@ -5034,6 +5211,7 @@ int main(void)
     bad += test_panel();
     bad += test_layer();
     bad += test_layer_knob_leak();
+    bad += test_layer_knob_race();
     bad += test_fx_latch();
     bad += test_layer_lock();
     bad += test_menu_prefs();
