@@ -76,7 +76,8 @@ if (typeof registerProcessor === "function") {
     publish() {
       const ex = this.ex, mem = ex.memory.buffer;
       const msg = { type: "frame" };
-      const leds = [ex.web_lit_buttons(), ex.web_lit_keys(), ex.web_dim_buttons(), ex.web_dim_keys(), ex.web_dim_level()];
+      const leds = [ex.web_lit_buttons(), ex.web_lit_keys(), ex.web_dim_buttons(), ex.web_dim_keys(), ex.web_dim_level(),
+                    ex.web_breath_buttons(), ex.web_breath_keys()];
       const key = leds.join(",");
       if (key !== this.sentLeds) {
         this.sentLeds = key;

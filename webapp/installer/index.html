@@ -144,8 +144,8 @@
   <p id="status" aria-live="polite"></p>
   <pre id="log"></pre>
   <p><a href="../editor/" data-t="editor"></a></p>
-  <p id="try-p" hidden><a href="../try/" data-t="tryIt"></a></p>
-  <p id="next-p"><a href="../try/" data-t="tryNext"></a></p>
+  <p id="try-p"><a href="../try/" data-t="tryIt"></a></p>
+  <p id="next-p" hidden><a href="../try/" data-t="tryNext"></a></p>
   <footer><p class="small">Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>, with its CrispyZebra waveforms, drum voices, Sample Pack and Fukiai icons (MIT).<br>
     Font: Inter Tight (The Inter Project Authors, SIL OFL 1.1). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
     FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0). <a href="../../firmware/LICENSING.md">Licences</a>: <a href="../../firmware/LICENSE">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt">Apache-2.0</a>, <a href="../../firmware/LICENSES/">all</a>.<br>
@@ -908,7 +908,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "1.0.3.1", "product": "FM-1_910", "pkg": "../../firmware/felucca-1.0.3.1.fwsc"};
+const meta = {"version": "1.0.5.1", "product": "FM-1_910", "pkg": "../../firmware/felucca-1.0.5.1.fwsc"};
 
 let writing = false, stock = null, stockFileEpoch = 0;
 const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
