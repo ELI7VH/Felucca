@@ -87,6 +87,8 @@ EXTRA = {
     # OCT UP / OCT DN (the harmonizer): stand-ins until Fukiai has a pitch-shift glyph;
     # the first of each tuple the font has
     "x_oct_up": ("symbol_pitch_up", "control_arrow_up"), "x_oct_dn": ("symbol_pitch_down", "control_arrow_down"),
+    # a missing sample (the header message, the SLICES page): SAMPLE NOT FOUND
+    "x_nofile": "symbol_document_disabled",
 }
 
 # a glyph given as a tuple: the first one the font has (a glyph still to be drawn falls back to a stand-in;
@@ -115,7 +117,8 @@ BIG_DEFAULT = ["x_play", "x_stop", "x_pause", "x_rec", "x_rec_o", "x_usb", "x_st
                "x_cog", "x_power", "x_warn", "x_palette", "x_speaker", "x_info", "x_hugelton", "x_doc",
                "wave", "algorithm", "phase", "bits", "sample", "mouth", "trio", "drawbar", "slice", "grain",
                "phys", "drum", "noise", "mod", "tempo", "tape",
-               "x_song", "x_motion", "x_motion_del", "x_doctor", "x_fx", "x_knob", "x_timer", "rate", "x_bat0", "x_bat1", "x_bat3", "x_bat4", "x_bat_chg"]
+               "x_song", "x_motion", "x_motion_del", "x_doctor", "x_fx", "x_knob", "x_timer", "rate", "x_bat0", "x_bat1", "x_bat3", "x_bat4", "x_bat_chg",
+               "x_nofile"]
 
 
 def glyph_table(font_path):

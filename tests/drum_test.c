@@ -24,7 +24,11 @@
  * 8. cost: host instructions per sample per voice while it sounds (retriggered), the metal source on its own,
  *    and a device estimate (1.7 % per 100 instructions per sample, the PHYS measurements' ratio).
  * 9. demos into DEMODIR: every voice and variant (designed, then DECAY / TONE / extra swept), the kit through
- *    the DRUM engine (the 8 keys), a beat. */
+ *    the DRUM engine (the 8 keys), a beat (and on each model kit).
+ * 10. the model kits (KIT 80 10 66 55 77): every lane of each at its design against its targets (t-30, centroid
+ *    as 1., the level of its lane on STD), DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners under
+ *    full scale; a retrigger the same; every GM note on its lane's piece, the lanes through the engine; the cost of
+ *    a kit's 8 lanes at once. */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -732,6 +736,37 @@ static void engine(void)
     printf("drum_test: engine: a crash 0.5 s after its key-off still rings (ADSR SUS 0 REL 0), its voice free after "
            "%.1f s: %s\n", (double)i * CTL / FS + 0.5, k && !voices_on(&trk[0]) ? "ok" : "FAIL");
     bad += !k || voices_on(&trk[0]);
+    /* a zero-length note (key-off before the first block, common in MIDI drum parts) on a fresh track: each lane
+     * sounds the same over 1/8 s as without the key-off (before the fix: the voice ended at once, -25..-40 dB) */
+    {
+        static const uint8_t KIT8[8] = {36, 38, 39, 42, 46, 45, 37, 56};
+        double worst = 0;
+        for (i = 0; i < 8u; i++) {
+            double e[2], d;
+            for (k = 0; k < 2u; k++) {
+                int32_t o[2 * CTL];
+                uint32_t b, j;
+                double s = 0;
+                kit_fresh();
+                trk[0].p[P_CHOR] = trk[0].p[P_DLY] = trk[0].p[P_REV] = 0;   /* dry: no tail of the run before */
+                trk_note_on(&trk[0], KIT8[i], 120);
+                if (k)
+                    trk_note_off(&trk[0], KIT8[i]);
+                for (b = 0; b < FS / 8u / CTL; b++) {
+                    mix_block(o, CTL);
+                    for (j = 0; j < 2u * CTL; j++)
+                        s += (double)o[j] * o[j];
+                }
+                e[k] = s;
+            }
+            d = 10 * log10((e[0] + 1) / (e[1] + 1));
+            worst = d > worst ? d : worst;
+        }
+        k = worst < 0.5;                                 /* (the mix carries a little state between runs) */
+        printf("drum_test: engine: a key-off right after the key-on (before the first block) keeps the hit, 8 lanes "
+               "(at most %.2f dB quieter): %s\n", worst, k ? "ok" : "FAIL");
+        bad += !k;
+    }
     /* VOICE MONO, GLIDE: the kit still plays POLY */
     kit_fresh();
     trk[0].p[P_VOICE] = V_MONO;
@@ -806,6 +841,229 @@ static void cost(void)
     }
     printf("drum_test:   the 8 lanes at once (PUNCH SNARE CLAP HAT CL HAT OP TOM RIM BELL, one metal source): %.0f, ~%.1f %%\n",
            sum + metal, (sum + metal) * 0.017);
+}
+
+/* --------------------------------------------------------- the model kits --- */
+static const char *const KITN[DV_NKIT] = {"80", "10", "66", "55", "77"};
+static const char *const LANEN[DV_NLANE] = {"KICK", "SNARE", "CLAP", "HATCL", "HATOP", "TOM", "RIM", "BELL"};
+#define KLEN (FS * 6u)
+
+/* each kit lane at its design: t-30 (s) and the centroid of the first 100 ms (Hz), Felucca's own numbers for the
+ * kits (measured, the shapes set against the circuits each kit models); the level of 0..0.2 s is its lane's on
+ * the STD kit's terms (KICK -14.5, SNARE -18.2, CLAP -24.2, HAT CL -27.4, HAT OP -23.8, TOM -13.6, RIM -22.5,
+ * BELL -21 dBFS) */
+static const float KTGT[DV_NKIT][DV_NLANE][2] = {
+    {{0.300, 1304}, {0.100, 5785}, {0.150, 4339}, {0.060, 10712},   /* 80 */
+     {0.350, 9524}, {0.200, 402}, {0.020, 4241}, {0.220, 1590}},
+    {{0.620, 1863}, {0.350, 7962}, {2.120, 9100}, {0.280, 7787},   /* 10 */
+     {2.000, 7902}, {0.420, 392}, {0.020, 1823}, {2.830, 5233}},
+    {{0.180, 505}, {0.050, 10507}, {0.160, 8175}, {0.210, 9473},   /* 66 */
+     {0.270, 9422}, {0.110, 1379}, {0.010, 2421}, {0.050, 1274}},
+    {{0.150, 651}, {0.080, 7928}, {0.130, 8209}, {0.090, 13073},   /* 55 */
+     {0.500, 13024}, {0.200, 3480}, {0.010, 3868}, {0.110, 5821}},
+    {{0.450, 1253}, {0.120, 4518}, {0.230, 5906}, {0.290, 8723},   /* 77 */
+     {1.630, 8771}, {0.420, 1151}, {0.110, 3517}, {1.090, 9998}},
+};
+static const float KLVL[DV_NLANE] = {-14.5f, -18.2f, -24.2f, -27.4f, -23.8f, -13.6f, -22.5f, -21.0f};
+
+/* every kit: every lane against its targets, DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners
+ * (DECAY TONE SNAP 0 / 127, TUNE +-25 st, LEVEL 127, full accent) under full scale; a retrigger renders the same */
+static void kits(void)
+{
+    static const uint8_t C[2] = {0, 127};
+    static const int16_t TU[2] = {-400, 400};
+    uint32_t k, l, bad_all = 0;
+    for (k = 0; k < DV_NKIT; k++) {
+        uint32_t bad = 0, knee = 0;
+        int32_t worst = 0;
+        char line[600] = "";
+        for (l = 0; l < DV_NLANE; l++) {
+            uint32_t type = DV_KTYPE(k + 1u, l), a, b, c, d, i, diff = 0;
+            dv_param_t p;
+            double t3, ce, lv, dc, lo, hi;
+            char why[300] = "";
+            dv_default(&p, type);
+            render(&p, NMAX, 0, &B);
+            t3 = t30(&B), ce = centroid100(&B), lv = rms_db(&B, 0, FS / 5u), dc = dc_share(&B);
+            snprintf(line + strlen(line), sizeof line - strlen(line), " %s %.2f s %.0f Hz %.1f dB;", LANEN[l], t3, ce, lv);
+            if (getenv("KTGT"))
+                printf("KTGT %u %u {%.3ff, %.0ff},\n", k, l, t3, ce);
+            if (fabs(t3 - KTGT[k][l][0]) > KTGT[k][l][0] * 0.15 + 0.01)
+                snprintf(why + strlen(why), sizeof why - strlen(why), " t-30 %.3f (target %.3f);", t3, KTGT[k][l][0]);
+            if (fabs(ce / KTGT[k][l][1] - 1) > 0.2)
+                snprintf(why + strlen(why), sizeof why - strlen(why), " centroid %.0f (target %.0f);", ce, KTGT[k][l][1]);
+            if (fabs(lv - KLVL[l]) > 1.5)
+                snprintf(why + strlen(why), sizeof why - strlen(why), " level %.1f (target %.1f);", lv, KLVL[l]);
+            if (dc > 0.01)
+                snprintf(why + strlen(why), sizeof why - strlen(why), " DC %.2f %%;", dc * 100);
+            if (!B.stop || B.stop > (uint32_t)((4 * t3 + 0.5) * FS))
+                snprintf(why + strlen(why), sizeof why - strlen(why), " stops at %.2f s;", B.stop / (double)FS);
+            /* the controls: DECAY up -> longer, TUNE up -> brighter, TONE and SNAP change it */
+            p.decay = 32;
+            render(&p, KLEN, 0, &B);
+            lo = t30(&B);
+            p.decay = 96;
+            render(&p, KLEN, 0, &B2);
+            hi = t30(&B2);
+            if (!(hi > lo))
+                snprintf(why + strlen(why), sizeof why - strlen(why), " DECAY 32/96: t-30 %.3f / %.3f;", lo, hi);
+            dv_default(&p, type);
+            p.tune = -48;
+            render(&p, FS / 2u, 0, &B);
+            p.tune = 48;
+            render(&p, FS / 2u, 0, &B2);
+            lo = centroid100(&B), hi = centroid100(&B2);         /* (the drums: their dominant frequency) */
+            if (!(hi > lo) && !(pitch(&B2, FS / 50u, FS * 3u / 10u, 30, 4000) > pitch(&B, FS / 50u, FS * 3u / 10u, 30, 4000)))
+                snprintf(why + strlen(why), sizeof why - strlen(why), " TUNE -3/+3 st: centroid %.0f / %.0f;", lo, hi);
+            for (a = 0; a < 2u; a++) {
+                dv_default(&p, type);
+                if (a)
+                    p.extra = 0;
+                else
+                    p.tone = 0;
+                render(&p, FS / 2u, 0, &B);
+                if (a)
+                    p.extra = 127;
+                else
+                    p.tone = 127;
+                render(&p, FS / 2u, 0, &B2);
+                for (i = 0, lo = hi = 0; i < FS / 2u; i++) {    /* the change against the sound: above -30 dB */
+                    lo += (double)(B.y[i] - B2.y[i]) * (B.y[i] - B2.y[i]);
+                    hi += (double)B.y[i] * B.y[i];
+                }
+                if (lo < hi * 1e-3)
+                    snprintf(why + strlen(why), sizeof why - strlen(why), " %s 0/127 does nothing;", a ? "SNAP" : "TONE");
+            }
+            /* the corners */
+            for (a = 0; a < 16u; a++) {
+                dv_default(&p, type);
+                p.decay = C[a & 1u], p.tone = C[(a >> 1) & 1u], p.extra = C[(a >> 2) & 1u], p.tune = TU[a >> 3];
+                p.level = 127, p.accent = 127;
+                render(&p, KLEN, 0, &B);
+                knee += B.knee > 0;
+                worst = B.peak > worst ? B.peak : worst;
+                if (B.over || dc_share(&B) > 0.01)
+                    snprintf(why + strlen(why), sizeof why - strlen(why), " corner %u: peak %d, DC %.2f %%;", a, B.peak,
+                             dc_share(&B) * 100);
+            }
+            /* a retrigger at 0.5 s */
+            dv_default(&p, type);
+            c = CTL * 689u;
+            render(&p, c * 2u, 0, &B);
+            render(&p, c * 2u, c, &B2);
+            for (i = 0; i < c; i++)
+                diff += B.y[i] != B2.y[c + i];
+            if (diff)
+                snprintf(why + strlen(why), sizeof why - strlen(why), " retrigger: %u samples differ;", diff);
+            (void)b, (void)d;
+            if (why[0]) {
+                printf("drum_test: KIT %s %s FAIL:%s\n", KITN[k], LANEN[l], why);
+                bad++;
+            }
+        }
+        printf("drum_test: kit %s:%s\n", KITN[k], line);
+        printf("drum_test: kit %s: targets (t-30 +-15 %% + 10 ms, centroid +-20 %%, level +-1.5 dB), DC, the end, DECAY TUNE "
+               "TONE SNAP, the corners (largest peak %d, %u renders in the knee), retrigger: %s\n", KITN[k], worst, knee,
+               bad ? "FAIL" : "ok");
+        bad_all += bad;
+    }
+    fails += bad_all != 0;
+}
+
+/* KIT 80..77: every note plays its lane's piece of the kit (KICK ignored); the 8 lanes through the engine all sound
+ * together; the lanes' names */
+static void kit_keys(void)
+{
+    static const uint8_t KIT[8] = {36, 38, 39, 42, 46, 45, 37, 56};
+    uint32_t k, n, bad = 0;
+    for (k = 0; k < DV_NKIT; k++) {
+        uint32_t i, nv, live = 0, quiet = 0;
+        int32_t st, pk;
+        host_tracks_init();
+        host_preset(&trk[0], ENGI_DRUM, 0);
+        trk[0].p[P_E0] = (int16_t)(DK_80 + k);
+        trk[0].p[P_E6] = 1;
+        for (n = 0; n < 128u; n++) {
+            uint32_t t = drum_gm(trk[0].p, n, &st);
+            bad += t != DV_KTYPE(k + 1u, drum_lane(n));
+        }
+        for (i = 0; i < 8u; i++) {
+            kit_fresh();
+            trk[0].p[P_E0] = (int16_t)(DK_80 + k);
+            trk_note_on(&trk[0], KIT[i], 110);
+            quiet += blocks_peak(8) < 200;
+        }
+        kit_fresh();
+        trk[0].p[P_E0] = (int16_t)(DK_80 + k);
+        for (i = 0; i < 8u; i++)
+            trk_note_on(&trk[0], KIT[i], 110);
+        pk = blocks_peak(2);
+        nv = voices_on(&trk[0]);
+        for (i = 0; i < DV_NLANE; i++)
+            live += drum_kit[0][i].v.live;
+        if (quiet || nv != 8u || live != 8u || pk < 1000) {
+            printf("drum_test: KIT %s engine FAIL: %u lanes silent alone, %u voices, %u lanes live, peak %d\n", KITN[k], quiet,
+                   nv, live, pk);
+            bad++;
+        }
+    }
+    host_tracks_init();
+    host_preset(&trk[0], ENGI_DRUM, 0);
+    trk[0].p[P_E0] = DK_10;
+    bad += strcmp(drum_lane_name(&trk[0], DV_BELL), "CYM") != 0 || strcmp(drum_lane_abbr(&trk[0], DV_TOM), "TM") != 0;
+    trk[0].p[P_E0] = DK_66;
+    bad += strcmp(drum_lane_name(&trk[0], DV_TOM), "CONGA") != 0 || strcmp(drum_lane_name(&trk[0], DV_BELL), "BELL") != 0;
+    trk[0].p[P_E0] = DK_77;
+    bad += strcmp(drum_lane_name(&trk[0], DV_RIM), "CLAVE") != 0 || strcmp(drum_lane_abbr(&trk[0], DV_BELL), "CY") != 0;
+    trk[0].p[P_E0] = DK_HCYM;
+    bad += strcmp(drum_lane_name(&trk[0], DV_TOM), "CONGA") != 0 || strcmp(drum_lane_name(&trk[0], DV_BELL), "CYM") != 0;
+    bad += ENG_DRUM.edit[0].max != DK_COUNT - 1 || strcmp(ENG_DRUM.edit[0].names[DK_77], "77") != 0;
+    printf("drum_test: kits 80 10 66 55 77: every GM note on its lane's piece, the 8 lanes alone and together through the "
+           "engine, the lanes' names: %s\n", bad ? "FAIL" : "ok");
+    fails += bad != 0;
+}
+
+/* host instructions per sample of a kit's 8 lanes at once (each struck every 0.25 s; a metal source per lane that
+ * needs one) */
+static double kit_cost(uint32_t k)
+{
+    static dv_coef_t c[DV_NLANE];
+    static dv_voice_t v[DV_NLANE];
+    static dv_metal_t mb[DV_NLANE];
+    static int32_t y[CTL], m[CTL];
+    uint32_t i, l, nb = FS * 4u / CTL;
+    uint64_t i0;
+    for (l = 0; l < DV_NLANE; l++) {
+        dv_param_t p;
+        dv_default(&p, DV_KTYPE(k + 1u, l));
+        dv_setup(&c[l], &p);
+        dv_init(&v[l], c[l].type);
+        dv_metal_tune(&mb[l], &c[l]);
+    }
+    i0 = instr_now();
+    for (i = 0; i < nb; i++)
+        for (l = 0; l < DV_NLANE; l++) {
+            if (i % (FS / 4u / CTL) == 0)
+                dv_trigger(&v[l]);
+            if (dv_uses_metal(c[l].type))
+                dv_metal_run(&mb[l], m, CTL);
+            dv_run(&c[l], &v[l], m, y, CTL);
+            __asm__ volatile("" : : "r"(y) : "memory");
+        }
+    return (double)(instr_now() - i0) / (nb * CTL);
+}
+
+static void kit_costs(void)
+{
+    uint32_t k;
+    char line[300] = "";
+    if (!instr_now())
+        return;
+    for (k = 0; k < DV_NKIT; k++) {
+        double c = kit_cost(k);
+        snprintf(line + strlen(line), sizeof line - strlen(line), " %s %.0f (~%.1f %%);", KITN[k], c, c * 0.017);
+    }
+    printf("drum_test: cost, the 8 lanes at once per kit, host instructions per sample (device estimate):%s\n", line);
 }
 
 /* ------------------------------------------------------------ demos --- */
@@ -908,14 +1166,21 @@ static void demos(const char *dir)
     demo_seq(dir, "kit_keys", (const uint8_t(*)[3])kit, 16, 64, 0, DK_HCYM);
     demo_seq(dir, "beat_punch", BEAT, sizeof BEAT / sizeof BEAT[0], 64, 0, DK_STD);
     demo_seq(dir, "beat_round", BEAT, sizeof BEAT / sizeof BEAT[0], 64, 1, DK_STD);
+    for (k = 0; k < DV_NKIT; k++) {
+        char name[32];
+        snprintf(name, sizeof name, "beat_kit_%s", KITN[k]);
+        demo_seq(dir, name, BEAT, sizeof BEAT / sizeof BEAT[0], 64, 0, (int16_t)(DK_80 + k));
+    }
     printf("drum_test: demos in %s: %u voices (designed, DECAY / TONE / extra low and high, TUNE -5 / +5 st), the kit's "
-           "keys, a beat (PUNCH, ROUND)\n", dir, (uint32_t)DVT_COUNT);
+           "keys, a beat (PUNCH, ROUND, the kits 80 10 66 55 77)\n", dir, (uint32_t)DVT_COUNT);
 }
 
 int main(int argc, char **argv)
 {
-    if (!getenv("NOCOST"))
+    if (!getenv("NOCOST")) {
         cost();
+        kit_costs();
+    }
     targets();
     controls();
     safety();
@@ -923,6 +1188,8 @@ int main(int argc, char **argv)
     choke();
     kick_speaker();
     keys();
+    kits();
+    kit_keys();
     lane_budget();
     engine();
     if (argc > 1)

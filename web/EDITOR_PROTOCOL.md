@@ -28,6 +28,9 @@ restore the whole device. P_COUNT is 89 and P_E0 is 81: twenty FM operator param
 before the engine parameters, which moved from 61..68 to 81..88. Always take P_E0 from `INFO`. INFO ends with
 tagged capability blocks for these (see `INFO`).
 
+**MENU settings (1.0.4):** `MENU_DESC` (72) and `MENU_SET` (73) read and set the device's MENU settings, described
+by the device (see "MENU settings" at the end); INFO advertises them with `4E 01 count`.
+
 **Chord keys (91 parameters, 1.0):** two track parameters, `CHRD` (81) and `VOIC` (82), went in before the
 engine parameters, which moved from 81..88 to 83..90: P_COUNT 91, P_E0 83. No command changed; an editor that
 takes P_COUNT and P_E0 from `INFO` keeps working (see "The chord keys" below).
@@ -123,7 +126,7 @@ global `G_CLOCK` (id 2, label "CLK") 3 (INT, USB, TRS). `G_MIDI` (id 12) is an e
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
-| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank` and `53 01 3` (below); older firmware ends earlier |
+| 1 INFO | — | version string, NENGINES, P_COUNT, G_COUNT, NSTEP, P_E0, then NENGINES engine-name strings, then (v3) NTRK (4), then (v6) CHAIN_ROWS (16), then the tagged blocks `55 01 uiCaps`, `4D 01 64 01`, `42 01 3`, `46 01 nfactory nbank`, `53 01 3`, (1.0.3) `50 01 3` and (1.0.4) `4E 01 count` (MENU settings) (below); older firmware ends earlier |
 | 2 GET | scope, id | scope, id, v14 |
 | 3 SET | scope, id, v14 | scope, id, v14 (the value after clamping). Setting global `G_ENGSEL` (id from DESC label "ENG") changes the engine: its defaults, then its first preset (as on the device) |
 | 4 DUMP | — | engine, preset, then P_COUNT × v14 (the selected track), then G_COUNT × v14 (globals) |
@@ -640,3 +643,66 @@ rc 0 = applied and saved; 1 = invalid arguments; 2 = unsupported feature;
 by the same persistence path as the panel. These changes never stop playback.
 Unchanged writes do not erase flash. Replies echo preference ids/values and
 favorite ranges so the editor rejects replies to a different request.
+
+## MENU settings (72, 73; 1.0.4)
+
+The device describes the settings of its MENU (HOME held) to the editor, which builds its settings from what it
+is told: no list of settings is fixed in the editor. INFO advertises `4E 01 count` after the FM6 v2 tag
+(`50 01 caps`): `count` items, MENU_DESC index 0..count−1. Firmware without the tag answers neither command.
+
+| cmd | Request args | Reply args |
+| --- | --- | --- |
+| 72 MENU_DESC | index (0..count−1) | index, id, kind, value v14, min v14, max v14, name string, then for kind 0 (max−min+1) value-name strings, for kind 1 a unit string. An index past the list: index, 127 (no more bytes) |
+| 73 MENU_SET | id, value v14 | rc, id, value v14: the device's value after the write (clamped to min..max) |
+
+- **index** is the position in the device's menu order (show them in this order); **id** names the setting and
+  never changes its meaning: a new setting takes a new id (append-only), wherever it shows in the menu. Ids are
+  0..126; 127 means "no item". Remember settings by id, not by index.
+- **kind**: 0 an enum (the value is an index into the names, min..max), 1 a number (min..max, its unit after the
+  name; no setting uses it yet). An editor shows a kind it does not know read-only, or not at all.
+- Values are v14 like the rest of the protocol, so a setting may later go past 127; today every value is 0..9.
+- **rc** as `UI_SET`: 0 applied and saved, 3 applied in RAM only (no flash or a failed write; retried by the
+  settings path), 4 applied and saved after STOP; 1 an unknown id (the request's id and value are echoed,
+  nothing changes). A value out of range is not refused: it is clamped and the reply says which value the device
+  took. A wrong argument length gets no reply.
+- A MENU_SET is applied exactly as the menu's KNOB 1 / OCT+ applies it (`src/menu_items.c` `menu_put`, shared by
+  both), and saved through the same settings record (`settings_save`; unchanged values write nothing). If the
+  device shows the MENU page, it redraws with the new value. There is no push: an editor that wants to follow
+  changes made on the device reads MENU_DESC again (for instance when its settings page opens).
+- CALIBRATION and ABOUT have no value and are not offered. COLOR (id 0) is the same setting as `UI_SET` id 0.
+
+This firmware (count 12):
+
+| index | id | name | kind | values (min 0) | default |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 0 | COLOR | 0 | 0..9: GREY GREEN AMBER ICE VIOLET ROSE PAPER HI-CON NIGHT MONO (the order of `UI_PALETTES`) | GREY |
+| 1 | 1 | STYLE | 0 | 0 FLAT, 1 LINE | FLAT |
+| 2 | 2 | LARGE | 0 | 0 OFF, 1 ON | OFF |
+| 3 | 3 | ANIM | 0 | 0 ON, 1 OFF | ON |
+| 4 | 4 | LEDS | 0 | 0 OFF, 1 DIM LO, 2 DIM HI, 3 INV (darkest first, as the menu steps them) | DIM HI |
+| 5 | 5 | HOLD | 0 | 0 "0.3 s", 1 "0.4 s", 2 "0.5 s", 3 "0.6 s" | 0.4 s |
+| 6 | 6 | KNOB ACCEL | 0 | 0 OFF, 1 ON | OFF |
+| 7 | 7 | FX LATCH | 0 | 0 OFF, 1 ON | OFF |
+| 8 | 8 | BPM LOCK | 0 | 0 OFF, 1 ON | OFF |
+| 9 | 9 | SPEAKER EQ | 0 | 0 FLAT, 1 LOWCUT, 2 BASS+ | FLAT |
+| 10 | 10 | USB LEVEL | 0 | 0 MASTER, 1 FIXED | MASTER |
+| 11 | 11 | USB SERIAL | 0 | 0 ON, 1 OFF | ON |
+
+Example (bytes in hex): `F0 7D 46 4C 48 04 F7` asks for index 4; the reply
+`F0 7D 46 4C 48 04 04 00 02 40 00 40 03 40 4C 45 44 53 00 4F 46 46 00 44 49 4D 20 4C 4F 00 44 49 4D 20 48 49 00 49 4E 56 00 F7`
+is index 4, id 4, kind 0, value 2 (`02 40`), min 0 (`00 40`), max 3 (`03 40`), "LEDS", then "OFF" "DIM LO"
+"DIM HI" "INV". `F0 7D 46 4C 49 04 03 40 F7` sets LEDS to INV and answers `F0 7D 46 4C 49 00 04 03 40 F7` (rc 0).
+`F0 7D 46 4C 49 00 32 40 F7` (COLOR 50) answers `F0 7D 46 4C 49 00 00 09 40 F7` (clamped to 9, MONO).
+`F0 7D 46 4C 48 0C F7` answers `F0 7D 46 4C 48 0C 7F F7` (no index 12).
+
+**USB SERIAL (id 11).** The menu applies it when it closes; a MENU_SET applies it about 200 ms after its reply
+(`usb_serial_apply`), so the reply leaves first (if the device shows the MENU at that moment: when it closes).
+A change (ON <-> OFF; setting the value it already has does nothing) re-enumerates the whole device: it drops off
+the bus (its D+ pull-up off) and comes back with the other descriptors, so USB-MIDI, USB audio and the serial
+console all go away and come back. On the device the gap is about 25 ms plus one main-loop pass (`usb_retry`,
+`usb_start`), or up to 1 s when it re-enumerated in the second before; the host then debounces the attach
+(>= 100 ms), resets and enumerates the device. Measured on macOS (CoreMIDI): OFF -> ON, the reply at ~0.04 s, the
+device gone at ~0.3 s, the MIDI port gone at ~0.57 s and back at ~1.15 s; ON -> OFF, the serial port goes
+at ~0.6 s while the MIDI port was not seen to disappear at all (so do not wait for a disconnect event: after
+a real change, wait ~1.5 s and open again). What the editor sends in that window is lost, `WATCH` ends with the
+bus reset (send `INFO` and `WATCH` again after reconnecting), and a backup in progress answers rc 5 (stale).

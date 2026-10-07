@@ -311,6 +311,7 @@ static void graph_scale(const track_t *t, uint16_t c)
  * C4) over the keys from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
  * root's ACCENT, the others RAISE. OFF or a kit: what to do instead */
 static void panel_note(const char *a, const char *b, const char *c);
+static void panel_alert(uint32_t id, const char *a);
 static void graph_chord(const track_t *t, uint16_t c)
 {
     static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
@@ -523,8 +524,8 @@ static void graph_slices(void)
 {
     uint32_t a, b, len, n = slice_count(), j = slice_sel(), i, src, div, ma, mb;
     char t[20], u[12];
-    if (!slice_src(&src, &div) || !n) {
-        panel_note("NO SAMPLE", "SRC: BREAK OR USR1-3", 0);
+    if (!slice_src(&src, &div) || !n) {             /* (it plays a sine: eng_slice.c) */
+        panel_alert(ICON_X_NOFILE, "SAMPLE NOT FOUND");
         return;
     }
     slice_view(&a, &b, &len);
@@ -566,7 +567,7 @@ static void graph_slices(void)
     str_cpy(t + 4, u, sizeof t - 4);
     str_cpy(t + str_len(t), " S", sizeof t - str_len(t));
     cv_text(12, 106, &AF_S, t, T_MID);
-    cv_text_r(228, 106, &AF_S, src ? N_SLC_SRC[src] : "BREAK", src ? T_THEME : T_DIM, T_SURF);
+    cv_text_r(228, 106, &AF_S, N_SLC_SRC[src], src && src != SLC_SRC_PIANO ? T_THEME : T_DIM, T_SURF);
 }
 #endif
 
@@ -982,6 +983,22 @@ static void panel_note(const char *a, const char *b, const char *c)
     cv_text_in(0, 30, 240, &AF_M, a, T_TEXT, T_SURF);
     if (b) note_line(60, b, T_MID);
     if (c) note_line(82, c, T_DIM);
+}
+/* the same title led by an icon (16 px, the accent's: the header message's, ui_draw.c draw_head) in the middle of
+ * the panel: the title's capitals centred up and down in it, the icon's ink on them; across, the pair centred by
+ * its ink */
+#define PA_GAP 6                                        /* icon ink -> title ink (setup_title's) */
+static void panel_alert(uint32_t id, const char *a)
+{
+    int32_t bi[4], bt[4], x, y = CAP_IN(M, (int32_t)graph_h());
+    icon_ink(16, id, bi);
+    text_ink(&AF_M, a, bt);
+    x = HALF_UP(240 - (bi[2] - bi[0] + PA_GAP + bt[2] - bt[0])) - bi[0];
+    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(2), "panel alert centred");
+    GFX_HOOK_ALIGN(0, y + AF_M_CAP_Y, 0, y + AF_M_CAP_Y + AF_M_CAP_H, AL_V | AL_PASS, "panel alert icon on its title's line");
+    cv_icon_in(x, y + AF_M_CAP_Y, 0, AF_M_CAP_H, 16, id, T_ACCENT, T_SURF);
+    GFX_HOOK_ALIGN(0, 0, 0, (int32_t)graph_h(), AL_V | AL_PASS, "panel alert title in the panel's middle");
+    cv_text_on(x + bi[2] + PA_GAP - bt[0], y, &AF_M, a, T_TEXT, T_SURF);
 }
 
 /* preset browser: the global list (every engine), the current one selected; tag DIM, name TEXT,

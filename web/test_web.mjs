@@ -38,7 +38,8 @@ const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
-   FM4, fromDigital, fromPerc, DRUM_KIT_E })`,
+   FM4, fromDigital, fromPerc, DRUM_KIT_E,
+   MENU: typeof MENU === "undefined" ? null : MENU, readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console });
 
 async function editorMock() {
@@ -153,6 +154,32 @@ async function editorMock() {
   }
   const none = await E.readDevicePreferences(() => { throw new Error("unexpected request"); }, { uiCaps: 0 }, []);
   ok(none === null, "editor: old firmware receives no unsupported preference requests");
+  if (!E.readDeviceMenu) console.log(`${"editor: MENU settings (this editor has none)".padEnd(64)} skip`);
+  else {   /* the MENU settings (1.0.4): INFO 4E 01 count, MENU_DESC (72), MENU_SET (73) */
+    ok(info.menuCount === 12, "editor: INFO advertises the MENU settings (4E 01 12)");
+    const items = await E.readDeviceMenu(rq, info);
+    ok(items.length === 12 && items.map((d) => d.id).join() === "0,1,2,3,4,5,6,7,8,9,10,11" &&
+       items.map((d) => d.name).join() === "COLOR,STYLE,LARGE,ANIM,LEDS,HOLD,KNOB ACCEL,FX LATCH,BPM LOCK,SPEAKER EQ,USB LEVEL,USB SERIAL" &&
+       items.every((d) => d.kind === 0 && d.min === 0 && d.names.length === d.max - d.min + 1) &&
+       eq(items[0].names, prefs.palettes) && items[0].value === m.state.palette &&
+       items[4].names.join() === "OFF,DIM LO,DIM HI,INV" && items[4].value === 2 && items[5].value === 1,
+       "editor: MENU_DESC lists every setting, its value names and value");
+    ok(E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(12))).id === 127, "editor: MENU_DESC past the list answers id 127");
+    let r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(4, 3)));
+    ok(r.rc === 0 && r.id === 4 && r.value === 3 && E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(4))).value === 3,
+       "editor: MENU_SET round trip (LEDS INV)");
+    const pal = m.state.palette;
+    r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(0, 50)));
+    ok(r.rc === 0 && r.value === 9 && E.parse[E.CMD.UI_STATE](await rq(E.req.uiState())).palette === 9,
+       "editor: MENU_SET clamps (COLOR 50 -> 9), the same setting as UI_SET 0");
+    ok(E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(12, 1))).rc === 1, "editor: MENU_SET of an unknown id: rc 1");
+    await rq(E.req.menuSet(0, pal)); await rq(E.req.menuSet(4, 2));
+    const d = E.parse[E.CMD.MENU_DESC]([3, 20, 1, 5, 64, 0, 64, 100, 64, 88, 0, 109, 115, 0]);
+    ok(d.kind === 1 && d.value === 5 && d.max === 100 && d.name === "X" && d.unit === "ms" && d.names === null,
+       "editor: MENU_DESC kind 1 (a number): its unit");
+    ok((await E.readDeviceMenu(() => { throw new Error("unexpected request"); }, { menuCount: 0 })).length === 0,
+       "editor: firmware without MENU settings is not asked");
+  }
   await rq(E.req.uiSet(3, 0));
   const scale = E.parse[E.CMD.DESC](await rq(E.req.desc(0, 26)));
   const scaleNames = ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"];
@@ -295,6 +322,12 @@ function mockTables() {
   cmp("FM6 patches (init, factory, bank size)", T.FM6, fw.FM6);
   cmp("DRUM grid: the lanes' GM notes", [...E.LANE_NOTE], fw.LANE_NOTE);
   cmp("DRUM grid: the lane of GM 35..81", E.LANE_OF, fw.LANE_OF);
+  const mj = join(DESC, "../menu.json");
+  if (E.MENU && existsSync(mj)) {                   /* the MENU settings: tests/editor_test.c's MENU_DESC replies */
+    const fm = JSON.parse(readFileSync(mj, "utf8"));
+    cmp("MENU settings", E.MENU.map((x) => ({ id: x.id, kind: 0, min: 0, max: (x.names || m2.state.palettes).length - 1,
+      value: x.def, name: x.name, names: x.names || m2.state.palettes })), fm);
+  }
   diffs.slice(0, 20).forEach((d) => console.log("  " + d));
   ok(!diffs.length, `editor: mock tables == firmware (${diffs.length} differences)`);
   /* #31: percent values as the firmware formats them (param_format), SWG 0..100 shows its value */

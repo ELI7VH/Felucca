@@ -394,6 +394,18 @@ static int layer_play(void)
     return 1;
 }
 
+/* OCT- / OCT+ pressed with a SET layer's button down (FX LATCH: FX's) before it opened: a combo, so it opens now,
+ * before oct_taps and layer_oct read it (else the press was nobody's: no put back / ALL OFF, no octave) */
+static void layer_oct_open(uint32_t pressed)
+{
+    uint32_t l = ui.ly, oct = 1u << panel.btn[B_OCTDN] | 1u << panel.btn[B_OCTUP];
+    if ((pressed & oct) && l && !(ui.ly_t0 & (LY_OPEN | LY_DEAD)) && layer_held() &&
+        (LAYERS[l].kind == LK_SET || (l == LAYER_FX && perf_latch_on))) {
+        ui.ly_t0 |= LY_OPEN | LY_COMBO;
+        layer_opened(l);
+    }
+}
+
 /* OCT- / OCT+ in a SET layer: no octave; OCT- let go puts back what the layer changed. Returns the taps left */
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 {
@@ -610,7 +622,7 @@ static void layer_scl(void)                             /* KNOB 2's scales, 4 x 
 }
 static void layer_edit(void)                            /* the engines from F3, INIT next (LY_INIT), the sound under them */
 {                                                        /* (cells show the engine's icon, not the key's note) */
-    uint32_t n = NENG_SHOWN < LY_INIT ? NENG_SHOWN : LY_INIT, cells = n + 1u, i, h = cells > 12u ? 22u : 28u;
+    uint32_t n = NENG_SHOWN < LY_INIT ? NENG_SHOWN : LY_INIT, cells = n + 1u, i, h = cells > 12u ? 20u : 28u;   /* 4 rows of 20: 8 px clear above the sound row */
     for (i = 0; i < cells; i++) {
         int32_t x = LC_X(i % 4u), y = 4 + (int32_t)(h + 4u) * (int32_t)(i / 4u);
         const engine_t *en = ENGINES[eng_vis(i) % NENGINES];

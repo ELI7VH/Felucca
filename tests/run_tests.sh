@@ -32,7 +32,8 @@
 #                   the DRUM grid (keys, knobs, LEDs, pages, live recording into it, BEAT from PATTERNS).
 # Audio / persistence / editor: the real C paths against simulated DMA and NOR flash: bounded overload
 #                   fades, shared-voice limits, deferred settings and retries, failed-save rollback,
-#                   malformed transfers, transport-stop timeouts, MIDI and UART recovery.
+#                   malformed transfers, transport-stop timeouts, MIDI and UART recovery; the MENU settings over the
+#                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later).
 # CHORD (tests/chord_test.c): the chord keys (src/chord.c): diatonic triads / sevenths of several scales and roots,
 #                   the fixed shapes and voicings (at most 4 notes), names, MONO plays the root, a release ends
 #                   exactly what its key / MIDI note started, recording, the ARP, MIDI IN, kits ignore CHRD.
@@ -55,7 +56,11 @@
 # USB audio (tests/uac_test.c): the UAC1 descriptors as a host parses them (with and without CDC), the
 #                   ring and packetiser: 44.1 frames per packet, every frame in order, underrun / overrun, restart.
 # web (web/test_web.mjs): the editor protocol against its mock device, whose tables must equal the
-#                   firmware's (tests/descdump.c -> build/host/desc.json), the package builder, the updater.
+#                   firmware's (tests/descdump.c -> build/host/desc.json; the MENU settings: tests/editor_test.c -> build/host/menu.json),
+#                   the package builder, the updater.
+# Browser emulator (web/emu, when emcc is there): the firmware in WebAssembly (build/emu) boots, plays keys and MIDI,
+#                   draws, lights its LEDs, keeps a save across instances, plays a song bit for bit as the same file
+#                   built with cc (web/emu/native_check.c); the cost of 1 s of a heavy song against real time.
 # PHYS (tests/phys_test.c): stability over the whole parameter and pitch range, the worst-case cost against
 #                   the heaviest factory preset, demos in build/phys_demo/; tests/phys_ref.cpp compares the
 #                   fixed-point models with DaisySP's float originals when DaisySP is there (DAISYSP=path).
@@ -181,7 +186,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/backup_test" tests/backup_test.c -lm
     run "full backup: CRC before writes, stale runtime, USB reset / timeout, malformed objects, older projects" "$OUT/backup_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/editor_test" tests/editor_test.c -lm
-    run "editor: real C protocol, malformed transfers and queue recovery" "$OUT/editor_test"
+    run "editor: real C protocol, malformed transfers, queue recovery, MENU settings (writes build/host/menu.json)" \
+        env MENU_JSON="$OUT/menu.json" "$OUT/editor_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/mod_test" tests/mod_test.c -lm
     mkdir -p build/mod_demo
     run "modulation matrix: off = bit-identical, the math, MIDI CC1 / CC11 / aftertouch, cost, demos" "$OUT/mod_test" build/mod_demo
@@ -249,6 +255,18 @@ if command -v node >/dev/null 2>&1; then
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
 else
     echo "== skip web tests (no node)"
+fi
+
+if ! command -v emcc >/dev/null 2>&1; then
+    echo "== skip the browser emulator (no emcc: Emscripten builds web/emu)"
+elif ! command -v node >/dev/null 2>&1 || [ ! -f build/gen/felucca_tables.h ]; then
+    echo "== skip the browser emulator (needs node and build/gen)"
+else
+    run "browser emulator: the firmware to WebAssembly (web/emu/build.sh -> build/emu)" sh web/emu/build.sh
+    cc -O2 -ffp-contract=off -w -Ibuild/gen -Ifirmware/src -o "$OUT/emu_native" web/emu/native_check.c -lm
+    run "browser emulator: the same song from the native build" "$OUT/emu_native" "$OUT/emu_native.f32"
+    run "browser emulator: boot, keys, MIDI, screen, LEDs, PLAY, a save kept across instances, = native, cost" \
+        node web/emu/emu_test.mjs build/emu/felucca.wasm "$OUT/emu_native.f32"
 fi
 
 [ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }

@@ -871,6 +871,7 @@ static int project_restore_runtime(const project_t *input)
     sync_reload = 1;
     ui.force = 1;
     ui_message("LOADED");
+    memset(snd_said, 0, sizeof snd_said);               /* a missing sample is said again, after LOADED */
     return 0;
 }
 static void project_load(uint32_t slot)

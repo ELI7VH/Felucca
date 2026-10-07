@@ -128,8 +128,8 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER };   /* ui.confirm: REC held on
-                                   * SEQ / ARP, on TRACKS; SAVE over a used slot; a pattern over the user's steps;
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER };   /* ui.confirm: TOOLS' clears, REC
+                                   * held on SEQ (#91); SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE */
 
 static const page_t *page_over;   /* a quick layer's own four knobs (ui_layer.c), while it edits or draws them */
@@ -220,6 +220,11 @@ static void ui_say(const char *a, const char *b)
 }
 
 static void ui_message(const char *s) { ui_say(s, ""); }
+/* a message led by an icon: its first byte (ui_draw.c draw_head draws the icon, then the words) */
+#define MSG_NOFILE "\x01"                      /* the no-file icon (ICON_X_NOFILE) */
+/* a missing sample (ui_input.c sample_notice): NO SAMPLE (SAMPLE NOT FOUND, the SLICES page's, is 4 px too wide
+ * for the header's 130 px after the icon) */
+#define MSG_NO_SAMPLE MSG_NOFILE "NO SAMPLE"
 
 static int chain_busy(void) { return chain.running || chain.armed; }
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
@@ -539,7 +544,7 @@ static void undo_swap(void)
     motion_store_t current_motion;
     motion_snapshot_track(t, &current_motion);
     if (motion_replace_track(t, &undo.motion_backup) != 0) {
-        ui_message("MOTION FULL");
+        ui_message("AUTOMATION FULL");
         return;
     }
     undo.motion_backup = current_motion;

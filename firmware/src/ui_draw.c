@@ -188,7 +188,13 @@ static void draw_head(void)
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
     roll_text(ROLL_BPM, BPM_X, HEAD_MY, b, ui.bpm_t ? T_ACCENT : T_THEME);
     if (ui.msg_t || ui.layer) {                     /* a message, or the layer's name */
-        int32_t x = cv_free_hint(106, HEAD_SY, ui.msg_t ? ui.msg : layer_head(), T_TEXT, T_BG, 236 - 106);   /* (may start with a keycap) */
+        const char *m = ui.msg_t ? ui.msg : layer_head();
+        int32_t x = 106;
+        if (m[0] == MSG_NOFILE[0]) {                /* a message led by an icon (ui.c MSG_NOFILE), the accent's */
+            x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_NOFILE, T_ACCENT, T_BG) + KH_GAP;
+            m++;
+        }
+        x = cv_free_hint(x, HEAD_SY, m, T_TEXT, T_BG, 236 - x);   /* (may start with a keycap) */
         if (!ui.msg_t && layer_locked())            /* #83: locked open (a double tap): the lock after its name */
             cv_icon_mid(x + 6, H_HEAD / 2, 16, ICON_X_LOCK, T_THEME, T_BG);
     } else {
@@ -605,9 +611,13 @@ static void draw_foot(void)
         x += cv_icon_in(x, 19 + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, engine_icon(ename), T_MID, T_BG) + 5;
     }
     x = cv_text_fit(x, 19, &AF_S, ename, T_THEME, T_BG, 80);
-    {   /* the page title at the right, its icon before it (MIXER, PHRASES, SONG, CHANCE, MOTION) */
+    {   /* the page title at the right, its icon before it (MIXER, PHRASES, SONG, CHANCE, AUTOMATION) */
         uint32_t pi = ui.home ? ICON_NONE : page_icon(pg);
         int32_t tx = 232 - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
+        if (!ui.home && pg->graph == GR_MOTION && tx - 12 - (x + 10) < text_w(&AF_S, pn)) {
+            str_cpy(ti + 4, ti + 10, sizeof ti - 4);    /* #93: "AUTOMATION 6/6" -> "AUTO 6/6" where the sound's name */
+            tx = 232 - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);   /* would be cut (MENU > LARGE) */
+        }
         cv_free_text(x + 10, 19, &AF_S, pn, T_TEXT, T_BG, tx - 12 - (x + 10));
         if (pi != ICON_NONE) {
             GFX_HOOK_ALIGN(0, 19 + AF_S_CAP_Y, 0, 19 + AF_S_CAP_Y + AF_S_CAP_H, AL_V,
@@ -897,7 +907,7 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "INITIALIZE SOUND?", 24);
         break;
     case CF_CLEAR_MOTION:
-        str_cpy(a, "CLEAR T1 MOTION?", 24); a[7] = (char)('1' + k % NTRK);
+        str_cpy(a, "CLEAR T1 AUTOMATION?", 24); a[7] = (char)('1' + k % NTRK);
         break;
     case CF_OVR_USER:
         str_cpy(a, "OVERWRITE ", 24);
