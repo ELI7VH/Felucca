@@ -204,10 +204,51 @@ static int midi_track_held(uint32_t track)
     return 0;
 }
 
+/* Standalone controllers: CC20..27 are the engine's eight EDIT parameters.
+ * These follow ROUT like notes. CC7 on channels 1..4 always addresses that
+ * channel's mixer strip, even in SEL, so four fixed-channel faders stay useful.
+ * Called between audio blocks: descriptors include engine-specific signed / enum
+ * ranges; motion_capture keeps automation's base and recording consistent. */
+static void midi_parameter(track_t *t, uint32_t id, uint32_t value)
+{
+    const param_desc_t *d = track_desc(t, id);
+    int32_t v = d->min + ((int32_t)value * (d->max - d->min) + 63) / 127;
+    if (d->max <= d->min)
+        return;
+    t->p[id] = (int16_t)param_fit(d, v);
+    (void)motion_capture(t, id, t->p[id]);
+}
+
+static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
+{
+    track_t *t = midi_track(ch);
+    uint32_t id;
+    if (cc >= 20u && cc <= 27u)
+        id = P_E0 + cc - 20u;
+    else switch (cc) {
+    case 7: t = ch < NPART ? &trk[ch] : t; id = P_LEVEL; break;
+    case 10: id = P_PAN; break;
+    case 70: id = P_SUS; break;
+    case 72: id = P_REL; break;
+    case 73: id = P_ATK; break;
+    case 75: id = P_DEC; break;
+    case 76: id = P_LRATE; break;
+    case 90: id = P_DIST; break;
+    case 91: id = P_REV; break;
+    case 93: id = P_CHOR; break;
+    case 94: id = P_DLY; break;
+    default: return 0;
+    }
+    midi_parameter(t, id, value);
+    return 1;
+}
+
 static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
 {
     midi_channel_t *c = midi_channel(ch);
     uint32_t i, mask;
+    if (midi_parameter_cc(ch, cc, value))
+        return;
     switch (cc) {
     case 1:
         c->wheel = (uint8_t)value;

@@ -279,9 +279,76 @@ static int route_test(void)
     bad += check("channel 1's note-off still releases its note after the switch", !any_gate() && !midi_owners[2]);
     return bad;
 }
+static int standalone_cc_test(void)
+{
+    int bad = 0;
+    midi_test_reset(); song.sel = 2;
+    for (uint32_t source = 1; source <= 2; source++) {
+        for (uint32_t ch = 0; ch < NPART; ch++) {
+            for (uint32_t k = 0; k < 8u; k++) {
+                const param_desc_t *d = track_desc(&trk[ch], P_E0 + k);
+                queued(0xB0u | ch, 20u + k, 0, source);
+                bad += check("USB/TRS engine CC minimum follows its channel", trk[ch].p[P_E0 + k] == param_fit(d, d->min));
+                queued(0xB0u | ch, 20u + k, 127, source);
+                bad += check("USB/TRS engine CC maximum follows its channel", trk[ch].p[P_E0 + k] == param_fit(d, d->max));
+            }
+            queued(0xB0u | ch, 7, 17u + ch, source);
+            bad += check("four CC7 mixer strips are independent", trk[ch].p[P_LEVEL] == (int32_t)(17u + ch));
+        }
+    }
+    queued(0xB0, 10, 0, 1); queued(0xB1, 10, 127, 2);
+    bad += check("pan reaches both signed endpoints", trk[0].p[P_PAN] == -64 && trk[1].p[P_PAN] == 63);
+    queued(0xB0, 73, 43, 1); queued(0xB0, 75, 44, 1); queued(0xB0, 70, 45, 2); queued(0xB0, 72, 46, 2);
+    bad += check("envelope CCs reach the addressed track", trk[0].p[P_ATK] == 43 && trk[0].p[P_DEC] == 44 && trk[0].p[P_SUS] == 45 && trk[0].p[P_REL] == 46);
+    queued(0xB0, 90, 11, 1); queued(0xB0, 91, 12, 1); queued(0xB0, 93, 13, 2); queued(0xB0, 94, 14, 2);
+    bad += check("effect sends are directly controllable", trk[0].p[P_DIST] == 11 && trk[0].p[P_REV] == 12 && trk[0].p[P_CHOR] == 13 && trk[0].p[P_DLY] == 14);
+    for (uint32_t engine = 0; engine < NENGINES; engine++) {
+        trk[1].eng_req = (uint8_t)engine;
+        for (uint32_t k = 0; k < 8u; k++) {
+            const param_desc_t *d = track_desc(&trk[1], P_E0 + k);
+            int16_t before = trk[0].p[P_E0 + k];
+            queued(0xB1, 20u + k, 0, 1);
+            if (d->max > d->min)
+                bad += check("every engine maps its own minimum", trk[1].p[P_E0 + k] == param_fit(d, d->min));
+            queued(0xB1, 20u + k, 127, 2);
+            if (d->max > d->min)
+                bad += check("every engine maps its own maximum", trk[1].p[P_E0 + k] == param_fit(d, d->max));
+            bad += check("an engine edit never leaks into another track", trk[0].p[P_E0 + k] == before);
+        }
+    }
+    midi_test_reset(); song.sel = 2;
+    um_byte(0xB1); um_byte(7); um_byte(64); um_byte(20); um_byte(127); events_block(CTL);
+    const param_desc_t *uart_d = track_desc(&trk[1], P_E0);
+    bad += check("real TRS parser with running status reaches track 2 volume and engine", trk[1].p[P_LEVEL] == 64 && trk[1].p[P_E0] == param_fit(uart_d, uart_d->max) && trk[0].p[P_LEVEL] == TP[P_LEVEL].def);
+    int16_t keep = trk[0].p[P_LEVEL]; queued(0xB4, 7, 99, 1);
+    bad += check("CH1-4 ignores unsupported channels' parameter CCs", trk[0].p[P_LEVEL] == keep);
+    song.g[G_ROUTE] = 1; events_block(CTL);
+    queued(0xB0, 7, 61, 1); queued(0xB1, 7, 62, 2);
+    bad += check("fixed faders remain independent in SEL mode", trk[0].p[P_LEVEL] == 61 && trk[1].p[P_LEVEL] == 62 && trk[2].p[P_LEVEL] == TP[P_LEVEL].def);
+    queued(0xB0, 73, 90, 1);
+    bad += check("other parameter CCs preserve SEL routing", trk[2].p[P_ATK] == 90);
+    midi_test_reset(); trk[0].p[P_REV] = 23; song.sel = 0; song.rec = 1;
+    seq_start(); seq_tick(&trk[0], CTL); queued(0xB0, 91, 92, 2);
+    bad += check("TRS CC edit records motion while preserving the patch base", motion.count == 1u && motion.event[0].param == P_REV && motion.event[0].value == 92 && motion_base_value(&trk[0], P_REV) == 23);
+    seq_stop();
+    bad += check("stop restores the original base after a recorded MIDI edit", trk[0].p[P_REV] == 23);
+    seq_start(); seq_tick(&trk[0], CTL); song.rec = 0; queued(0xB0, 91, 37, 1); seq_stop();
+    bad += check("unrecorded MIDI edits survive stopping automation", trk[0].p[P_REV] == 37);
+    midi_test_reset(); queued(0xB0, 1, 127, 2);
+    int16_t depth = trk[0].p[P_LD_PIT];
+    bad += check("wheel provides pitch modulation without changing the patch", mod_wheel_pitch(&trk[0], 32767) == 7 && mod_wheel_pitch(&trk[0], -32768) == -8 && trk[0].p[P_LD_PIT] == depth);
+    queued(0xB0, 1, 0, 1);
+    bad += check("wheel zero restores unmodulated pitch", !mod_wheel_pitch(&trk[0], 32767));
+    queued(0xB0, 1, 127, 1); trk[0].p[P_M1SRC] = MS_MODW; trk[0].p[P_M1DST] = MD_VIB; trk[0].p[P_M1AMT] = 32;
+    bad += check("an explicit wheel matrix assignment overrides default vibrato", !mod_wheel_pitch(&trk[0], 32767));
+    trk[3].mw = 127;
+    bad += check("drums ignore wheel vibrato", !mod_wheel_pitch(&trk[3], 32767));
+    return bad;
+}
+
 int main(void)
 {
     int bad = controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
-              arp_ext_stop_test() + usb_burst_test() + route_test();
+              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

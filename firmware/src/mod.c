@@ -208,6 +208,20 @@ static __attribute__((noinline)) void mod_voice(track_t *t, voice_t *v, vmod_t *
     }
 }
 
+/* Default CC1 vibrato: the patch's LFO, up to +/- half a semitone.
+ * An explicit active MODW matrix assignment takes priority; drums ignore it.
+ * The wheel is live expression, never a write to the saved LFO depth. */
+static int32_t mod_wheel_pitch(const track_t *t, int32_t lfo)
+{
+    uint32_t k;
+    if (!t->mw || ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM)
+        return 0;
+    for (k = 0; k < NMSLOT; k++)
+        if (t->p[P_M1SRC + 3u * k] == MS_MODW && t->p[P_M1DST + 3u * k] && t->p[P_M1AMT + 3u * k])
+            return 0;
+    return ((lfo * (int32_t)t->mw * 8) / 127) >> 15;
+}
+
 /* a note-on of track t (voice.c trk_note_on): the per-voice sources of the latest note */
 static void mod_note(track_t *t, uint32_t note, uint32_t vel)
 {
