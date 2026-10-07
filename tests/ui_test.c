@@ -3373,6 +3373,36 @@ static int test_quick_layers(void)
     ok = TSEL->eng_req == eng_step(0, 1);
     btn_up(B_EDIT); frame();
     bad += check("  KNOB 1: the next engine", ok);
+    {                                                   /* #124: SAMPLE's alias (1 = PIANO) is not a stop on KNOB 2 */
+        uint32_t tot, n, c0, c1, c2, seen = 0, alias = 0;
+        set_engine_of(TSEL, ENGI_SAMPLE); go_home(); frame();
+        eng_list_pos(&tot);
+        btn_down(B_EDIT); frame();
+        c0 = eng_list_pos(&tot);
+        turn(EN_K2, 1);
+        ok = TSEL->preset == 2u && user_of(TSEL) >= UP_SLOTS;
+        c1 = eng_list_pos(&tot);
+        turn(EN_K2, 1);
+        ok &= TSEL->preset == 3u;
+        c2 = eng_list_pos(&tot);
+        ok &= c0 == 0u && c1 == 1u && c2 == 2u && tot >= SMP_NPRESETS - SMP_NALIAS;
+        apply_preset(0);
+        for (n = 0; n < tot; n++) {                     /* right: every sound once, back to the first */
+            turn(EN_K2, 1);
+            seen |= 1u << eng_list_pos(&tot);
+            alias |= user_of(TSEL) >= UP_SLOTS && TSEL->preset == 1u;
+        }
+        ok &= seen == (1u << tot) - 1u && TSEL->preset == 0u && user_of(TSEL) >= UP_SLOTS;
+        seen = 0;
+        for (n = 0; n < tot; n++) {                     /* left: the same, backwards */
+            turn(EN_K2, -1);
+            seen |= 1u << eng_list_pos(&tot);
+            alias |= user_of(TSEL) >= UP_SLOTS && TSEL->preset == 1u;
+        }
+        ok &= seen == (1u << tot) - 1u && TSEL->preset == 0u && !alias;
+        btn_up(B_EDIT); frame();
+        bad += check("  #124 SAMPLE: KNOB 2 right PIANO, FLUTE, SAX (No. 1 2 3), both ways round the list, never the alias", ok);
+    }
     song.playing = 0;
     lay_combo(B_EDIT, white(LY_INIT));
     ok = ui.confirm == CF_INIT_SOUND;

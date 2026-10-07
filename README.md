@@ -5,7 +5,7 @@
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.0.5.1 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
+**TL;DR:** Felucca 1.0.5.2 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
 open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back. Want to look around first?
@@ -225,7 +225,8 @@ moved there. Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
   (TRS MIDI, bend, sustain and clock, palettes, favourites, editor display settings: #8, #10, #11, #12),
   [andreahaku](https://github.com/andreahaku) (sample recording and trim, #29; SLICE manual slices and tests, #27, #22),
   [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111),
-  [zednaked](https://github.com/zednaked) (ratchets, #100)
+  [zednaked](https://github.com/zednaked) (ratchets, #100),
+  [jasonpersinger](https://github.com/jasonpersinger) (the ROOM reverb click fix, #121)
 
 ## Licence
 

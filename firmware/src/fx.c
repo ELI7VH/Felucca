@@ -268,8 +268,8 @@ static void rev_clear(void)
     uint32_t i;
     for (i = 0; i < sizeof rev_comb / 2u; i++)
         rev_comb[i] = 0;
-    for (i = 0; i < sizeof rev_u.sp / 4u; i++)
-        rev_u.sp[i] = 0;
+    for (i = 0; i < sizeof rev_u.ap / 2u; i++)          /* (int16: 997 of them, an odd count the int32 view misses one of) */
+        rev_u.ap[i] = 0;
     for (i = 0; i < 4u; i++)
         fx.comb_lp[i] = 0;
     fx.sp_lp = fx.sp_hp = fx.sp_he = 0;

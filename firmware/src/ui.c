@@ -982,8 +982,10 @@ static void preset_go(uint32_t n)                    /* load list index n into t
  * made with it (slot order). List index of the current sound; *total the length */
 static uint32_t eng_list_pos(uint32_t *total)
 {
-    uint32_t e = TSEL->eng_req % NENGINES, np = ENGINES[e]->npresets, u = user_of(TSEL), k, n = 0;
-    uint32_t cur = np ? TSEL->preset % np : 0u;
+    const engine_t *en = ENGINES[TSEL->eng_req % NENGINES];
+    uint32_t e = TSEL->eng_req % NENGINES, np = preset_shown(e), u = user_of(TSEL), k, n = 0;
+    uint32_t cur = np ? preset_rank(en, preset_orig(en, TSEL->preset % en->npresets)) : 0u;   /* (#124: the aliases
+                                        * skipped, as on PRESETS: SAMPLE 1 loads as 0, so counting it stuck KNOB 2) */
     for (k = 0; k < UP_SLOTS; k++)
         if (up_used(k) && up_engine(k) == e) {
             if (k == u)
@@ -996,12 +998,14 @@ static uint32_t eng_list_pos(uint32_t *total)
 
 static void eng_list_step(int32_t direction)         /* the next / previous sound of the engine (wraps) */
 {
-    uint32_t total, cur = eng_list_pos(&total), e = TSEL->eng_req % NENGINES, np = ENGINES[e]->npresets, k, n;
+    uint32_t total, cur = eng_list_pos(&total), e = TSEL->eng_req % NENGINES, np = preset_shown(e), k, n;
     if (total < 2u)
         return;
     n = (cur + (direction > 0 ? 1u : total - 1u)) % total;
     if (n < np) {
-        apply_preset(n);
+        for (k = 0; preset_orig(ENGINES[e], k) != k || n--; k++)   /* the n-th shown preset */
+            ;
+        apply_preset(k);
     } else {
         n -= np;
         for (k = 0; k < UP_SLOTS; k++)
