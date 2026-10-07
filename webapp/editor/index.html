@@ -9,6 +9,7 @@
 <title>Felucca Editor</title>
 <link rel="icon" href="data:,">
 <meta name="felucca-release" content="1.0.3.1">
+  <meta name="felucca-try" content="next">
 <style>
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
@@ -1982,7 +1983,7 @@ function makeMockDevice(opt = {}) {
         P("FM BASS", [0, 0, 0, 0, 0, 0, 0, 2], [0, 0, 127, 0], 1, 2), P("BRASS", [0, 0, 0, 0, 0, 0, 0, 3], [0, 0, 127, 0], 0, 4),
         P("PAD", [0, 0, 0, 0, 0, 0, 30, 4], [0, 0, 127, 0], 0, 5), P("MARIMBA", [0, 0, 0, 0, 0, 0, 0, 5], [0, 0, 127, 0], 0, 3),
         P("ORGAN", [0, 0, 0, 0, 0, 0, 0, 6], [0, 0, 127, 0], 0, 6), P("PLUCK", [0, 0, 0, 0, 0, 0, 0, 7], [0, 0, 127, 0], 0, 13)] },
-    { name: "SLICE", titles: ["SLCE", "PLAY"], edit: [E("SRC", ["PIANO", "USR1", "USR2", "USR3"], 0),
+    { name: "SLICE", titles: ["SLCE", "PLAY"], edit: [E("SRC", ["BREAK", "USR1", "USR2", "USR3", "PIANO"], 0),
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
@@ -4157,7 +4158,7 @@ const TEXT = {
     fm6OtherMaker: "another manufacturer's SysEx", fm6Universal: "universal SysEx",
     installer: "Installer", classic: "Classic editor", update: "Update", continue: "Continue",
     files: "Files", recInput: "Input", recFull: "The slot is full", recDenied: "No input:", recSilent: "Nothing came in",
-    usbQ: "Switch USB SERIAL? USB drops for a moment.", usb: "USB is switching; connecting again",
+    tryIt: "Try in browser", tryNext: "Try the next version", usbQ: "Switch USB SERIAL? USB drops for a moment.", usb: "USB is switching; connecting again",
     didLoad: "Loaded {0}", didKeep: "Kept {0}", didSave: "Saved to {0}", didRestore: "Restored {0}", isEmpty: "{0} empty",
     didSend: "Sent to {0}", didImport: "Imported {0}", skippedN: "{0} skipped",
   },
@@ -4188,7 +4189,7 @@ const TEXT = {
     fm6OtherMaker: "ほかのメーカーの SysEx", fm6Universal: "ユニバーサル SysEx",
     installer: "インストーラー", classic: "旧エディタ", update: "アップデート", continue: "このまま",
     files: "ファイル", recInput: "入力", recFull: "スロットがいっぱいです", recDenied: "入力が使えません:", recSilent: "音が入っていません",
-    usbQ: "USB SERIAL を切り替えますか？ USB が一度切れます。", usb: "USB を切り替え中、つなぎ直します",
+    tryIt: "ブラウザで試す", tryNext: "次の版を試す", usbQ: "USB SERIAL を切り替えますか？ USB が一度切れます。", usb: "USB を切り替え中、つなぎ直します",
     didLoad: "{0} を読み込みました", didKeep: "{0} をライブラリに追加", didSave: "{0} に保存しました", didRestore: "{0} から復元しました", isEmpty: "{0} は空",
     didSend: "{0} へ送りました", didImport: "{0} 件取り込み", skippedN: "{0} 件スキップ",
   },
@@ -4685,7 +4686,7 @@ const __m10 = (() => {
   const { G_SKIP, HEAD_IC, LAYOUT, paramIcon, visible } = __m9;
   const { card, cells, paramRow } = __m5;
   const { knownLayout } = __m2;
-  const { t } = __m6;
+  const { getLang, t } = __m6;
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 //
@@ -4841,7 +4842,7 @@ function soundScreen(root, ui) {
     drawEnv(); drawLfo();
     built = signature();
   }
-  const signature = () => (dev && dev.dump ? JSON.stringify([dev.dump.engine, dev.dump.preset, dev.sel, dev.pdesc.slice(dev.info.pe0)]) : "");
+  const signature = () => (dev && dev.dump ? JSON.stringify([getLang(), dev.dump.engine, dev.dump.preset, dev.sel, dev.pdesc.slice(dev.info.pe0)]) : "");
   return {
     /* the whole sound (after a load, RELOAD, another track): rebuilt when its shape changed, else values only */
     show(device) { if (device !== dev || signature() !== built) build(device); else refresh(); },
@@ -6180,6 +6181,9 @@ const __m19 = (() => {
 
 
 
+/* the site has the emulator beside the editor (make_site.py --try) */
+/* (content "1": the release's emulator; "next": a preview of the next version) */
+const TRY = (globalThis.document && (document.querySelector('meta[name="felucca-try"]') || {}).content) || "";
 const THEMES = ["system", "dark", "light"];
 const SIZES = [1, 1.25, 1.5];
 function applyEditorPrefs() {
@@ -6262,6 +6266,7 @@ function settingsScreen(root, ui) {
         ...kv(t("userBank"), dev.bank ? String(dev.bank.total) : "—")] : [])),
       el("div", { class: "links" },
         el("a", { class: "btn", href: "../installer/", text: t("installer") }),
+        TRY ? el("a", { class: "btn", href: "../try/", text: t(TRY === "next" ? "tryNext" : "tryIt") }) : null,
         el("a", { class: "btn", href: "../editor-classic/", text: t("classic") }),
         el("a", { class: "btn", href: "fonts/OFL.txt", text: "Inter Tight · OFL" }),
         el("a", { class: "btn", href: "fonts/FUKIAI-LICENSE.txt", text: "Fukiai · MIT" })),
@@ -6338,16 +6343,18 @@ let place = PLACES.some(([p]) => p === store.get(PLACE_KEY)) ? store.get(PLACE_K
 
 /* ---- messages: the log, and its last line at the right of the help bar ---- */
 const messages = [];
+/* text: a string, or () => a string (a message by its key: shown again in the language chosen later) */
+const said = (m) => (typeof m.text === "function" ? m.text() : m.text);
 function say(text, level = "info") {
   const now = new Date();
   messages.unshift({ time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`, text, level });
   messages.length = Math.min(messages.length, 100);
-  $("#msg-t").textContent = text;
+  $("#msg-t").textContent = said(messages[0]);
   $("#msgs").classList.toggle("warn", level !== "info");
   if ($("#log").open) drawLog();
 }
-const sayK = (k, extra = "", level) => say(t(k) + (extra ? " " + extra : ""), level || (["error", "noreply", "lost", "nodevice", "denied", "nomidi", "rejected"].includes(k) ? "warn" : "info"));
-function drawLog() { $("#log-list").replaceChildren(...messages.map((m) => el("li", {}, el("time", { text: m.time }), el("span", { class: m.level === "info" ? null : "warn", text: m.text })))); }
+const sayK = (k, extra = "", level) => say(() => t(k) + (extra ? " " + extra : ""), level || (["error", "noreply", "lost", "nodevice", "denied", "nomidi", "rejected"].includes(k) ? "warn" : "info"));
+function drawLog() { $("#log-list").replaceChildren(...messages.map((m) => el("li", {}, el("time", { text: m.time }), el("span", { class: m.level === "info" ? null : "warn", text: said(m) })))); }
 
 /* ---- the help bar: the name of what was touched and its value ---- */
 onHelp((name, value) => $("#help").replaceChildren(el("b", { text: name }), value ? document.createTextNode("  " + value) : ""));
@@ -6469,6 +6476,9 @@ function relabel() {
   $("#rail").setAttribute("aria-label", t("sound") + " · " + t("seq"));
   $("#tracks").setAttribute("aria-label", t("tracks"));
   $("#connect").lastElementChild.textContent = t(dev ? "disconnect" : "connect");
+  if (!$("#update").hidden) $("#update-t").textContent = `${t("update").toUpperCase()} v${$('meta[name="felucca-release"]').content}`;
+  if (messages.length && !connecting) $("#msg-t").textContent = said(messages[0]);   /* (a key's message in the new language) */
+  if ($("#log").open) drawLog();
 }
 
 /* ---- header: state, tracks, flash ---- */
@@ -6534,7 +6544,7 @@ async function connect() {
     relabel();
     d.on("progress", (p) => { if (p.what === "desc") $("#msg-t").textContent = `${t("reading")} ${p.n}/${p.total}`; else if (p.what === "steps") $("#msg-t").textContent = `${t("steps")} ${p.n}/${p.total}`; });
     d.on("param", (p) => { sound.param(p.scope, p.id, p.value); seq.param(p.scope, p.id, p.value); settings.param(p.scope, p.id, p.value); });
-    const settle = () => { $("#msg-t").textContent = messages.length ? messages[0].text : ""; };   /* (the progress line goes) */
+    const settle = () => { $("#msg-t").textContent = messages.length ? said(messages[0]) : ""; };   /* (the progress line goes) */
     d.on("reload", () => { sound.show(d); seq.show(d); mix.show(d); library.refresh(); samples.refresh(); project.refresh(); settings.show(d); drawTracks(); drawStore(); drawState(); settle(); });
     d.on("mix", () => { drawTracks(); if (d.loaded) mix.all(); });
     d.on("track", (k) => { drawTracks(); mix.track(k); });

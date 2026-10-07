@@ -144,6 +144,8 @@
   <p id="status" aria-live="polite"></p>
   <pre id="log"></pre>
   <p><a href="../editor/" data-t="editor"></a></p>
+  <p id="try-p" hidden><a href="../try/" data-t="tryIt"></a></p>
+  <p id="next-p"><a href="../try/" data-t="tryNext"></a></p>
   <footer><p class="small">Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>, with its CrispyZebra waveforms, drum voices, Sample Pack and Fukiai icons (MIT).<br>
     Font: Inter Tight (The Inter Project Authors, SIL OFL 1.1). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0).<br>
     FM6 engine: msfa from Dexed (Google Inc., Pascal Gauthier, Apache-2.0). The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0). <a href="../../firmware/LICENSING.md">Licences</a>: <a href="../../firmware/LICENSE">GPL-3.0</a>, <a href="../../firmware/LICENSES/Apache-2.0.txt">Apache-2.0</a>, <a href="../../firmware/LICENSES/">all</a>.<br>
@@ -829,6 +831,8 @@ const TEXT = {
     warn: "書き込み中は USB を抜かないでください。",
     install: "インストール", other: "English",
     editor: "エディタ（インストール後、パソコンから音色やシーケンスを編集）",
+    tryIt: "ブラウザで試す（FM-1 なしで動くエミュレータ）",
+    tryNext: "次の版をブラウザで試す（プレビュー、FM-1 不要）",
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
     brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
     beta: "Felucca 1.0 は実地テスト版です。不具合は GitHub で知らせてください。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
@@ -860,6 +864,8 @@ const TEXT = {
     warn: "Do not unplug the USB cable while writing.",
     install: "Install", other: "日本語",
     editor: "Editor (after installing: edit sounds and sequences from the computer)",
+    tryIt: "Try in the browser (an emulator, no FM-1 needed)",
+    tryNext: "Try the next version in the browser (preview, no FM-1 needed)",
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
     beta: "Felucca 1.0 is a field-testing release; please report problems on GitHub. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
