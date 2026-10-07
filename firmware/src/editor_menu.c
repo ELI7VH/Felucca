@@ -2,7 +2,8 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* MENU's settings for the editor (EDITOR_PROTOCOL.md "MENU settings"): MENU_DESC describes one, MENU_SET sets one;
  * INFO 4E 01 count. The editor builds its settings from these; the values, names and the apply path are the menu's
- * own (menu_items.c), so the two cannot differ. CALIBRATION and ABOUT are not offered (no value).
+ * own (menu_items.c), so the two cannot differ. CALIBRATION and ABOUT are not offered (no value). 1.0.5: each reply
+ * ends with the row's MENU tab (MI_TAB: its index and name), so the editor can group the settings as the device does.
  * ED_MENU: {row, id} in the menu's order. An id keeps its meaning for good: a new setting takes the next free id
  * (append-only), wherever its row goes; ids 0..126 (127: none). */
 enum { ED_MENU_DESC = 72, ED_MENU_SET };
@@ -34,7 +35,8 @@ static int ed_menu_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
     uint32_t i, row, k;
     int32_t v;
-    if (cmd == ED_MENU_DESC) {                         /* index -> index, id, kind, value, min, max (v14), name, names */
+    if (cmd == ED_MENU_DESC) {                         /* index -> index, id, kind, value, min, max (v14), name, names,
+                                                          * (1.0.5) its tab: index, name */
         ed_b(a[0]);
         if (a[0] >= ED_MENU_N) {
             ed_b(127);                                 /* no such item: the list ends */
@@ -50,6 +52,8 @@ static int ed_menu_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
         ed_str(MI_NAME[row], 12);
         for (i = 0; i < k; i++)
             ed_str(menu_vname(row, i), 12);
+        ed_b(MI_TAB[row]);                             /* (after the names: an older editor stops before it) */
+        ed_str(MTAB_NAME[MI_TAB[row]], 12);
         return 1;
     }
     if (cmd != ED_MENU_SET)

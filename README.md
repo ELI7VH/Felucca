@@ -5,7 +5,7 @@
 
 ![Felucca 1.0](docs/felucca-1.0.png)
 
-**TL;DR:** Felucca 1.0.4 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
+**TL;DR:** Felucca 1.0.5 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
 open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back. Want to look around first?
@@ -28,8 +28,9 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **Thirteen engines** (below), each with its own factory presets
 - **Four tracks**, one synth part each with its own engine and sound (drums are the DRUM engine);
   8 voices shared between them. ALGORITHM selects the track on every page
-- **Sequencer:** 64 steps per track with chords, ties, accent, slide and per-step chance; a piano
-  roll of the steps; a drum grid (white keys = steps, black keys = lanes); automation (formerly motion):
+- **Sequencer:** 64 steps per track with chords, ties, accent, slide, per-step chance and ratchets
+  (a step played 2, 3 or 4 times in its length); a piano roll of the steps; a drum grid (white keys =
+  steps, black keys = lanes); automation (formerly motion):
   recording of knob moves per step (an automation icon marks the cards it drives); live loop recording
   with overdub; REC held on the SEQ pages clears the sequence (it asks first, and SAVE held undoes it);
   divisions listed by length, 4 bars to 1/32; loading a sound never touches your patterns
@@ -45,13 +46,14 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
   (OCT UP / OCT DN with shimmer), and mutes on the black keys; MENU > FX LATCH makes them toggle, so
   nothing has to stay held
 - **Quick layers:** hold FX, GLO, SCL or EDIT for shortcuts on the keys and knobs, or double-tap it to
-  keep the layer open; one-step undo (SAVE held); REC on every page; OCT+ confirms, OCT- goes back
+  keep the layer open; one-step undo (SAVE held); REC on every page; OCT+ confirms, OCT- goes back;
+  what can be pressed breathes softly instead of blinking
 - **Presets:** factory presets, 32 user preset slots and 4 projects, named on the device (an FM6
   sound keeps its own patch in both); projects from every earlier version load. The PRESETS knob
   changes the sound from every page that is not a list, and moves the step cursor on the SEQ pages
 - **Screen:** flat UI with Inter Tight and Fukiai icons, FLAT or LINE style, 10 palettes including
   grayscale, black and white, high contrast and NIGHT; tracks numbered 1–4 on small cushions;
-  MENU > LARGE for tall knob cards with larger labels and values
+  MENU > LARGE for tall knob cards with larger labels and values; the menu in four tabs
 - **LEDs:** idle buttons and keys glow dim so the panel can be found in the dark (MENU > LEDS: OFF,
   DIM LO, DIM HI or INV, the official firmware's look); PLAY turns green while playing; the keys show
   the notes the sequencer and MIDI IN play, and on SEQ > STEP (stopped) the notes of the step under the cursor
@@ -73,14 +75,17 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - Hold FX, GLO, SCL or EDIT for its quick layer; hold SAVE to undo, HOME for the menu, SEQ for the song
 - Double-tap FX, GLO, SCL or EDIT to keep its layer open without holding; tap it again to close
 - Hold REC on SEQ > STEP (or the drum grid), PATTERN or CHANCE to clear the track's sequence: OCT+ clears, OCT− cancels
-- On action pages, in dialogs and the menu, OCT+ does it and OCT− goes back
+- On action pages and in dialogs, OCT+ does it and OCT− goes back; in the menu, OCT+ / OCT− change the value and HOME closes it
 - Save a sound: stop, tap SAVE, pick a slot with KNOB 1, then OCT+ and OCT+ again (name it with the keys)
 
 ## Menu
 
-Hold **HOME** for the menu. PRESETS moves through the rows, KNOB 1 or OCT+ changes the value, hold HOME
-again to leave. Every new setting defaults to the earlier behaviour. From 1.0.4 the web editor's Settings
-tab reads and changes them too (COLOR to USB SERIAL), saved the same way as from the menu.
+Hold **HOME** for the menu. Since 1.0.5 it is in four tabs: **DISPLAY** (COLOR to LEDS), **CONTROL** (HOLD to
+BPM LOCK), **AUDIO** (SPEAKER EQ, USB LEVEL) and **SYSTEM** (USB SERIAL, HARDWARE CALIBRATION, ABOUT).
+ALGORITHM moves between the tabs and PRESETS through the rows of one; any of KNOB 1–4, or OCT+ / OCT−,
+changes the value (OCT+ opens HARDWARE CALIBRATION and ABOUT); press HOME to close the menu. Every new
+setting defaults to the earlier behaviour. From 1.0.4 the web editor's Settings tab reads and changes them
+too (COLOR to USB SERIAL), saved the same way as from the menu; with 1.0.5 it groups them in the same tabs.
 
 - **COLOR:** the palette. GREY (grayscale, called MONO up to 1.0.1), GREEN, AMBER, ICE, VIOLET, ROSE,
   PAPER (light), HI-CON (high contrast), NIGHT (the 0.9 look: true black, green-tinted text) and MONO
@@ -90,7 +95,8 @@ tab reads and changes them too (COLOR to USB SERIAL), saved the same way as from
   larger labels and values about twice the size; the graph below becomes a strip. Lists, the piano roll,
   the drum grid and the quick layers keep their layout with larger labels
 - **ANIM:** ON or OFF; OFF shows every change at once, without rolling digits or a gliding piano roll
-- **LEDS:** OFF (no glow), DIM LO, DIM HI (default) or INV (the idle LEDs lit, the active ones dark)
+- **LEDS:** OFF (no glow), DIM LO, DIM HI (default) or INV (the idle LEDs lit, the active ones dark).
+  What can be pressed breathes up to about 60 % of a lit LED, about 30 % with DIM LO
 - **HOLD:** how long FX, GLO, SCL or EDIT is held before its map shows
 - **KNOB ACCEL:** OFF (one step per click) or ON: a fast, steady turn of a wide value moves 2 to 4 steps
   per click; lists never jump
@@ -128,7 +134,7 @@ In the order the device lists them:
 - **SLICE**: a drum break, a piano note (both built in) or your own sample cut into slices, one per key;
   set the slices by hand on the SLICES page
 - **DRUM**: an 8-lane kit of Felucca's own drum voices on the General MIDI key map. KIT picks the
-  standard, hand-percussion and cymbal variants, or one of five virtual-analog (VA) kits in the manner of
+  standard kit or one of five virtual-analog (VA) kits in the manner of
   classic analog drum machines (the numbers are a hint), every lane its own voice: **80** (deep sine kick with a long decay, noisy snare,
   six-square hats), **10** (swept kick, white-noise snare, long-tailed claps, a cymbal), **66** (soft
   round kick, bright snare, noise hats, a conga), **55** (dropping kick, high metal hats, a metal bell)
@@ -142,7 +148,8 @@ slots) was removed in 1.0.3: user presets keep their own FM6 patch, and presets 
 that patch on the first start of 1.0.3. SLICE gained a second built-in sound in 1.0.4, PIANO (the SAMPLE
 engine's middle C), next to BREAK. Since 1.0.4 a missing sample (an empty user slot, or a set missing
 from the build) plays a plain sine at the note's pitch on SAMPLE, GRAIN and SLICE, and the screen says
-NO SAMPLE once.
+NO SAMPLE once. DRUM's KIT variants HAND, CYM and H+CYM were retired in 1.0.5: sounds and projects that
+used them play the 66, 10 and 77 kits.
 
 **SLICER** (FX page, every track): a tempo-synced 16-step gate or stutter, with 16 patterns.
 
@@ -217,7 +224,8 @@ moved there. Pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
 - Contributions: [keremimo](https://github.com/keremimo) (white-key scales, #2), [ChanceTheMaker](https://github.com/ChanceTheMaker)
   (TRS MIDI, bend, sustain and clock, palettes, favourites, editor display settings: #8, #10, #11, #12),
   [andreahaku](https://github.com/andreahaku) (sample recording and trim, #29; SLICE manual slices and tests, #27, #22),
-  [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111)
+  [spinkham](https://github.com/spinkham) (the boot fix for 0.9 projects, #111),
+  [zednaked](https://github.com/zednaked) (ratchets, #100)
 
 ## Licence
 

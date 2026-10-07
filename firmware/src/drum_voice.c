@@ -8,7 +8,8 @@
  *   fast (tau under ~40 ms)  Q16 per sample, e = (e * k) >> 15 with k Q15 (the floor form: always reaches 0)
  *   slow (tau above)         Q30 per CTL block times a Q16 factor, ramped linearly inside the block
  *
- * Lanes and their variants (dv_type: what a lane plays):
+ * Lanes and their variants (dv_type: what a lane plays; ROUND: KICK's other kick; CONGA CLAVE CYM: the GM notes
+ * of congas, claves and cymbals on KIT STD, eng_drum.c DRUM_GM):
  *   KICK    PUNCH: a sine swept in two stages (an attack of +2 octaves, then TONE's 0..+3 octaves after a
  *           hold), held flat for 12 ms, phase-locked 2nd and 3rd harmonics, a DC-free click (two cycles of
  *           a high sine under a raised-cosine window) and a soft-clip DRIVE; ROUND: no attack stage and
@@ -65,10 +66,6 @@ enum { DV_KICK, DV_SNARE, DV_CLAP, DV_HATC, DV_HATO, DV_TOM, DV_RIM, DV_BELL, DV
 enum {
     DVT_PUNCH, DVT_ROUND, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_CONGA, DVT_RIM, DVT_CLAVE,
     DVT_BELL, DVT_CYM, DVT_COUNT
-};
-static const uint8_t DV_LANE_TYPE[DV_NLANE][2] = {   /* lane, variant -> type */
-    {DVT_PUNCH, DVT_ROUND}, {DVT_SNARE, DVT_SNARE}, {DVT_CLAP, DVT_CLAP}, {DVT_HATC, DVT_HATC},
-    {DVT_HATO, DVT_HATO}, {DVT_TOM, DVT_CONGA}, {DVT_RIM, DVT_CLAVE}, {DVT_BELL, DVT_CYM},
 };
 /* a lane of a model kit as a type: the kit (1..DV_NKIT) in the high 4 bits, the lane in the low 3 (Felucca's own
  * types: 0 above). Its run (the DVT_* it plays through) is the kit's (DV_KIT) */

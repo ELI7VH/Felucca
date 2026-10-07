@@ -82,6 +82,31 @@ check("PLAY: the sequencer runs, PLAY's green LED", a.ex.web_playing() === 1 && 
 a.tap(B.PLAY);
 a.render(300);
 check("PLAY again stops it", a.ex.web_playing() === 0);
+a.ex.web_buttons(1 << B.FX);                                  // #119: FX held, its map: the effects breathe
+a.render(800);
+const brK = a.ex.web_breath_keys(), brB = a.ex.web_breath_buttons(), litK = a.ex.web_lit_keys();
+a.ex.web_buttons(0);
+a.render(300);
+check("FX held: its button and the effects' keys breathe, none lit; let go: nothing",
+      (brB >> B.FX & 1) === 1 && brK !== 0 && (brK & litK) === 0 && litK === 0 &&
+      a.ex.web_breath_keys() === 0 && a.ex.web_breath_buttons() === 0);
+{ // the page's breathing peaks against the firmware's (hal/fm1_input.h FM1_LED_BREATH_PK / _LO, /256 of lit): the
+  // colour at 50 % between the dark and the lit one by the LED's share, gamma-encoded (sRGB), within 0.06
+  const html = fs.readFileSync(new URL("./index.html", import.meta.url), "utf8");
+  const hal = fs.readFileSync(new URL("../../firmware/hal/fm1_input.h", import.meta.url), "utf8");
+  const pk = (n) => +hal.match(new RegExp(`#define ${n} (\\d+)u`))[1] / 256;
+  const srgb = (x) => x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055;
+  const red = (c) => parseInt(c.slice(1, 3), 16);
+  const share = (name, lit) => {                        // (the red channel: the peak's share of dark .. lit)
+    const m = html.match(new RegExp(`@keyframes ${name} \\{ 0%, 100% \\{ fill: (#[0-9a-f]{6}); \\} 50% \\{ fill: (#[0-9a-f]{6})`));
+    return (red(m[2]) - red(m[1])) / (lit - red(m[1]));
+  };
+  const hi = srgb(pk("FM1_LED_BREATH_PK")), lo = srgb(pk("FM1_LED_BREATH_PK_LO")), litBtn = 0xff, litSlit = 0xec;
+  const got = [share("breath-btn", litBtn), share("breath-slit", litSlit), share("breath-btn-lo", litBtn), share("breath-slit-lo", litSlit)];
+  check(`the page's breath peaks ${got.map((x) => x.toFixed(2)).join(" ")} ~ ${hi.toFixed(2)} (HI) ${lo.toFixed(2)} (LO)`,
+        Math.abs(got[0] - hi) <= 0.06 && Math.abs(got[1] - hi) <= 0.06 && Math.abs(got[2] - lo) <= 0.06 &&
+        Math.abs(got[3] - lo) <= 0.06);
+}
 
 // ---- a user preset saved from the panel, kept across a fresh instance
 const w0 = a.ex.web_flash_writes_count();

@@ -672,12 +672,17 @@ static void draw_columns(void)
         draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
         return;
     }
-    if (cur_page()->graph == GR_CHANCE) {
+    if (cur_page()->graph == GR_CHANCE) {              /* STEP CHANCE RATCH: the cursor step's, of all of it */
+        const step_t *cs = &TSEL->step[ui.cursor];
+        int rplays = cs->time == ST_NOTE && (cs->n || cs->hit);   /* RATCH does nothing on a REST, a TIE, empty: DIM */
         fmt_int(val, (int32_t)ui.cursor + 1);
         draw_column(0, "STEP", val, "", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)step_chance(&TSEL->step[ui.cursor]));
         draw_column(1, "CHANCE", val, "%", VAL(1u), -1, ICON_PROB);   /* the die */
-        draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
+        val[0] = 'x';                                  /* x1 .. x4 */
+        val[1] = (char)('0' + step_ratchet(&TSEL->step[ui.cursor]));
+        val[2] = 0;
+        draw_column(2, "RATCH", val, "", rplays ? VAL(2u) : T_DIM, -1, ICON_X_REPEAT);
         draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
         return;
     }

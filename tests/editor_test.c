@@ -114,16 +114,17 @@ static int preferences(void)
     uint32_t n = request(ED_INFO, a, 0);
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
-        host_wire[n - 25] == CHAIN_ROWS && host_wire[n - 24] == 0x55 &&
-        host_wire[n - 23] == 1 && host_wire[n - 22] == 9 &&
-        host_wire[n - 21] == 0x4d && host_wire[n - 20] == 1 &&
-        host_wire[n - 19] == MOTION_MAX && host_wire[n - 18] == 1 &&
-        host_wire[n - 17] == 0x42 && host_wire[n - 16] == 1 && host_wire[n - 15] == 3 &&
-        host_wire[n - 14] == 0x46 && host_wire[n - 13] == 1 && host_wire[n - 12] == FM6_NFACTORY &&
-        host_wire[n - 11] == 0 &&                        /* (no bank since 1.0.3) */
-        host_wire[n - 10] == 0x53 && host_wire[n - 9] == 1 && host_wire[n - 8] == 3 &&
-        host_wire[n - 7] == 0x50 && host_wire[n - 6] == 1 && host_wire[n - 5] == 3 &&   /* FM6 v2: no bank, preset patches */
-        host_wire[n - 4] == 0x4E && host_wire[n - 3] == 1 && host_wire[n - 2] == 12);   /* MENU settings: 12 items */
+        host_wire[n - 28] == CHAIN_ROWS && host_wire[n - 27] == 0x55 &&
+        host_wire[n - 26] == 1 && host_wire[n - 25] == 9 &&
+        host_wire[n - 24] == 0x4d && host_wire[n - 23] == 1 &&
+        host_wire[n - 22] == MOTION_MAX && host_wire[n - 21] == 1 &&
+        host_wire[n - 20] == 0x42 && host_wire[n - 19] == 1 && host_wire[n - 18] == 3 &&
+        host_wire[n - 17] == 0x46 && host_wire[n - 16] == 1 && host_wire[n - 15] == FM6_NFACTORY &&
+        host_wire[n - 14] == 0 &&                        /* (no bank since 1.0.3) */
+        host_wire[n - 13] == 0x53 && host_wire[n - 12] == 1 && host_wire[n - 11] == 3 &&
+        host_wire[n - 10] == 0x50 && host_wire[n - 9] == 1 && host_wire[n - 8] == 3 &&   /* FM6 v2: no bank, preset patches */
+        host_wire[n - 7] == 0x4E && host_wire[n - 6] == 1 && host_wire[n - 5] == 12 &&   /* MENU settings: 12 items */
+        host_wire[n - 4] == 0x52 && host_wire[n - 3] == 1 && host_wire[n - 2] == 4);   /* RATCH */
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -237,22 +238,45 @@ static int steps(void)
     reset();
     TSEL->step[0].hit = TSEL->step[0].acc = 0x80;
     bad += check("legacy 8-byte step writes preserve lane data",
-                 request(ED_STEP_SET, a, 9) == 19u && TSEL->step[0].note[0] == 60 &&
+                 request(ED_STEP_SET, a, 9) == 20u && TSEL->step[0].note[0] == 60 &&
                  TSEL->step[0].hit == 0x80 && TSEL->step[0].acc == 0x80);
     bad += check("full grid step writes preserve high lane bits and constrain accents",
-                 request(ED_STEP_SET, a, 12) == 19u && TSEL->step[0].hit == 0x92 && TSEL->step[0].acc == 2);
+                 request(ED_STEP_SET, a, 12) == 20u && TSEL->step[0].hit == 0x92 && TSEL->step[0].acc == 2);
     before = TSEL->step[0]; a[2] = 71;
     for (n = 2; n <= sizeof a; n++) {
-        if (n == 9u || n == 12u || n == 13u) continue;
+        if (n == 9u || n == 12u || n == 13u) continue;   /* (14: a[13], the ratchet, 0 is refused) */
         ok &= !request(ED_STEP_SET, a, n) && !memcmp(&before, &TSEL->step[0], sizeof before);
     }
     bad += check("partial or oversized step payloads never mutate a valid step", ok);
     a[0] = 1; a[1] = 0; memcpy(a + 2, (const uint8_t[]){1,64,0,0,0,ST_NOTE,0,99}, 8);
     bad += check("TRACK_STEP accepts its legacy payload on an unselected track",
-                 request(ED_TRACK_STEP, a, 10) == 20u && trk[1].step[0].note[0] == 64 && song.sel == 0);
+                 request(ED_TRACK_STEP, a, 10) == 21u && trk[1].step[0].note[0] == 64 && song.sel == 0);
     before = trk[1].step[0]; a[3] = 65;
     bad += check("TRACK_STEP rejects an incomplete grid extension",
                  !request(ED_TRACK_STEP, a, 11) && !memcmp(&before, &trk[1].step[0], sizeof before));
+    /* RATCH (INFO 52 01 04): the hits 1..4 after the chance; the flags byte stays accent | slide both ways */
+    memcpy(a, (const uint8_t[]){0, 1, 60, 0, 0, 0, ST_NOTE, SF_ACCENT, 100, 0, 0, 0, 80, 3}, 14);
+    n = request(ED_STEP_SET, a, 14);
+    bad += check("STEP_SET with the ratchet: x3 kept, replied after the chance, flags without it",
+                 n == 20u && step_ratchet(&TSEL->step[0]) == 3u && step_chance(&TSEL->step[0]) == 80u &&
+                 host_wire[n - 2] == 3 && host_wire[n - 3] == 80 && host_wire[12] == SF_ACCENT);
+    a[7] = SF_SLIDE; n = request(ED_STEP_SET, a, 13);
+    ok = n == 20u && step_ratchet(&TSEL->step[0]) == 3u && TSEL->step[0].flags == (SF_SLIDE | 2u << SF_RATCH_SH);
+    n = request(ED_STEP_SET, a, 9);
+    bad += check("STEP_SET without the ratchet (an older editor) keeps the step's own",
+                 ok && n == 20u && step_ratchet(&TSEL->step[0]) == 3u);
+    before = TSEL->step[0]; ok = 1;
+    for (n = 0; n < 8u; n++) {
+        a[13] = (uint8_t)(n < 4u ? 0u : 5u + n);
+        ok &= !request(ED_STEP_SET, a, 14) && !memcmp(&before, &TSEL->step[0], sizeof before);
+    }
+    bad += check("STEP_SET refuses a ratchet outside 1..4 and leaves the step", ok);
+    memcpy(a, (const uint8_t[]){1, 2, 1, 64, 0, 0, 0, ST_NOTE, 0, 99, 0, 0, 0, 100, 4}, 15);
+    n = request(ED_TRACK_STEP, a, 15);
+    ok = n == 21u && step_ratchet(&trk[1].step[2]) == 4u && host_wire[n - 2] == 4;
+    a[14] = 1; n = request(ED_TRACK_STEP, a, 15);
+    bad += check("TRACK_STEP sets the ratchet of any track (x4, then back to x1)",
+                 ok && n == 21u && step_ratchet(&trk[1].step[2]) == 1u && !(trk[1].step[2].flags & SF_RATCH));
     return bad;
 }
 
@@ -665,7 +689,7 @@ static int usb_burst(void)
 }
 
 /* ---- MENU_DESC / MENU_SET (72, 73): the menu's settings over the editor ---- */
-typedef struct { uint32_t index, id, kind, nnames; int32_t value, min, max; char name[16], names[12][12]; } menu_item_t;
+typedef struct { uint32_t index, id, kind, nnames, tab, rest; int32_t value, min, max; char name[16], names[12][12], tabname[16]; } menu_item_t;
 static uint32_t menu_desc(uint32_t index, menu_item_t *it)   /* the reply's payload length; it parsed */
 {
     uint8_t a[1] = {(uint8_t)index};
@@ -678,10 +702,17 @@ static uint32_t menu_desc(uint32_t index, menu_item_t *it)   /* the reply's payl
     it->value = ed_rv(host_wire + 8); it->min = ed_rv(host_wire + 10); it->max = ed_rv(host_wire + 12);
     for (k = 0; p < n - 1u && host_wire[p] && k < 15u; ) it->name[k++] = (char)host_wire[p++];
     p++;
-    while (p < n - 1u && it->nnames < 12u) {
+    while (p < n - 1u && it->nnames < 12u && (int32_t)it->nnames < it->max - it->min + 1) {   /* (kind 0: max - min + 1) */
         for (k = 0; p < n - 1u && host_wire[p] && k < 11u; ) it->names[it->nnames][k++] = (char)host_wire[p++];
         p++; it->nnames++;
     }
+    it->tab = 127;                                          /* 1.0.5: then the row's tab, index and name */
+    if (p < n - 1u) {
+        it->tab = host_wire[p++];
+        for (k = 0; p < n - 1u && host_wire[p] && k < 15u; ) it->tabname[k++] = (char)host_wire[p++];
+        p++;
+    }
+    it->rest = p < n - 1u ? n - 1u - p : 0u;                /* (bytes left over: none) */
     return n - 6u;
 }
 static uint32_t menu_set(uint32_t id, int32_t v)            /* -> rc; host_wire[6], [7..8]: id, value */
@@ -697,6 +728,8 @@ static int menu_protocol(void)
         {"HOLD", "0.3 s,0.4 s,0.5 s,0.6 s"}, {"KNOB ACCEL", "OFF,ON"}, {"FX LATCH", "OFF,ON"}, {"BPM LOCK", "OFF,ON"},
         {"SPEAKER EQ", "FLAT,LOWCUT,BASS+"}, {"USB LEVEL", "MASTER,FIXED"}, {"USB SERIAL", "ON,OFF"}};
     static const int32_t DEF[12] = {-1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0};   /* (COLOR: the default palette) */
+    static const uint8_t TAB[12] = {0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3};      /* DISPLAY CONTROL AUDIO SYSTEM */
+    static const char *const TABN[4] = {"DISPLAY", "CONTROL", "AUDIO", "SYSTEM"};
     int bad = 0, ok = 1;
     uint32_t i, k, n;
     menu_item_t it;
@@ -712,19 +745,28 @@ static int menu_protocol(void)
         ok &= n > 10u && it.index == i && it.id == i && it.kind == 0 && it.min == 0 &&
               it.max + 1 == (int32_t)it.nnames && !strcmp(it.name, WANT[i][0]) &&
               (WANT[i][1] ? !strcmp(joined, WANT[i][1]) : it.nnames == NPALETTES) &&
-              it.value == (DEF[i] < 0 ? (int32_t)settings.palette : DEF[i]);
+              it.value == (DEF[i] < 0 ? (int32_t)settings.palette : DEF[i]) &&
+              it.tab == TAB[i] && !strcmp(it.tabname, TABN[TAB[i]]) && !it.rest;
         if (i == 0)
             for (k = 0; k < NPALETTES; k++) ok &= !strcmp(it.names[k], UI_PALETTES[k].name);
-        if (!ok) { printf("  MENU_DESC %u: %s [%s] value %d max %d\n", i, it.name, joined, it.value, it.max); break; }
+        if (!ok) { printf("  MENU_DESC %u: %s [%s] value %d max %d tab %u %s\n", i, it.name, joined, it.value, it.max, it.tab, it.tabname); break; }
         if (jf) {
             fprintf(jf, "%s\n {\"id\":%u,\"kind\":%u,\"min\":%d,\"max\":%d,\"value\":%d,\"name\":\"%s\",\"names\":[", i ? "," : "",
                     it.id, it.kind, it.min, it.max, it.value, it.name);
             for (k = 0; k < it.nnames; k++) fprintf(jf, "%s\"%s\"", k ? "," : "", it.names[k]);
-            fprintf(jf, "]}");
+            fprintf(jf, "],\"tab\":%u,\"tabName\":\"%s\"}", it.tab, it.tabname);
         }
     }
     if (jf) { fprintf(jf, "]\n"); fclose(jf); }
     bad += check("MENU_DESC: 12 items in the menu's order, ids 0..11, every name and value name, the defaults", ok);
+    bad += check("MENU_DESC (1.0.5): after the names each item's tab, index and name (DISPLAY CONTROL AUDIO SYSTEM)", ok);
+    {   /* an older editor reads the names and stops: the tab is past them, nothing it reads moved */
+        uint32_t m = menu_desc(4, &it), p = 14, q;
+        for (q = 0; q < 1u + it.nnames; q++) { while (host_wire[p]) p++; p++; }   /* name, the names */
+        ok = m > 10u && host_wire[p] == 0 && !strcmp((const char *)host_wire + p + 1, "DISPLAY") &&
+             p + 1u + 8u == m + 6u - 1u;
+        bad += check("MENU_DESC: the tab comes after every byte of the 1.0.4 reply (older editors ignore it)", ok);
+    }
     ok = 1;
     for (i = 0; i < 12u; i++) {
         menu_desc(i, &it);
@@ -829,10 +871,68 @@ static int menu_protocol(void)
     return bad;
 }
 
+/* DRUM KIT 1..3 (HAND CYM H+CYM until 1.0.4, retired): DESC names them as the kit they play (66 10 77), a SET of
+ * one lands on that kit (the reply says so), a user preset sent with one loads as that kit */
+static int drum_kit_retired(void)
+{
+    static const uint8_t MAP[4] = {0, 6, 5, 8};
+    static uint8_t a[16 + 2u * P_COUNT + 32u];
+    int16_t got[P_COUNT];
+    uint32_t r, i, k = 0, ok = 1;
+    int bad = 0;
+    reset();
+    a[0] = 1; a[1] = G_ENGSEL; a[2] = (8192 + ENGI_DRUM) & 127; a[3] = (8192 + ENGI_DRUM) >> 7;
+    request(ED_SET, a, 4);
+    a[0] = 0; a[1] = P_E0;
+    request(ED_DESC, a, 2);
+    {   /* scope, id, fmt, min, max, def (v14 each), "KIT", "", then the 9 names */
+        const char *n = (const char *)host_wire + 5 + 3 + 6;
+        static const char *const WANT[9] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77"};
+        n += strlen(n) + 1; n += strlen(n) + 1;
+        for (i = 0; i < 9u; i++, n += strlen(n) + 1)
+            ok &= !strcmp(n, WANT[i]);
+    }
+    bad += check("DESC of DRUM KIT: STD 66 10 77 80 10 66 55 77 (1..3 as the kits they play)", ok);
+    for (r = 1, ok = ed_eng(TSEL) == ENGI_DRUM; r < 4u; r++) {
+        uint32_t u = r + 8192u;
+        a[0] = 0; a[1] = P_E0; a[2] = u & 127u; a[3] = u >> 7;
+        request(ED_SET, a, 4);
+        ok &= TSEL->p[P_E0] == MAP[r] && (int32_t)(host_wire[7] | host_wire[8] << 7) - 8192 == MAP[r];
+    }
+    bad += check("SET of DRUM KIT 1..3 lands on 66 10 77 (and replies it)", ok);
+    a[k++] = 5; a[k++] = ENGI_DRUM;                        /* slot U06, DRUM, KIT 3 (H+CYM) */
+    memcpy(a + k, "OLDKIT", 6); k += 6; a[k++] = 0;
+    for (i = 0; i < P_COUNT; i++) {
+        uint32_t u = (uint32_t)((i == P_E0 ? 3 : param_desc_of(ENGI_DRUM, i)->def) + 8192);
+        a[k++] = u & 127u; a[k++] = (u >> 7) & 127u;
+    }
+    for (i = 0; i < 16u; i++) { a[k++] = 0; a[k++] = 0; }
+    request(ED_UP_PUT, a, k);
+    up_values(up_rec(5), got);
+    bad += check("a user preset of DRUM KIT 3 (H+CYM) loads as 77", up_used(5) && got[P_E0] == 8);
+    {   /* a project whose DRUM tracks hold KIT 0..3: loaded (and bounded, as from flash) as STD 66 10 77 */
+        static project_t p;
+        for (r = 0; r < NTRK; r++) {
+            set_engine_of(&trk[r], ENGI_DRUM); apply_preset_to(&trk[r], 0);
+            trk[r].engine = trk[r].eng_req;
+        }
+        project_capture(&p);
+        for (r = 0; r < NTRK; r++) p.t[r].p[P_E0] = (int16_t)r;
+        p.sum = proj_sum(&p);
+        ok = !project_restore_runtime(&p);
+        for (r = 0; r < NTRK; r++) ok &= trk[r].p[P_E0] == MAP[r];
+        for (r = 0; r < NTRK; r++) p.t[r].p[P_E0] = (int16_t)r;
+        proj_bound(&p);
+        for (r = 0; r < NTRK; r++) ok &= p.t[r].p[P_E0] == MAP[r];
+        bad += check("a project of DRUM KIT 1..3 loads as 66 10 77 (STD stays)", ok);
+    }
+    return bad;
+}
+
 int main(void)
 {
     int bad = preferences() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
-              fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol();
+              fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
     return bad != 0;
 }

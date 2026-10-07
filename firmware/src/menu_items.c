@@ -4,16 +4,45 @@
  * MENU_DESC / MENU_SET). One apply path for both: menu_put. Grouped: the screen (COLOR, STYLE, LARGE, ANIM, LEDS), the
  * controls (HOLD: the layer threshold, KNOB ACCEL, FX LATCH, BPM LOCK), the sound (SPEAKER EQ: FLAT LOWCUT BASS+,
  * USB LEVEL), USB SERIAL, then CALIBRATION (the setup screen: HARDWARE CALIBRATION) and ABOUT, the two rows with no
- * value (MI_VALUES: the rows before them hold one). */
+ * value (MI_VALUES: the rows before them hold one). 1.0.5: in four tabs (MI_TAB). */
 enum { MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_LOWCUT, MI_USB, MI_SERIAL, MI_PANEL, MI_ABOUT, MI_COUNT };
 #define MI_VALUES MI_PANEL
 static const char *const MI_NAME[MI_COUNT] = {"COLOR", "STYLE", "LARGE", "ANIM", "LEDS", "HOLD", "KNOB ACCEL", "FX LATCH", "BPM LOCK",
                                               "SPEAKER EQ", "USB LEVEL", "USB SERIAL", "CALIBRATION", "ABOUT"};
+/* 1.0.5: the MENU's tabs (ui_menu.c: ALGORITHM steps between them, PRESETS among one tab's rows; the editor gets a
+ * row's tab after its MENU_DESC reply). A tab's rows follow each other in MI order (tests/ui_test.c checks it); at
+ * most MTAB_ROWS each (the page does not scroll: ui_menu.c fits them). A new row joins a tab here, a new tab is
+ * appended (its index is what the editor is told) */
+enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_SYSTEM, MTAB_COUNT };
+#define MTAB_ROWS 6u
+static const char *const MTAB_NAME[MTAB_COUNT] = {"DISPLAY", "CONTROL", "AUDIO", "SYSTEM"};
+static const uint8_t MI_TAB[MI_COUNT] = {
+    MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY, MTAB_DISPLAY,   /* COLOR STYLE LARGE ANIM LEDS */
+    MTAB_CONTROL, MTAB_CONTROL, MTAB_CONTROL, MTAB_CONTROL,                 /* HOLD KNOB ACCEL FX LATCH BPM LOCK */
+    MTAB_AUDIO, MTAB_AUDIO,                                                 /* SPEAKER EQ, USB LEVEL */
+    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* USB SERIAL, CALIBRATION, ABOUT */
+};
+typedef char mtab_fits_ui[sizeof ui.menu_row >= MTAB_COUNT ? 1 : -1];   /* (ui.c: the row last picked per tab) */
+static uint32_t mtab_first(uint32_t t)                 /* a tab's first row */
+{
+    uint32_t i = 0;
+    while (i < MI_COUNT && MI_TAB[i] != t)
+        i++;
+    return i;
+}
+static uint32_t mtab_rows(uint32_t t)                  /* .. and how many it has */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < MI_COUNT; i++)
+        n += MI_TAB[i] == t;
+    return n;
+}
 /* STYLE (ui_style, gfx.c ST_*): FLAT the filled cards; LINE black areas divided by 1 px rules (#50, #57: the 0.9 look)
  * (1.0.2: PIXEL retired, a saved PIXEL reads as LINE) */
 static const char *const STYLE_N[2] = {"FLAT", "LINE"};
-/* the two-valued rows: a bit of ui_prefs and its names (bit clear = the default, bit set); KNOB 1 right = set
- * (the other value), left = clear (the default) */
+/* the two-valued rows: a bit of ui_prefs and its names (bit clear = the default, bit set). A step up (a knob right,
+ * OCT+) = ON on the ON / OFF rows (the switch's knob to the right; ANIM, USB SERIAL: their bit clears), else the
+ * second name (STYLE LINE, USB LEVEL FIXED); a step down the other (menu_step) */
 typedef struct { uint8_t row, bit; const char *name[2]; } menu_flag_t;
 static const menu_flag_t MENU_FLAGS[] = {
     {MI_LARGE, PREF_LARGE, {"OFF", "ON"}},            /* #15 / Discussion #80: ON, big knob labels and values (ui.c large_kind) */
@@ -118,13 +147,17 @@ static void menu_put(uint32_t row, uint32_t v)
     case MI_LEDS: settings_leds = LEDS_MENU[v]; break;
     }
 }
-/* the menu's step: KNOB 1 (s) stops at the ends (COLOR wraps), OCT+ (s 0) steps and wraps */
+/* the menu's step, any of KNOB 1..4 or OCT+ (s > 0) / OCT- (s < 0): the next / previous value, stopping at the ends;
+ * COLOR wraps round its palettes. On an ON / OFF row up is ON (MENU_FLAGS) */
 static uint32_t menu_step(uint32_t row, int32_t s)
 {
+    const menu_flag_t *f = menu_flag(row);
     uint32_t v = menu_get(row), n = menu_n(row);
+    if (f && str_eq(f->name[0], "ON"))                 /* (ANIM, USB SERIAL: ON is their value 0) */
+        s = -s;
     if (s > 0)
         return v + 1u < n ? v + 1u : row == MI_COLOR ? 0u : v;
     if (s < 0)
         return v ? v - 1u : row == MI_COLOR ? n - 1u : 0u;
-    return (v + 1u) % n;
+    return v;
 }

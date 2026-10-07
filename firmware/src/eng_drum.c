@@ -10,11 +10,13 @@
  * their octave of 36..47), so GM patterns and MIDI parts play as they did on SAMPLE PERC (retired: its sounds
  * load as this engine, core.h drum_from_perc).
  *
- * Parameters: KIT what the lanes 6..8 play (STD: TOM RIM BELL, HAND: CONGA CLAVE BELL, CYM: TOM RIM CYM,
- * H+CYM: CONGA CLAVE CYM), or a model kit (80 10 66 55 77: every lane that kit's own piece, drum_voice.c DV_KIT;
- * KICK does not apply), KICK the kick (PUNCH, ROUND). TUNE (64: as designed, +-12 semitones), TONE,
- * DECY and SNAP (each lane's extra: the kick's drive, the snare's snappiness, the clap's spread, the hats'
- * noise, the toms' bend, the rim's drive, the bell's strike) move every lane from its designed value. ACC
+ * Parameters: KIT the kit: STD (Felucca's own: TOM RIM BELL on lanes 6..8, other GM notes their congas, claves,
+ * cymbals) or a model kit (80 10 66 55 77: every lane that kit's own piece, drum_voice.c DV_KIT; KICK does not
+ * apply). Its stored values 1..3 were HAND CYM H+CYM (STD with CONGA CLAVE / CYM on lanes 6..8) until 1.0.4: they
+ * play 66 10 77 now (DK_PLAYS), and whatever stores them lands there (params.c enum_orig, param_fit: the knob
+ * steps over them, the editor's SET, projects, user presets, motion). KICK the kick (PUNCH, ROUND). TUNE (64: as
+ * designed, +-12 semitones), TONE, DECY and SNAP (each lane's extra: the kick's drive, the snare's snappiness,
+ * the clap's spread, the hats' noise, the toms' bend, the rim's drive, the bell's strike) move every lane from its designed value. ACC
  * is the accent at full velocity (velocity scales it), DRV a soft clip on every hit (x1..x4, level kept).
  * A hit keeps the drum and the variant it was struck with; the knobs move it while it rings.
  *
@@ -32,7 +34,11 @@
  * source of each lane). */
 #include "drum_voice.c"
 
-enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_COUNT };
+enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_COUNT };   /* (stored values) */
+/* the kit a stored KIT value plays: HAND CYM H+CYM (retired after 1.0.4) -> 66 (a conga on TOM), 10 (a cymbal on
+ * BELL), 77 (claves on RIM, a cymbal on BELL) */
+static const uint8_t DK_PLAYS[DK_COUNT] = {DK_STD, DK_66, DK_10, DK_77, DK_80, DK_10, DK_66, DK_55, DK_77};
+static uint32_t drum_kit_plays(int32_t v) { return DK_PLAYS[clamp(v, 0, DK_COUNT - 1)]; }
 /* the model kits' pieces where a lane plays another than its own (the lane's name): 1 TOM -> CONGA, 2 RIM -> CLAVE,
  * 4 BELL -> CYM */
 static const uint8_t DK_SWAP[DV_NKIT] = {0, 4, 1, 0, 2 | 4};
@@ -53,7 +59,8 @@ typedef struct {
 
 static drum_lane_t drum_kit[NPART][DV_NLANE] __attribute__((section(".pool")));
 
-static const char *const N_DRUM_KIT[] = {"STD", "HAND", "CYM", "H+CYM", "80", "10", "66", "55", "77"};
+/* 1..3 named as the kit they play: aliases, never shown or offered (EDITOR_PROTOCOL.md: retired values) */
+static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77"};
 static const char *const N_DRUM_KICK[] = {"PUNCH", "ROUND"};
 
 /* General MIDI notes 35..81 -> the drum (DVT_*; DVT_PUNCH: the kick KICK picks) and semitones from its
@@ -68,22 +75,16 @@ static const int8_t DRUM_GM[47][2] = {
     {DVT_CLAVE, 7}, {DVT_CLAVE, 5}, {DVT_HATC, -4}, {DVT_HATC, -6}, {DVT_CLAVE, 0}, {DVT_CLAVE, -4},  /* 71 */
     {DVT_CLAVE, -7}, {DVT_CONGA, 7}, {DVT_CONGA, 3}, {DVT_BELL, 12}, {DVT_BELL, 12},                  /* 77 */
 };
-/* the drum of a note (DVT_*, or a model kit's lane: DV_KTYPE) and its semitones; KICK picks the kick, KIT swaps
- * TOM RIM for CONGA CLAVE (HAND) and BELL for CYM (CYM); a model kit plays its own piece on the note's lane */
+/* the drum of a note (DVT_*, or a model kit's lane: DV_KTYPE) and its semitones; KICK picks the kick; a model kit
+ * plays its own piece on the note's lane */
 static uint32_t drum_gm(const int16_t *p, uint32_t note, int32_t *st)
 {
     uint32_t n = note >= 35u && note <= 81u ? note : 36u + (note + 120u - 36u) % 12u, t = (uint32_t)DRUM_GM[n - 35u][0];
-    uint32_t kit = (uint32_t)clamp(p[P_E0], 0, DK_COUNT - 1);   /* STD HAND CYM H+CYM, the model kits */
+    uint32_t kit = drum_kit_plays(p[P_E0]);           /* STD, the model kits */
     *st = DRUM_GM[n - 35u][1];
     if (kit >= DK_80)
         return DV_KTYPE(kit - DK_80 + 1u, DV_TYPE_LANE[t]);
-    if (t == DVT_PUNCH && p[P_E6] > 0)
-        t = DVT_ROUND;
-    if (kit & 1u)
-        t = t == DVT_TOM ? DVT_CONGA : t == DVT_RIM ? DVT_CLAVE : t;
-    if ((kit & 2u) && t == DVT_BELL)
-        t = DVT_CYM;
-    return t;
+    return t == DVT_PUNCH && p[P_E6] > 0 ? DVT_ROUND : t;
 }
 
 /* ----------------------------------------------------- the grid's lanes --- */
@@ -92,7 +93,7 @@ static uint32_t drum_gm(const int16_t *p, uint32_t note, int32_t *st)
  * its lane (st 0 in DRUM_GM) */
 static const uint8_t DRUM_LANE_NOTE[NLANE] = {36, 38, 39, 42, 46, 45, 37, 56};
 
-/* the lane a note strikes (KIT-proof: HAND and CYM swap drums inside their lanes) */
+/* the lane a note strikes (KIT-proof: a kit plays its own piece inside the lane) */
 static uint32_t drum_lane(uint32_t note)
 {
     uint32_t n = note >= 35u && note <= 81u ? note : 36u + (note + 120u - 36u) % 12u;
@@ -102,8 +103,8 @@ static uint32_t drum_lane(uint32_t note)
 /* KIT's swaps of lanes 6..8 (1 TOM -> CONGA, 2 RIM -> CLAVE, 4 BELL -> CYM) */
 static uint32_t drum_swaps(const track_t *t)
 {
-    uint32_t kit = (uint32_t)clamp(t->p[P_E0], 0, DK_COUNT - 1);
-    return kit >= DK_80 ? DK_SWAP[kit - DK_80] : (kit & 1u) * 3u | (kit & 2u) << 1;
+    uint32_t kit = drum_kit_plays(t->p[P_E0]);
+    return kit >= DK_80 ? DK_SWAP[kit - DK_80] : 0u;
 }
 
 /* the lane's name as the track's KIT plays it (5 characters at most) */
