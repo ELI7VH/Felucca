@@ -3,10 +3,11 @@
 // Local, complete musical archives. Requests name whitelisted objects, never flash addresses.
 // 8: the FM6 patch bank of 1.0..1.0.2 (listed empty since 1.0.3: a restore of an older archive's bank moves its patches
 // into the user presets restored before it); 9: the user presets' FM6 patches (1.0.3)
-export const BACKUP_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34];
-const BACKUP_IDS_V2 = BACKUP_IDS.filter((id) => id !== 9);              // 1.0..1.0.2, and their archives
+const BACKUP_IDS_V3 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34];
+export const BACKUP_IDS = [...BACKUP_IDS_V3,10,11,12,13,14,15,16,17,18,19];
+const BACKUP_IDS_V2 = BACKUP_IDS_V3.filter((id) => id !== 9);              // 1.0..1.0.2, and their archives
 const BACKUP_IDS_V1 = BACKUP_IDS_V2.filter((id) => id !== 8);           // firmware before FM6, and its archives
-const idsOf = (n) => [BACKUP_IDS, BACKUP_IDS_V2, BACKUP_IDS_V1].find((ids) => ids.length === n) || null;
+const idsOf = (n) => [BACKUP_IDS, BACKUP_IDS_V3, BACKUP_IDS_V2, BACKUP_IDS_V1].find((ids) => ids.length === n) || null;
 export const BACKUP_CMD = { LIST: 65, GET: 66, PUT: 67 };
 const BACKUP_CHUNK = 256;
 export const bkU32 = (n) => Array.from({ length: 5 }, (_, i) => (n >>> (i * 7)) & (i === 4 ? 15 : 127));
@@ -110,11 +111,16 @@ export async function captureBackup(request, firmware, onProgress = () => {}) {
 }
 export async function restoreBackup(request, file, onProgress = () => {}) {
   const archive = readBackup(file); // Validate every byte before the first destructive request.
+  const target=bkManifest(await askManifest());
+  async function askManifest() { return request([BACKUP_CMD.LIST,[]],{timeout:4000,retries:0}); }
+  if (!target.some((o)=>o.id===19) && archive.objects.some((o)=>o.id>=10 && o.id<=19)) throw new Error("Install the setlist mod before restoring this backup");
+  if (target.some((o)=>o.id===19) && archive.objects.some((o)=>o.id===34 && o.size)) throw new Error("This backup uses sample slot 3, reserved for the setlist");
   const total = archive.objects.reduce((n, o) => n + o.size, 0); let done = 0;
   const ask = async (r, o = {}) => request(r, { timeout: 4000, retries: 0, ...o });
   const put = async (args) => { const a = await ask([BACKUP_CMD.PUT, args]); bkCheck(a[2]); return a; };
   // Restore live music last. Other objects commit individually; a disconnect can leave a partial restore.
   for (const o of [...archive.objects.slice(2), archive.objects[1], archive.objects[0]]) {
+    if (o.id===34 && !o.size && target.some((x)=>x.id===19)) continue;
     if (o.id >= 32) {
       const slot = o.id - 32;
       const check = (a) => { if (a[0] !== slot) throw new Error("Unexpected sample reply"); bkCheck(a.at(-1)); };

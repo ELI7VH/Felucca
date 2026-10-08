@@ -25,7 +25,7 @@
  * (up_fm6.c upf_boot); the first write of the new object goes to the sector that does not hold the bank's newest
  * copy (st_save_to), so a power cut never loses both. */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_UPFM6,
-       OBJ_COUNT };
+       OBJ_SONG0, OBJ_SETLIST = OBJ_SONG0 + 9, OBJ_COUNT };
 
 typedef struct {
     uint32_t magic;
@@ -56,6 +56,7 @@ static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per
 
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
+    if (obj >= OBJ_SONG0) return 0xC8000u + (obj-OBJ_SONG0)*2u*ST_SECTOR + copy*ST_SECTOR;
     if (obj == OBJ_SETTINGS)
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_FM6BANK || obj == OBJ_UPFM6)          /* (the same pair: see the flash map) */

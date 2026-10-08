@@ -91,7 +91,7 @@ static void name_open(uint32_t kind, uint32_t slot)
             str_cpy(b, nm.ph, sizeof b);
     } else {
         str_cpy(nm.ph, "PROJECT A", sizeof nm.ph);
-        nm.ph[8] = (char)('A' + (slot & 3u));
+        nm.ph[8] = (char)('A' + (slot>3u ? slot-1u:slot));
         if (kind == NK_PROJ_RENAME)
             project_name(slot, b);
         else
@@ -106,7 +106,7 @@ static void name_open(uint32_t kind, uint32_t slot)
 static void name_rename(void)
 {
     int user = cur_page()->graph == GR_USER;
-    uint32_t k = user ? ui.uslot : (uint32_t)song.g[G_SLOT] - 1u;
+    uint32_t k = user ? ui.uslot : cur_page()->graph==GR_SETLIST ? setlist_slot(setlist.pick) : (uint32_t)song.g[G_SLOT] - 1u;
     if (!(user ? up_used(k) : project_used(k)))
         ui_message("EMPTY SLOT");
     else if (transport_busy())

@@ -166,6 +166,16 @@ typedef struct {                               /* format 1 (until 0.5 beta), rea
 _Static_assert(sizeof(project_v2_t) == 2552u && sizeof(project_v1_t) == 688u && sizeof(project_v3_t) == 2584u &&
                sizeof(project_v4_t) == 2680u, "formats 1 / 2 / 3 / 4 as they were stored");
 project_store_t proj_slot[4] __attribute__((section(".noinit")));
+static project_store_t proj_extra;
+static uint8_t proj_extra_key=255, proj_extra_used[9];
+static char proj_extra_names[9][13];
+static uint32_t project_rank(uint32_t slot) { return slot>3u ? slot-1u:slot; }
+#if FELUCCA_FLASH
+static uint32_t project_obj(uint32_t slot) { return slot<4u ? OBJ_PROJECT0+slot : OBJ_SONG0+slot-4u; }
+#endif
+static project_store_t *project_cached(uint32_t slot);
+static void project_cache_note(uint32_t slot);
+
 
 static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
 {
@@ -687,14 +697,38 @@ static void proj_bound(project_t *q)
     q->sum = proj_sum(q);
 }
 
+static project_store_t *project_cached(uint32_t slot)
+{
+    if (slot<4u) return &proj_slot[slot];
+    if (slot>=PROJECT_SLOTS) return &proj_extra; /* callers reject invalid indices */
+    if (proj_extra_key==slot) return &proj_extra;
+    proj_extra_key=(uint8_t)slot;
+    memset(&proj_extra,0,sizeof proj_extra);
+#if FELUCCA_FLASH
+    if (flash_ok) {
+        int n=st_load(project_obj(slot),&proj_extra,sizeof proj_extra);
+        if (n!=sizeof proj_extra) memset(&proj_extra,0,sizeof proj_extra);
+    }
+#endif
+    return &proj_extra;
+}
+static void project_cache_note(uint32_t slot)
+{
+    if (slot<4u || slot>=PROJECT_SLOTS) return;
+    project_store_t *q=project_cached(slot);
+    proj_extra_used[slot-4u]=(uint8_t)(proj_import(&proj_scratch,q,sizeof *q)!=0);
+    if (proj_extra_used[slot-4u]) proj_name_get(proj_extra_names[slot-4u],(const uint8_t *)proj_scratch.name);
+    else proj_extra_names[slot-4u][0]=0;
+}
+
 #if FELUCCA_FLASH
 /* slot from flash into RAM (format 7, or format 6 / 5 / 4 / 3 / 2 / 1 converted) */
 static void proj_fetch(uint32_t slot)
 {
-    project_store_t *q = &proj_slot[slot & 3u];
+    project_store_t *q = project_cached(slot);
     int n;
     proj_wire_gen++;
-    n = st_load(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire);
+    n = st_load(project_obj(slot), &proj_wire, sizeof proj_wire);
     if (!proj_import(&proj_scratch, &proj_wire, n))
         memset(q->raw, 0, 4);
     else {
@@ -737,6 +771,7 @@ static void project_capture(project_t *p)
 static int project_save_as(uint32_t slot, const char *name)
 {
     project_t *p = &proj_scratch;
+    if (slot>=PROJECT_SLOTS) return 1;
     if (transport_busy()) {                            /* a flash erase silences the audio and stalls the */
         ui_message("STOP TO SAVE");                     /* sequencer (storage_hw.c): only while stopped */
         return 1;
@@ -751,20 +786,24 @@ static int project_save_as(uint32_t slot, const char *name)
 
 #if FELUCCA_FLASH
     if (flash_ok) {
-        if (st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire)) {
+        if (st_save(project_obj(slot), &proj_wire, sizeof proj_wire)) {
             ui_message("SAVE ERROR");
             return 2;
         }
-        memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
+        memcpy(project_cached(slot), &proj_wire, sizeof proj_wire);
         proj_name_get(proj_name, (const uint8_t *)p->name);
-        proj_cur = (uint8_t)(slot & 3u);
+        proj_cur = (uint8_t)slot;
+        project_cache_note(slot);
+        if (slot!=3u) setlist_active=(uint8_t)slot;
         ui_message("SAVED");
         return 0;
     }
 #endif
-    memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
+    memcpy(project_cached(slot), &proj_wire, sizeof proj_wire);
     proj_name_get(proj_name, (const uint8_t *)p->name);
-    proj_cur = (uint8_t)(slot & 3u);
+    proj_cur = (uint8_t)slot;
+    project_cache_note(slot);
+    if (slot!=3u) setlist_active=(uint8_t)slot;
     ui_message("SAVED (RAM)");
     return 0;
 }
@@ -775,7 +814,9 @@ static void project_cur_name(char *b) { str_cpy(b, proj_name, PROJ_NAME_LEN + 1u
 static int project_name(uint32_t slot, char *b)
 {
     b[0] = 0;
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)))
+    if (slot>=PROJECT_SLOTS) return 0;
+    if (slot>=4u) { str_cpy(b,proj_extra_names[slot-4u],13); return proj_extra_used[slot-4u]; }
+    if (!proj_import(&proj_scratch, project_cached(slot), sizeof(project_store_t)))
         return 0;
     proj_name_get(b, (const uint8_t *)proj_scratch.name);
     return 1;
@@ -787,11 +828,12 @@ static int project_name(uint32_t slot, char *b)
 static int project_rename(uint32_t slot, const char *name)
 {
     project_t *p = &proj_scratch;
+    if (slot>=PROJECT_SLOTS) return 1;
     if (transport_busy()) {
         ui_message("STOP TO SAVE");
         return 1;
     }
-    if (!proj_import(p, &proj_slot[slot & 3u], sizeof(project_store_t))) {
+    if (!proj_import(p, project_cached(slot), sizeof(project_store_t))) {
         ui_message("EMPTY SLOT");
         return 1;
     }
@@ -800,13 +842,14 @@ static int project_rename(uint32_t slot, const char *name)
     proj_wire_gen++;
     if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
 #if FELUCCA_FLASH
-    if (flash_ok && st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire)) {
+    if (flash_ok && st_save(project_obj(slot), &proj_wire, sizeof proj_wire)) {
         ui_message("SAVE ERROR");
         return 2;
     }
 #endif
-    memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
-    if (proj_cur == (slot & 3u))
+    memcpy(project_cached(slot), &proj_wire, sizeof proj_wire);
+    project_cache_note(slot);
+    if (proj_cur == slot)
         proj_name_get(proj_name, (const uint8_t *)p->name);
 #if FELUCCA_FLASH
     if (flash_ok) { ui_message("RENAMED"); return 0; }
@@ -894,13 +937,19 @@ static int project_restore_runtime(const project_t *input)
 }
 static void project_load(uint32_t slot)
 {
+    if (slot>=PROJECT_SLOTS || (slot>=4u && transport_busy())) { ui_message("STOP TO LOAD"); return; }
 #if FELUCCA_FLASH
-    if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
+    if (flash_ok && !proj_import(&proj_scratch, project_cached(slot), sizeof(project_store_t))) proj_fetch(slot);
 #endif
-    if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
-    if (!project_restore_runtime(&proj_scratch))
-        proj_cur = (uint8_t)(slot & 3u);
+    if (!proj_import(&proj_scratch, project_cached(slot), sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
+    if (!project_restore_runtime(&proj_scratch)) {
+        proj_cur = (uint8_t)slot;
+        setlist_active=slot==3u ? 255u : (uint8_t)slot;
+    }
+    project_cache_note(slot);
 }
+
+#include "setlist.c"
 
 /* settings + learned panel table: one flash object. The flash copy wins at
  * boot (the .noinit copies are garbage after a power-off). */
@@ -945,10 +994,13 @@ static void persist_boot(void)                    /* before settings_init / pane
                 proj_fetch(i);
     }
     up_boot();                                     /* user presets */
+    setlist_boot();
+#else
+    setlist_boot();
 #endif
 }
 
-static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)); }
+static int project_used(uint32_t slot) { return slot<PROJECT_SLOTS && (slot<4u ? proj_import(&proj_scratch,&proj_slot[slot],sizeof(project_store_t)) : proj_extra_used[slot-4u]); }
 
 /* Main loop only: no flash access or copies when the ISR changes rows. */
 static uint32_t chain_prepare(void)

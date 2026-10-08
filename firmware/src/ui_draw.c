@@ -393,7 +393,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     key[n + 1] = (char)('A' + ((vc >> 4) & 15u));
     key[n + 2] = (char)('A' + ((vc >> 8) & 15u));
     key[n + 3] = (char)('A' + (vc >> 12));
-    key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio / 20));
+    key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + (ratio * (COL_W - 10) / 1000 < 3 ? 3 : ratio * (COL_W - 10) / 1000)));
     key[n + 5] = (char)(icon == ICON_NONE ? '~' : '!' + icon % 90u);
     key[n + 6] = (char)('0' + hot + 2 * mot + 4 * (int)kind);
     key[n + 7] = 0;
@@ -658,6 +658,14 @@ static void draw_columns(void)
         }
         return;
     }
+    if (cur_page()->graph == GR_SETLIST) {
+        fmt_int(val,setlist.pick+1u);
+        draw_column(0,"SONG",val,"",VAL(0u),-1,ICON_X_SONG);
+        draw_column(1,"ORDER","MOVE","",VAL(1u),-1,ICON_NONE);
+        draw_act_column(2,"LOAD",VAL(2u),ICON_AUTO);
+        draw_act_column(3,"SAVE",VAL(3u),ICON_AUTO);
+        return;
+    }
     if (cur_page()->graph == GR_SONG) {
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u;
         int used = row < chain_config.count;
@@ -898,8 +906,8 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_OVR_PROJ:
         str_cpy(a, "OVERWRITE PROJECT A?", 24);
-        a[18] = (char)('A' + (k & 3u));
-        if (!project_name(k & 3u, b) || !b[0])          /* the project's name, else what SONG plays from it */
+        a[18] = (char)('A' + (k>3u?k-1u:k));
+        if (!project_name(k, b) || !b[0])          /* the project's name, else what SONG plays from it */
             str_cpy(b, "SONG PATTERN CHANGES", 24);
         break;
     case CF_DEL_ROW:

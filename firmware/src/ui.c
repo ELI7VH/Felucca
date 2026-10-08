@@ -4,6 +4,16 @@
  * Flat: SURF cards and panels on the palette's background, no rules, one type family (Inter Tight, three sizes), tracks
  * named by their numbers 1..4 on a cushion (icons.c trk_icon). Four columns <-> KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
+#define SETLIST_SONGS 12u
+#define PROJECT_SLOTS 13u /* 0..2 old songs, 3 recovery, 4..12 new songs */
+typedef struct { uint32_t magic; uint8_t order[SETLIST_SONGS], pick, rsv[3]; } setlist_store_t;
+static setlist_store_t setlist;
+static uint8_t setlist_dirty, setlist_pending, setlist_active=255;
+static uint32_t setlist_change_ms;
+static uint32_t setlist_slot(uint32_t pos);
+static void setlist_request(uint32_t pos);
+static void setlist_move(int32_t delta);
+static void setlist_pick(uint32_t pos);
 static int project_save(uint32_t slot);
 static void panel_setup(void);
 static void project_load(uint32_t slot);
@@ -157,7 +167,7 @@ static uint32_t large_kind(void)
     if (ui.home)
         return LK_TALL;
     g = cur_page()->graph;
-    return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
+    return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_SETLIST || g == GR_ROLL ||
            g == GR_CHANCE || g == GR_SLICES ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
@@ -1113,6 +1123,12 @@ static void midi_ui_poll(void)
     uint32_t steps;
     int pending;
     uint8_t drum_target;
+    if (midi_setlist_step) {
+        fm1_irq_off(); int32_t step=midi_setlist_step; midi_setlist_step=0; fm1_irq_on();
+        uint32_t pos=setlist.pick;
+        for (uint32_t j=0;j<12u;j++) if (setlist_slot(j)==setlist_active) { pos=j; break; }
+        setlist_request((uint32_t)((int32_t)pos+step+12)%12u);
+    }
     if (!midi_notice_pending && !midi_track_steps && !drum_focus_pending) return;
     fm1_irq_off();
     pending = midi_notice_pending;
@@ -1156,6 +1172,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     uint32_t c, m = 0;
     if (ui.home)
         return 0;
+    if (pg->graph == GR_SETLIST) return 12u;
     if (pg->graph == GR_MOTION) return 8u;
     if (pg->graph == GR_TOOLS) return 15u;
     if (pg->graph == GR_SONG)
@@ -1184,6 +1201,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
 {
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
     uint32_t id = cur_page()->id[c & 3u];
+    if (cur_page()->graph == GR_SETLIST) return c==2u ? "LOAD" : "SAVE";
     if (cur_page()->graph == GR_MOTION) return "CLEAR";
     if (cur_page()->graph == GR_TOOLS) {
         static const char *const actions[] = {"CLEAR", "INIT", "DELETE", "CLEAR"};
@@ -1207,6 +1225,7 @@ static int act_ready(void)
     uint32_t c = act_col(), s = song.sel, id;
     if (!c--)
         return 0;
+    if (cur_page()->graph == GR_SETLIST) return !transport_busy() && (c==3u || project_used(setlist_slot(setlist.pick)));
     if (cur_page()->graph == GR_MOTION) return !chain_busy() && motion_count(TSEL);
     if (cur_page()->graph == GR_TOOLS)                  /* one case per column: CLEAR PAT, INIT, DELETE ROW, CLEAR SONG */
         return !chain_busy() && (c == 0u ? !seq_is_empty(TSEL) || motion_count(TSEL) : c == 1u ? 1 :

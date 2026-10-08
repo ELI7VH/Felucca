@@ -8,7 +8,7 @@
  * patches into the user presets restored before it (ids 6, 7), as the first boot after the update does (up_fm6.c).
  * Id 9 is the user presets' FM6 patches (up_fm6.c), appended in 1.0.3.
  */
-static const uint8_t ED_BK_IDS[13] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34};
+static const uint8_t ED_BK_IDS[23] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
 #define ED_BK_N ((uint32_t)sizeof ED_BK_IDS)
 #define ED_BK_MAX ((uint32_t)sizeof proj_wire_u.raw)
 #define ED_BK_RAW (proj_wire_u.raw)  /* reuse the existing serialized main-loop scratch */
@@ -50,6 +50,13 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
         if (upf_valid(&upf)) *len = sizeof upf;
         return (const uint8_t *)&upf;
     }
+    if (id>=10u && id<=18u) {
+        uint32_t k=id-10u+4u;
+        if (project_used(k)) *len=sizeof(project_store_t);
+        return (const uint8_t *)project_cached(k);
+    }
+    if (id==19u) { *len=sizeof setlist; return (const uint8_t *)&setlist; }
+    if (id==34u) return ED_BK_RAW; /* retired sample, empty for old archives */
     if (id >= 32u && id < 32u + SMP_USER_SLOTS) {
         uint32_t k = id - 32u;
         const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(k);
@@ -64,6 +71,9 @@ static uint32_t ed_bk_capture(void)
     if (ed_flash_stop()) return 3;
     project_capture(&proj_scratch);
     if (!proj_pack((project_store_t *)ED_BK_RAW, &proj_scratch)) return 2;
+    ED_BK_RAW[SESSION_UI_OFF+7]=setlist_active<PROJECT_SLOTS && setlist_active!=3u ? setlist_active+1u : 0u;
+    uint32_t hash=proj_hash(ED_BK_RAW,sizeof(project_store_t)-4u);
+    memcpy(ED_BK_RAW+sizeof(project_store_t)-4u,&hash,4);
     ed_bk_gen = ++proj_wire_gen;
 #if FELUCCA_FLASH
     ed_bk_settings = persist_saved;                 /* fields absent from this build survive */
@@ -95,6 +105,7 @@ static uint32_t ed_bk_commit(void)
     if (ed_bk_pos != ed_bk_len || st_crc32(raw, ed_bk_len) != ed_bk_crc) return 2;
     if (ed_bk_id == 0u || (ed_bk_id >= 2u && ed_bk_id <= 5u)) {
         if (ed_bk_len && !proj_import(&proj_scratch, raw, (int)ed_bk_len)) return 2;
+        uint8_t active=ed_bk_len==sizeof(project_store_t) ? raw[SESSION_UI_OFF+7] : 0u;
         uint8_t resume_meta[10];
         int resume = ed_bk_id == 5u && ed_bk_len == sizeof(project_store_t) && raw[65] == SESSION_MARK;
         if (resume) {
@@ -114,7 +125,9 @@ static uint32_t ed_bk_commit(void)
         }
         if (ed_bk_id == 0u) {
             if (!ed_bk_len) return 2;
-            return project_restore_runtime(&proj_scratch) ? 2u : 0u;
+            uint32_t rc=project_restore_runtime(&proj_scratch) ? 2u : 0u;
+            if (!rc) { setlist_active=active && active<=PROJECT_SLOTS && active!=4u ? active-1u : 255u; session_seen=0; }
+            return rc;
         }
         obj = OBJ_PROJECT0 + ed_bk_id - 2u;
     } else if (ed_bk_id == 1u) {
@@ -140,6 +153,12 @@ static uint32_t ed_bk_commit(void)
         if (ed_bk_len) memcpy(&upf, raw, sizeof upf); else upf_empty();
         sync_reload = 1; ui.force = 1;
         return upf_save() == 2 ? 4u : 0u;           /* (a failed write keeps the restored RAM copy) */
+    } else if (ed_bk_id>=10u && ed_bk_id<=18u) {
+        if (ed_bk_len && (ed_bk_len!=sizeof(project_store_t) || !proj_import(&proj_scratch,raw,(int)ed_bk_len))) return 2;
+        obj=OBJ_SONG0+ed_bk_id-10u;
+    } else if (ed_bk_id==19u) {
+        if (ed_bk_len!=sizeof setlist || !setlist_valid((const setlist_store_t *)raw)) return 2;
+        obj=OBJ_SETLIST;
     } else return 1;
 #if FELUCCA_FLASH
     if (!flash_ok || st_save(obj, raw, ed_bk_len)) return 4;
@@ -158,6 +177,14 @@ static uint32_t ed_bk_commit(void)
 #if FELUCCA_FLASH
         persist_saved = ed_bk_settings; persist_pending = 0;
 #endif
+    } else if (ed_bk_id>=10u && ed_bk_id<=18u) {
+        uint32_t k=ed_bk_id-10u+4u;
+        project_store_t *q=project_cached(k); memset(q,0,sizeof *q);
+        if (ed_bk_len) memcpy(q,raw,ed_bk_len);
+        project_cache_note(k);
+        if (setlist_active==k) setlist_active=255;
+    } else if (ed_bk_id==19u) {
+        memcpy(&setlist,raw,sizeof setlist); setlist_dirty=setlist_pending=0;
     } else {
         uint32_t b = ed_bk_id - 6u;
         memset(&up_bank[b], 0, sizeof up_bank[b]);
@@ -169,12 +196,12 @@ static uint32_t ed_bk_commit(void)
 }
 static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 {
-    if (n < 2u || a[0] > 3u || a[1] > 9u) return 1;
+    if (n < 2u || a[0] > 3u || a[1] > 19u) return 1;
     if (ed_flash_stop()) return 3;
     if (a[0] == 0u) {
         if (n != 12u || a[6] > 15u || a[11] > 15u) return 1;
         uint32_t len = ed_bk_r32(a + 2);
-        if (len > ED_BK_MAX || (a[1] == 0u && len != sizeof(project_store_t) && len != PROJ_STORE_V7) ||
+        if (len > ED_BK_MAX || (a[1]>=10u && a[1]<=18u && len && len!=sizeof(project_store_t)) || (a[1]==19u && len!=sizeof setlist) || (a[1] == 0u && len != sizeof(project_store_t) && len != PROJ_STORE_V7) ||
             (a[1] == 1u && len != sizeof(persist_t)) ||
             (a[1] >= 2u && a[1] <= 5u && len && len != sizeof(project_store_t) && len != PROJ_STORE_V7) ||
             ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t)) ||

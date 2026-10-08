@@ -904,6 +904,14 @@ static uint32_t graph_signature(void)
             h = (h ^ chord_last[song.sel].note[i]) * 16777619u;
         h ^= (uint32_t)t->engine * 389u;             /* (MONO and kits follow the sounding engine) */
     }
+    if (pg->graph == GR_SETLIST) {
+        h^=setlist.pick*40503u+setlist_active*7919u;
+        for (i=0;i<12u;i++) {
+            char nm[13]; project_name(setlist_slot(i),nm);
+            h=(h^setlist.order[i])*16777619u;
+            for (uint32_t j=0;nm[j];j++) h=(h^(uint8_t)nm[j])*16777619u;
+        }
+    }
     if (pg->graph == GR_SONG) {
         h ^= ui.song_row * 40503u + chain_config.count * 7919u;
         for (i = 0; i < CHAIN_ROWS; i++)
@@ -1355,6 +1363,18 @@ static void graph_scope(uint16_t c)
 
 /* SONG is a playing order of the four stored project patterns. Letters match
  * PROJECT A..D; loading a project still restores its sound, SONG borrows steps. */
+static void graph_setlist(void)
+{
+    uint32_t start=setlist.pick>3u ? setlist.pick-3u : 0u;
+    if (start>5u) start=5u;
+    for (uint32_t row=0;row<7u;row++) {
+        uint32_t pos=start+row,k=setlist_slot(pos);
+        char tag[5],nm[13]; fmt_int(tag,pos+1u);
+        int used=project_name(k,nm);
+        list_row(LIST_Y(row),pos==setlist.pick,tag,k==setlist_active?T_TEXT:T_MID,
+                 used?(nm[0]?nm:"USED"):"--",used?T_TEXT:T_DIM,232);
+    }
+}
 static void graph_song(void)
 {
     uint32_t first = ui.song_row > 2u ? ui.song_row - 2u : 0u, i;
@@ -1466,6 +1486,8 @@ static void draw_graph(void)
             cv_oy = 0;
             graph_user();
             break;
+        case GR_SETLIST:
+            cv_oy=0; graph_setlist(); break;
         case GR_SONG:
             cv_oy = 0;
             graph_song();

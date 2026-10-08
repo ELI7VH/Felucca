@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Felucca Mod · Build details</title>
+<style>body{max-width:720px;margin:40px auto;padding:0 20px;font:16px/1.5 system-ui}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<h1>Build and support details</h1><p><a href="../mod/">Controls and setup</a> · <a href="../webapp/editor/">Device editor</a></p>
+<p>This installer uses the package recorded below. Compare the editor’s connected version with it after an update.</p><pre id="build">Reading build information…</pre>
+<h2>Persistence</h2><p>The 12-song setlist uses original projects A–C and nine additional A/B flash pairs in the retired third sample slot. Project 4 remains the recovery journal. Order has its own A/B pair. Commits wait for stopped transport, no held notes, five seconds of rendered silence and settled edits.</p>
+<p>Backup includes all 12 songs, order, recovery, settings, presets and two sample slots. Older archives remain readable. Archives containing a third sample must be migrated before restoring into this mod.</p>
+<h2>Support</h2><p>Check MiniLab User 5 is active if knobs or faders target the wrong controls. Download a backup before changing firmware. Report issues with the connected version and a short description of the gesture; keep private backups private.</p>
+<p><a href="https://github.com/ELI7VH/Felucca">Mod source</a> · <a href="https://github.com/hugelton/Felucca">Upstream source</a> · <a href="../docs/MIDI-IMPLEMENTATION.md">Protocol and validation</a> · <a href="../firmware/LICENSING.md">Licensing</a></p>
+<script>fetch('../build.json').then(r=>{if(!r.ok)throw Error(r.status);return r.json()}).then(x=>document.getElementById('build').textContent=JSON.stringify(x,null,2)).catch(()=>document.getElementById('build').textContent='Build details unavailable. Check the release download.')</script></html>

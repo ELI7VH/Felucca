@@ -18,7 +18,7 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_TRACK, ED_TRACK_MIX, ED_TRACK_DUMP, ED_TRACK_STEP,                    /* v3: tracks */
        ED_TRACK_PARAM, ED_TRACK_CHANGED, ED_SONG,
        ED_UI_STATE, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET,
-       ED_MOTION = 64, ED_BACKUP_LIST, ED_BACKUP_GET, ED_BACKUP_PUT };                              /* v6: song chain */
+       ED_MOTION = 64, ED_BACKUP_LIST, ED_BACKUP_GET, ED_BACKUP_PUT, ED_SETLIST = 74 };                              /* v6: song chain */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -367,6 +367,8 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
     case ED_STEP_GET: case ED_NAMES: case ED_SMP_BEGIN: case ED_SMP_ERASE:
     case ED_UP_GET: case ED_UP_LOAD: case ED_UP_ERASE: case ED_WATCH: case ED_TRACK_DUMP: case ED_MENU_DESC:
         return n == 1u;
+    case ED_SETLIST:
+        return n==1u || n==2u || (n>=3u && n<=15u && a[0]==5u);
     case ED_MENU_SET:
         return n == 3u;
     case ED_STEP_SET:
@@ -440,6 +442,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                                          * patches (FM6 target 3, backup id 9) */
         ed_b(0x4E); ed_b(1); ed_b(ED_MENU_N);   /* MENU settings: cmds 72, 73; the items MENU_DESC offers */
         ed_b(0x52); ed_b(1); ed_b(4);   /* RATCH: a step's ratchet (1..4 hits) after its chance */
+        ed_b(0x4C); ed_b(1); ed_b(12); /* complete song setlist, cmd 74 */
         break;
     case ED_GET:
     case ED_SET:
@@ -525,6 +528,27 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ui.force = 1;
         ed_b(ed_eng(TSEL));
         ed_b(TSEL->preset);
+        break;
+    }
+    case ED_SETLIST: {
+        uint32_t rc=na<1u || a[0]>5u ? 1u : 0u;
+        if (!rc && a[0]) {
+            if (na<2u || (a[0]!=5u && na!=2u) || a[1]>=12u) rc=1u;
+            else if (transport_busy()) rc=3u;
+            else if (a[0]==1u) setlist_pick(a[1]);
+            else if (a[0]==2u) setlist_move((int32_t)a[1]-(int32_t)setlist.pick);
+            else if (a[0]==3u) { if (!project_used(setlist_slot(a[1]))) rc=2u; else setlist_request(a[1]); }
+            else if (a[0]==5u) {
+                char name[13]; uint32_t n=na-2u;
+                if (!n || n>12u) rc=1u;
+                else { for (uint32_t j=0;j<n;j++) { if (a[j+2u]<32u || a[j+2u]>126u) rc=1u; name[j]=(char)a[j+2u]; }
+                    name[n]=0; if (!rc && project_rename(setlist_slot(a[1]),name)) rc=4u; }
+            }
+            else if (project_save(setlist_slot(a[1]))) rc=4u;
+        }
+        ed_b(rc); ed_b(setlist.pick); ed_b(setlist_active<PROJECT_SLOTS ? project_rank(setlist_active) : 127u); ed_b(setlist_pending);
+        for (uint32_t j=0;j<12u;j++) { char name[13]; uint32_t k=setlist_slot(j);
+            ed_b(setlist.order[j]); ed_b(project_name(k,name)); ed_str(name,13); }
         break;
     }
     case ED_PROJECT:                                       /* 0 = load, 1 = save, 2 = query; slot 0..3 */

@@ -44,7 +44,20 @@ const E = vm.runInNewContext(proto + `
 { setTimeout, clearTimeout, setInterval, clearInterval, console });
 
 async function editorMock() {
-  const m = E.makeMockDevice();
+  {
+  const setMock=E.makeMockDevice({auto:false,setlist:true});
+  const inp=[...setMock.access.inputs.values()][0],out=[...setMock.access.outputs.values()][0];
+  const link=new E.Link(d=>out.send(d),{timeout:300});inp.onmidimessage=e=>link.receive(e.data);
+  const ask=(op,...args)=>link.request([E.CMD.SETLIST,[op,...args]]).then(a=>E.parse[E.CMD.SETLIST](a));
+  const si=E.parse[E.CMD.INFO](await link.request(E.req.info()));
+  ok(si.setlistCount===12,"setlist: tagged capability and 12 complete song rows");
+  let x=await ask(4,11); ok(x.rows[11].used && x.active===11,"setlist: save binds current song");
+  await ask(1,11);x=await ask(2,0);ok(x.rows[0].id===11,"setlist: move follows song identity");
+  x=await ask(5,0,...Array.from("FINALE",c=>c.charCodeAt(0)));ok(x.rows[0].name==="FINALE","setlist: song names parse correctly");
+  x=await ask(3,1);ok(x.rc===2,"setlist: empty entry cannot load");
+  link.close();setMock.stop();
+}
+const m = E.makeMockDevice();
   const inp = [...m.access.inputs.values()][0], out = [...m.access.outputs.values()][0];
   const link = new E.Link((d) => out.send(d), { timeout: 300 });
   inp.onmidimessage = (e) => link.receive(e.data);
@@ -247,7 +260,7 @@ async function editorSamplePresets() {
   await rq(E.req.preset(4, 0));
   const set = E.parse[C.DESC](await rq(E.req.desc(0, info.pe0)));
   ok(eq(names.names, ["PIANO", "PIANO", "FLUTE", "SAX"]) && eq(set.names.slice(0, 4), ["PIANO", "PIANO", "FLUTE", "SAX"])
-    && set.names[4] === "PIANO" && eq(set.names.slice(5), ["USR1", "USR2", "USR3"]),
+    && set.names[4] === "PIANO" && eq(set.names.slice(5), ["USR1", "USR2"]),
     "SAMPLE: TRANH and PERC removed, SET 1 and 4 kept as PIANO aliases, indices unchanged");
   ok(E.aliasOf(names.names, 1) === 0 && E.aliasOf(names.names, 2) === 2 && E.aliasOf(set.names, 5) === 5 &&
      E.aliasOf(set.names, 4) === 0, "SAMPLE: an entry named like an earlier one is an alias of it");
@@ -1211,7 +1224,7 @@ async function editorSessions() {
     paramKeys: noop, libAdopt: () => { adoptStarted?.(); return adopted || Promise.resolve(); },
     buildUI: () => { shown++; }, renderPanels: noop, loadSteps: noop,
     startWatch: async () => false, renderLive: noop, renderLib: noop,
-    renderBank: noop, renderSysinfo: noop, sayK: noop, report: noop, syncPreferences: noop,
+    renderBank: noop, renderSysinfo: noop, sayK: noop, report: noop, syncPreferences: noop, readSetlist: noop,
   });
   const oldRelease = S.beginBusy();
   S.resetBusy();

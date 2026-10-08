@@ -1,3 +1,5 @@
+> **MiniLab 3 mod:** [Features and controls](https://eli7vh.github.io/Felucca/mod/) · [Install](https://eli7vh.github.io/Felucca/) · [Editor](https://eli7vh.github.io/Felucca/webapp/editor/). 12 evolving songs, silent autosave, per-drum control.
+
 # Felucca
 
 ## Felucca Mod — MiniLab 3
@@ -19,7 +21,7 @@ use this fork's release package and the setup guide. Original project documentat
 ![Felucca 1.0](docs/felucca-1.0.png)
 
 **TL;DR:** Felucca 1.0.5.2 — Big New Features, field testing. Connect your FM-1 to a computer by USB,
-open the [web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge, and press Install;
+open the [web installer](https://eli7vh.github.io/Felucca/) in Chrome or Edge, and press Install;
 no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or the installer's
 **Return to official V15** takes you back. Want to look around first?
 [Try it in your browser](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed.
@@ -27,10 +29,10 @@ no extra hardware is needed. Installing is at your own risk: M-VAVE's updater or
 Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you find in
 [Issues](https://github.com/hugelton/Felucca/issues).
 
-- Install: [web installer](https://hugelton.github.io/Felucca/) (Chrome or Edge, USB), or `tools/fm1_install.py` from a terminal
+- Install: [web installer](https://eli7vh.github.io/Felucca/) (Chrome or Edge, USB), or `tools/fm1_install.py` from a terminal
 - Try: [Felucca in your browser](https://hugelton.github.io/Felucca/webapp/try/): the same firmware compiled to
   WebAssembly, with the panel on screen (mouse, touch, computer keyboard, Web MIDI in)
-- Editor: [web editor](https://hugelton.github.io/Felucca/webapp/editor/); its development has moved to
+- Editor: [web editor](https://eli7vh.github.io/Felucca/webapp/editor/); its development has moved to
   [Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp)
 - Build: [BUILDING.md](BUILDING.md)
 

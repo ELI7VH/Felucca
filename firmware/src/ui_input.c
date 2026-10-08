@@ -507,6 +507,12 @@ static void edit_param(uint32_t slot, int32_t steps)
     const page_t *pg = cur_page();
     const param_desc_t *d;
     int32_t v;
+    if (pg->graph == GR_SETLIST) {
+        if (slot==0u) setlist_pick((uint32_t)clamp((int32_t)setlist.pick+steps,0,11));
+        else if (slot==1u) setlist_move(steps>0?1:-1);
+        else ui.act=(uint8_t)(slot+1u);
+        return;
+    }
     if (pg->graph == GR_CHANCE) {
         if (slot == 0u) cursor_set(ui.cursor + steps);
         else if (slot == 1u || slot == 2u) {
@@ -618,6 +624,14 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
+    if (cur_page()->graph == GR_SETLIST) {
+        k=setlist_slot(setlist.pick);
+        if (c==2u) setlist_request(setlist.pick);
+        else if (transport_busy()) ui_message("STOP TO SAVE");
+        else if (project_used(k)) confirm_open(CF_OVR_PROJ,k);
+        else name_open(NK_PROJ_SAVE,k);
+        return;
+    }
     if (cur_page()->graph == GR_MOTION) {
         if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
         confirm_open(CF_CLEAR_MOTION, song.sel);
@@ -769,7 +783,7 @@ static void presets_turn(int32_t s)
     uint32_t g = pg->graph;
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
-    } else if (g == GR_ROLL || g == GR_CHANCE || g == GR_USER || g == GR_SLOTS || g == GR_PATS || g == GR_SONG) {
+    } else if (g == GR_ROLL || g == GR_CHANCE || g == GR_USER || g == GR_SLOTS || g == GR_PATS || g == GR_SONG || g == GR_SETLIST) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
@@ -834,7 +848,7 @@ static int page_tap(uint32_t b)
         ui_message("STEP CLEARED");
         return 1;
     }
-    if (b == B_EDIT && !ui.home && (cur_page()->graph == GR_USER || cur_page()->graph == GR_SLOTS)) {
+    if (b == B_EDIT && !ui.home && (cur_page()->graph == GR_USER || cur_page()->graph == GR_SLOTS || cur_page()->graph == GR_SETLIST)) {
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
@@ -1175,7 +1189,7 @@ static void ui_input(void)
             continue;
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
             ((pg->graph == GR_USER || pg->graph == GR_MOD || pg->graph == GR_PATS) && k == 0u)
-            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u)) {   /* (not an empty column) */
+            || pg->graph == GR_SONG || pg->graph == GR_SETLIST || (pg->graph == GR_SLICES && k < 2u)) {   /* (not an empty column) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
         }

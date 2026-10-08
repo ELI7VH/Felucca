@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi10.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi11.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -15,7 +15,8 @@ Use the custom `felucca-1.0.5.2-midi10.fwsc` firmware and `Felucca.minilab3` pre
 | Mod strip | CC1 on keyboard channel; vibrato |
 | Pitch strip | Pitch bend on keyboard channel |
 | A-bank pads 1–8 | Hold for repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
-| B-bank pads 1–4 | Factory notes on keyboard channel |
+| B-bank pads 1–2 | CC110/111 Gate on channel 16; previous/next setlist song |
+| B-bank pads 3–4 | Factory notes on keyboard channel |
 | B-bank pad 5 / Stop | CC106 Gate; stop transport |
 | B-bank pad 6 / Play | CC107 Gate; start transport |
 | B-bank pad 7 / Record | CC108 Gate; toggle recording for the displayed FM-1 track; start if stopped |
@@ -56,7 +57,7 @@ USB archive backup/restore temporarily reserves the save buffer; autosave resume
 
 ## Transport and tap tempo
 
-The updated User preset puts Stop, Play, Record and Tap on **B-bank pads 5–8**, matching their printed labels. Switch banks with Shift + Pad 2, then press these pads without Shift. A-bank effects remain unchanged; B-bank pads 1–4 still play notes. Import and Store To the updated preset once before using these controls.
+The updated User preset puts Stop, Play, Record and Tap on **B-bank pads 5–8**, matching their printed labels. Switch banks with Shift + Pad 2, then press these pads without Shift. A-bank effects remain unchanged; B-bank pads 1–2 switch songs; 3–4 still play notes. Import and Store To the updated preset once before using these controls.
 
 Firmware also accepts Arturia's CC106–109 transport messages on any MIDI channel, independently of ROUT. If Shift + the labeled pads sends these through DIN on your MiniLab firmware, those shortcuts work too. That shortcut's direct-DIN output has not been verified; the B-bank mapping is the supported standalone path. Arturia documents a separate USB MCU/HUI port for DAW transport; changing FM-1 firmware cannot create DIN messages the controller does not send. See [Arturia's MIDI ports and CC chart](https://support.arturia.com/hc/en-us/articles/6189475866396-MiniLab-3-General-Questions).
 
@@ -81,3 +82,16 @@ Selected-drum controls also follow the FM-1 HOME/EDIT/FX pages. The **DRUM MIX**
 Edits survive projects, autosave and user presets, and sound undo/redo. Untouched drum controls inherit the kit settings. Loading a new factory preset starts fresh drum settings. Effect returns are shared; per-drum pan controls dry sound. With custom drum mixing, sends feed effects before the kit's shared SLICER insert.
 
 For longer patterns, set **SEQ → PATTERN → LEN** to 32, 48 or 64 (any length up to 64 works). On the drum grid, black keys 10 and 11 page backward/forward for steps 1–16, 17–32, 33–48 and 49–64. Play kick/snare/etc. to choose the lane, then use the FM-1's 16 step buttons on that page.
+
+## Twelve-song setlist
+
+- SEQ → SETLIST: knob 1 selects; knob 2 moves that entry.
+- Knob 3 chooses LOAD; knob 4 chooses SAVE. OCT+ confirms; EDIT renames.
+- Each song keeps tempo, all four sounds, patterns, automation and per-drum settings.
+- Autosave updates the current song and setlist order after five quiet, settled seconds.
+- Loading waits for silence and saves the previous song first. Transport stays stopped.
+- A recovery-only session becomes the first empty song without replacing existing songs.
+- Original projects A–C are preserved. Project 4 stays recovery; nine more songs use sample slot 3.
+- Two user sample slots remain. Full USB backup includes all songs and their order.
+
+[Mod website](https://eli7vh.github.io/Felucca/mod/) · [Setlist editor](https://eli7vh.github.io/Felucca/webapp/editor/).

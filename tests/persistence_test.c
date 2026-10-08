@@ -95,6 +95,7 @@ static void reset(void)
     fail_after = -1;
     up_gen = erases = 0;
     irq_start_race = irq_races = 0;
+    setlist_boot();
 }
 
 /* ---- 1.0.3: the retired FM6 bank's patches move into the user presets on the first boot (up_fm6.c) ---- */
@@ -270,6 +271,48 @@ static int session_test(void)
     fm1_ms=250; session_poll();fm1_ms=6000;transport_req=1;irq_start_race=1;session_poll();
     bad += check("PLAY arriving at the snapshot blocks autosave",!erases && song.playing);
     reset(); return bad;
+}
+
+static void quiet_save(void)
+{
+    session_quiet_frames=SESSION_QUIET_FRAMES; session_seen=0;
+    fm1_ms+=250; session_poll(); fm1_ms+=5250; session_poll();
+}
+static int setlist_test(void)
+{
+    int bad=0; reset(); session_boot();
+    song.g[G_BPM]=101; trk[0].p[P_LEVEL]=73;
+    bad+=check("new song saves to ninth additional A/B pair",!project_save_as(12,"FINALE") && project_used(12));
+    song.g[G_BPM]=123; trk[0].p[P_LEVEL]=88;
+    quiet_save();
+    project_t q;
+    int n=st_load(project_obj(12),&proj_wire,sizeof proj_wire);
+    bad+=check("quiet autosave evolves current named song and recovery",n==sizeof proj_wire && proj_import(&q,&proj_wire,n) && q.g[G_BPM]==123 && q.t[0].p[P_LEVEL]==88 && proj_slot[3].raw[SESSION_UI_OFF+7]==13);
+    uint32_t before=erases; fm1_ms+=6000; session_poll();
+    bad+=check("unchanged song causes no extra flash wear",erases==before);
+    song.g[G_BPM]=90; project_save_as(0,"OPENER");
+    setlist_pick(11); setlist_move(-11); quiet_save();
+    setlist_store_t saved=setlist;
+    setlist_boot();
+    bad+=check("setlist order survives reboot",!memcmp(&setlist,&saved,sizeof saved) && setlist_slot(0)==12);
+    session_boot();
+    bad+=check("recovery retains current song identity",setlist_active==0 && song.g[G_BPM]==90);
+    trk[0].p[P_LEVEL]=100; setlist_request(0);
+    session_quiet_frames=0; fm1_ms+=6000; session_poll();
+    bad+=check("song load waits for actual rendered silence",setlist_pending && setlist_active==0);
+    quiet_save();
+    bad+=check("loading restores complete target song after saving old song",!setlist_pending && setlist_active==12 && song.g[G_BPM]==123 && trk[0].p[P_LEVEL]==88);
+    n=st_load(project_obj(0),&proj_wire,sizeof proj_wire);
+    bad+=check("pending switch preserves latest edits in previous song",proj_import(&q,&proj_wire,n) && q.t[0].p[P_LEVEL]==100);
+    song.playing=1; setlist_request(11);
+    bad+=check("playing blocks setlist loads",!setlist_pending && setlist_active==12); song.playing=0;
+    trk[0].p[P_LEVEL]=45; erase_error=1; quiet_save();
+    bad+=check("failed named song save does not replace recovery",proj_slot[3].raw[SESSION_UI_OFF+7]==1 && setlist_active==12);
+    erase_error=0; quiet_save(); session_boot();
+    bad+=check("retry and reboot restore evolving song",setlist_active==12 && trk[0].p[P_LEVEL]==45);
+    setlist_store_t invalid=setlist; invalid.order[1]=invalid.order[0];
+    bad+=check("duplicate setlist entries rejected",!setlist_valid(&invalid));
+    return bad;
 }
 
 int main(void)
@@ -549,6 +592,7 @@ int main(void)
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
     bad += mig_test();
     bad += session_test();
+    bad += setlist_test();
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
     return bad != 0;
 }

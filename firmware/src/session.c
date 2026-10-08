@@ -41,11 +41,41 @@ static void session_boot(void)
         if (view[4] < NPAGES) ui.page = view[4];
         ui.cursor = view[5] < NSTEP ? view[5] : 0;
         ui.bank = view[6] < 4u ? view[6] : 0;
-        proj_cur = SESSION_SLOT;
+        setlist_active=view[7] && view[7]<=PROJECT_SLOTS && view[7]!=4u ? view[7]-1u : 255u;
+        if (setlist_active==255u) {
+            /* Upgrade a recovery-only session into the first empty setlist song.
+             * Existing songs are never replaced; the first quiet poll commits it. */
+            for (uint32_t pos=0;pos<12u;pos++) {
+                uint32_t slot=setlist_slot(pos);
+                if (!project_used(slot)) { setlist_active=(uint8_t)slot; setlist_pick(pos); break; }
+            }
+        }
+        proj_cur=setlist_active<PROJECT_SLOTS ? setlist_active : SESSION_SLOT;
         ui_message("SESSION RESTORED");
     }
     session_quiet_frames = 0;
 #endif
+}
+static int session_pack(void)
+{
+    project_capture(&proj_scratch);
+    proj_wire_gen++;
+    if (!proj_pack(&proj_wire, &proj_scratch)) {
+        if (!session_error) ui_message("AUTOSAVE FORMAT ERROR");
+        session_error = 1;
+        return 0;
+    }
+    proj_wire.raw[65] = SESSION_MARK;
+    proj_wire.raw[67] = (uint8_t)(clamp(perf_k[0], -100, 100) + 100);
+    for (uint32_t k=1;k<4;k++) proj_wire.raw[SESSION_UI_OFF+k-1] = (uint8_t)clamp(perf_k[k],0,100);
+    proj_wire.raw[SESSION_UI_OFF+3] = ui.home;
+    proj_wire.raw[SESSION_UI_OFF+4] = ui.page;
+    proj_wire.raw[SESSION_UI_OFF+5] = ui.cursor;
+    proj_wire.raw[SESSION_UI_OFF+6] = ui.bank;
+    proj_wire.raw[SESSION_UI_OFF+7]=setlist_active<PROJECT_SLOTS && setlist_active!=3u ? setlist_active+1u : 0u;
+    uint32_t hash = proj_hash(proj_wire.raw, sizeof proj_wire - 4u);
+    memcpy(proj_wire.raw + sizeof proj_wire - 4u, &hash, 4);
+    return 1;
 }
 static void session_poll(void)
 {
@@ -59,38 +89,32 @@ static void session_poll(void)
     }
     /* Track edits even during sound; wait for both five quiet seconds and five
      * seconds of unchanged musical state. This coalesces continuous tweaking. */
-    if (transport_busy()) { session_seen = 0; return; }
+    if (transport_busy()) { session_seen = 0; setlist_pending=0; return; }
     if (project_used(SESSION_SLOT) && proj_slot[SESSION_SLOT].raw[65] != SESSION_MARK) {
         if (!session_error) ui_message("AUTOSAVE SLOT4 USED");
         session_error = 1;
         return;
     }
-    project_capture(&proj_scratch);
-    proj_wire_gen++;
-    if (!proj_pack(&proj_wire, &proj_scratch)) {
-        if (!session_error) ui_message("AUTOSAVE FORMAT ERROR");
-        session_error = 1;
-        return;
-    }
-    proj_wire.raw[65] = SESSION_MARK;
-    proj_wire.raw[67] = (uint8_t)(clamp(perf_k[0], -100, 100) + 100);
-    for (uint32_t k=1;k<4;k++) proj_wire.raw[SESSION_UI_OFF+k-1] = (uint8_t)clamp(perf_k[k],0,100);
-    proj_wire.raw[SESSION_UI_OFF+3] = ui.home;
-    proj_wire.raw[SESSION_UI_OFF+4] = ui.page;
-    proj_wire.raw[SESSION_UI_OFF+5] = ui.cursor;
-    proj_wire.raw[SESSION_UI_OFF+6] = ui.bank;
-    uint32_t hash = proj_hash(proj_wire.raw, sizeof proj_wire - 4u);
-    memcpy(proj_wire.raw + sizeof proj_wire - 4u, &hash, 4);
+    if (!session_pack()) return;
+    uint32_t hash=proj_hash(proj_wire.raw,sizeof proj_wire-4u);
     if (!session_seen || hash != session_hash) {
         session_hash = hash; session_seen = 1; session_change_ms = fm1_ms;
         return;
     }
     if ((uint32_t)(fm1_ms - session_change_ms) < 5000u ||
-        !memcmp(&proj_slot[SESSION_SLOT], &proj_wire, sizeof proj_wire) || !session_idle()) return;
+        !session_idle()) return;
+    if (setlist_save_current()) { session_change_ms=fm1_ms; return; }
+    if (!session_idle()) return;
+    if (setlist_dirty && (uint32_t)(fm1_ms-setlist_change_ms)>=5000u) {
+        if (st_save(OBJ_SETLIST,&setlist,sizeof setlist)) { ui_message("SETLIST SAVE ERROR"); setlist_change_ms=fm1_ms; return; }
+        setlist_dirty=0;
+    }
+    if (!session_pack() || !session_idle()) return;
+    int changed=memcmp(&proj_slot[SESSION_SLOT],&proj_wire,sizeof proj_wire)!=0;
     /* Catch a PLAY/note arriving just before the write. Individual flash hooks
      * guard IRQs themselves; do not mask interrupts through the entire save. */
     if (!session_idle()) return;
-    if (st_save(OBJ_PROJECT0 + SESSION_SLOT, &proj_wire, sizeof proj_wire)) {
+    if (changed && st_save(OBJ_PROJECT0 + SESSION_SLOT, &proj_wire, sizeof proj_wire)) {
         if (!session_error) ui_message("AUTOSAVE ERROR");
         session_error = 1;
         session_change_ms = fm1_ms;       /* retry after five seconds, no hot failure loop */
@@ -98,6 +122,11 @@ static void session_poll(void)
     }
     memcpy(&proj_slot[SESSION_SLOT], &proj_wire, sizeof proj_wire);
     session_error = 0;
-    ui_message("AUTOSAVED");
+    if (changed) ui_message("AUTOSAVED");
+    if (setlist_pending && session_idle()) {
+        uint32_t slot=setlist_pending-1u; setlist_pending=0;
+        project_load(slot); session_seen=0;
+        for (uint32_t pos=0;pos<12u;pos++) if (setlist_slot(pos)==slot) { setlist_pick(pos); break; }
+    }
 #endif
 }

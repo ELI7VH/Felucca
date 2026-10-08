@@ -7,10 +7,13 @@ Direct DIN MIDI control; no computer needed while playing.
 
 | Problem | Solution |
 | --- | --- |
+| Needed more songs for a performance | 12 complete songs, in a reorderable setlist; two user sample slots remain. |
+| Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
+| Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
 | Wanted separate kick/snare edits and mixing | Each drum lane keeps its own sound, volume, pan and effect sends. |
 | Wanted playing a drum to select its sequencer lane | Hit a drum, then edit that lane with the step buttons. |
 | Needed patterns longer than 16 steps | Up to 64 steps: PATTERN → LEN, then page keys. |
-| Wanted transport and tap without a computer | B-bank pads 5–8: Stop, Play, selected-track Record, Tap. |
+| Wanted transport and tap without a computer | B-bank 1–2: previous/next song; 5–8: Stop, Play, selected-track Record, Tap. |
 | Never wanted to press Save or rebuild a session | Autosave after five seconds of silence; restore at power-on. |
 | Needed a standalone setup | MiniLab plugs directly into FM-1 over DIN MIDI. |
 | Wanted four independent track volumes | Faders 1–4 always mix tracks 1–4. |
@@ -56,13 +59,17 @@ Encoder click changes the screen’s track; the keyboard MIDI channel stays inde
 
 ## Get the mod
 
+[Web installer](https://eli7vh.github.io/Felucca/) · [Web editor](https://eli7vh.github.io/Felucca/webapp/editor/) · [Controls](https://eli7vh.github.io/Felucca/mod/).
+
 [Download firmware + controller preset](https://github.com/ELI7VH/Felucca/releases/latest).
 Import the MiniLab preset, Store To an enabled User slot, and set FM-1 **ROUT = CH1-4**.
-Autosave uses **Project 4**; keep it for session recovery.
+Autosave updates the **current setlist song** and saves order. **Project 4** remains session recovery.
 Use the correct DIN-to-TRS adapter. A computer is needed for initial setup.
 
 [Full setup guide](controllers/MiniLab-3.md) · [Technical details and validation](docs/MIDI-IMPLEMENTATION.md)
 
-**Status:** midi10 installed; full host suite, target processor budgets and 92 unchanged golden renders passed. MiniLab User 5 stored and all 319 parameters read back exactly. Live USB drum isolation and CRC-verified silent autosave passed; four complete track dumps matched on restart. Subsequent live notes/tweaks changed selection and sounds, so screen-selection stability needs a quiet hands-on check. Direct DIN gestures and the physical popup remain hands-on checks.
+**Setlist:** SEQ → SETLIST. Knob 1 selects; knob 2 moves; knobs 3/4 select Load/Save, then OCT+ confirms. EDIT renames. New songs need an initial Save into an empty entry; a recovery-only session upgrades into the first empty entry automatically. Load waits for stopped transport and five seconds of silence, saving the previous song first. Press Play after loading. There is no automatic song advance.
+
+**Validation:** Host persistence tests cover evolving songs, saved order, restart identity, save failure/retry and saving before a song switch. Original DSP golden renders and direct-DIN/controller checks are recorded in the technical guide.
 
 Based on [hugelton/Felucca](https://github.com/hugelton/Felucca) 1.0.5.2, commit `7414269c4392cde8f4a4351c5f566314903b9116`. Original credits and GPL-3.0-only licensing retained.

@@ -8,7 +8,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Felucca Editor</title>
+<title>Felucca Mod Editor</title>
 <style>
   /* Fukiai: Hügelton Instruments' icon font (MIT, FUKIAI-LICENSE.txt). Icons are text in .ic spans;
      they stay hidden until the face has loaded (html.fk), so a missing font never shows boxes. */
@@ -157,7 +157,7 @@
 <body>
 <main>
   <button class="lang" id="lang"></button>
-  <h1>Felucca Editor</h1>
+  <h1>Felucca Mod Editor</h1>
   <p class="dim"><a href="../installer/" style="color:inherit" data-t="installer"></a></p>
   <!-- always visible: connection, version, sync mode, the tabs and (Sound / Sequencer / Tracks) the track selector -->
   <header class="top">
@@ -314,6 +314,13 @@
   <section class="panel" id="p-projects" data-tab="projects" data-dev hidden>
     <h2 data-t="projects" data-ic="symbol_folder"></h2>
     <p class="dim" data-t="projHelp"></p>
+      <div id="setlist-panel" hidden>
+        <h2>Setlist · 12 songs</h2>
+        <p class="dim">Each song keeps its tempo, sounds and sequences. Stop, then load. Edits and order autosave after five seconds of silence.</p>
+        <div id="setlist-rows"></div>
+        <p id="setlist-status" role="status"></p>
+      </div>
+
     <div class="slots" id="slots"></div>
     <div id="backup-panel" style="margin-top:16px">
       <h2 data-t="backupTitle"></h2>
@@ -359,7 +366,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK: 27, TRACK_MIX: 28, TRACK_DUMP: 29, TRACK_STEP: 30,
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
-  MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
+  SETLIST: 74, MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
   FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANGED]);
@@ -454,6 +461,12 @@ const parse = {
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
+    o.setlistCount = trailer.slice(-3).join(",") === "76,1,12" ? 12 : 0;
+    return o;
+  },
+  [CMD.SETLIST](a) {
+    const r=new Reader(a),o={rc:r.b(),pick:r.b(),active:r.b(),pending:r.b(),rows:[]};
+    for(let i=0;i<12;i++) o.rows.push({id:r.b(),used:r.b(),name:r.s()});
     return o;
   },
   [CMD.UI_STATE](a) {
@@ -1657,6 +1670,7 @@ function fromPerc(pt, engines, pe0) {
 const engineLabel = (engines, e) => (e === 1 && (engines || [])[1] === "-" ? "FM6" : (engines || [])[e] ?? String(e));
 
 function makeMockDevice(opt = {}) {
+  const demoSetlist={pick:0,active:127,rows:Array.from({length:12},(_,id)=>({id,used:0,name:""}))};
   const NONOFF = ["OFF", "ON"], NDIV = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"], NGO = ["--", "GO"], NDASH = ["--"];
   const D = (label, fmt, min, max, def, names = null, unit = "") => ({ label, fmt, min, max, def, names, unit });
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
@@ -1717,7 +1731,7 @@ function makeMockDevice(opt = {}) {
       presets: [P("PULSE LD", [0, 0, 32, 0, 0, 20, 0, 127], [0, 60, 90, 30], 1, 4), P("WAVE BASS", [1, 1, 0, 0, 0, 0, 0, 90], [0, 50, 70, 20], 1, 2),
         P("ARP 8BIT", [2, 0, 96, 0, 0, 0, 2, 110], [0, 60, 80, 40], 0, 13), P("WAVE LEAD", [0, 4, 92, 0, 0, 18, 0, 110], [0, 70, 90, 30], 1, 3),
         P("STEP LEAD", [4, 0, 40, 34, 0, 16, 0, 127], [0, 64, 127, 55], 1, 4)] },
-    { name: "SAMPLE", titles: ["SET", "TONE"], edit: [E("SET", ["PIANO", "PIANO", "FLUTE", "SAX", "PIANO", "USR1", "USR2", "USR3"], 0), D("TUNE", F.SEMI, -24, 24, 0), D("BITS", F.INT, 0, 127, 0),
+    { name: "SAMPLE", titles: ["SET", "TONE"], edit: [E("SET", ["PIANO", "PIANO", "FLUTE", "SAX", "PIANO", "USR1", "USR2"], 0), D("TUNE", F.SEMI, -24, 24, 0), D("BITS", F.INT, 0, 127, 0),
         E("LOOP", NONOFF, 1), D("CUT", F.INT, 0, 127, 127), NONE, D("DRV", F.PCT, 0, 127, 0), NONE],
       presets: [P("PIANO", [0, 0, 0, 1, 127, 0, 0, 0], [0, 127, 127, 70]), P("PIANO", [0, 0, 0, 1, 127, 0, 0, 0], [0, 127, 127, 70]),
         P("FLUTE", [2, 0, 0, 1, 127, 0, 0, 0], [12, 80, 120, 60]), P("SAX", [3, 0, 0, 1, 127, 0, 0, 0], [12, 80, 120, 60])] },
@@ -1737,7 +1751,7 @@ function makeMockDevice(opt = {}) {
       presets: [P("FULL ORGAN", [15, 0, 0, 0, 0, 30, 20, 1], [0, 64, 127, 45], 0, 5), P("JAZZ PERC", [4, 0, 0, 0, 2, 50, 8, 1], [0, 64, 127, 40], 0, 3),
         P("GOSPEL", [6, 0, 0, 0, 1, 60, 40, 2], [0, 64, 127, 45], 0, 6), P("SOFT FLUTE", [1, 0, -2, 0, 0, 10, 0, 1], [0, 64, 127, 55], 0, 5),
         P("ROCK DRIVE", [7, 0, 0, 0, 0, 70, 100, 2], [0, 64, 127, 40], 0, 4)] },
-    { name: "GRAIN", titles: ["GRAN", "SPRY"], edit: [E("SRC", ["PIANO", "PIANO", "FLUTE", "SAX", "PIANO", "USR1", "USR2", "USR3"], 0),
+    { name: "GRAIN", titles: ["GRAN", "SPRY"], edit: [E("SRC", ["PIANO", "PIANO", "FLUTE", "SAX", "PIANO", "USR1", "USR2"], 0),
         D("POS", F.PCT, 0, 127, 32), D("SIZE", F.PCT, 0, 127, 80), D("DENS", F.PCT, 0, 127, 80),
         D("PTCH", F.SEMI, -24, 24, 0), D("SPRD", F.PCT, 0, 127, 30), D("RAND", F.PCT, 0, 127, 10), D("TONE", F.PCT, 0, 127, 127)],
       presets: [P("CLOUD PAD", [2, 50, 92, 88, 0, 40, 14, 100], [70, 90, 120, 90], 0, 5), P("GLITCH", [3, 64, 24, 112, 0, 100, 90, 127], [0, 70, 100, 30], 0, 4),
@@ -1766,7 +1780,7 @@ function makeMockDevice(opt = {}) {
         P("FM BASS", [0, 0, 0, 0, 0, 0, 0, 2], [0, 0, 127, 0], 1, 2), P("BRASS", [0, 0, 0, 0, 0, 0, 0, 3], [0, 0, 127, 0], 0, 4),
         P("PAD", [0, 0, 0, 0, 0, 0, 30, 4], [0, 0, 127, 0], 0, 5), P("MARIMBA", [0, 0, 0, 0, 0, 0, 0, 5], [0, 0, 127, 0], 0, 3),
         P("ORGAN", [0, 0, 0, 0, 0, 0, 0, 6], [0, 0, 127, 0], 0, 6), P("PLUCK", [0, 0, 0, 0, 0, 0, 0, 7], [0, 0, 127, 0], 0, 13)] },
-    { name: "SLICE", titles: ["SLCE", "PLAY"], edit: [E("SRC", ["BREAK", "USR1", "USR2", "USR3", "PIANO"], 0),
+    { name: "SLICE", titles: ["SLCE", "PLAY"], edit: [E("SRC", ["BREAK", "USR1", "USR2", "USR2", "PIANO"], 0),
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
@@ -2065,7 +2079,20 @@ function makeMockDevice(opt = {}) {
           if (st.uiCaps) { b(0x55); b(1); b(st.uiCaps); b(0x4d); b(1); b(64); b(1); if (!opt.noFm6) { b(0x46); b(1); b(FM6.FACTORY_PK.length); b(0); }
             if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
         }
+        if(opt.setlist) {b(0x4C);b(1);b(12);}
         break;
+      case CMD.SETLIST: {
+        if(!opt.setlist) return null;
+        let rc=0; const op=a[0],pos=a[1];
+        if(op>5 || op && !(pos>=0 && pos<12)) rc=1;
+        else if(op===1) demoSetlist.pick=pos;
+        else if(op===2) { const old=demoSetlist.pick; [demoSetlist.rows[old],demoSetlist.rows[pos]]=[demoSetlist.rows[pos],demoSetlist.rows[old]];demoSetlist.pick=pos; }
+        else if(op===3) { if(!demoSetlist.rows[pos].used) rc=2; else demoSetlist.active=demoSetlist.rows[pos].id; }
+        else if(op===4) { demoSetlist.rows[pos].used=1;demoSetlist.rows[pos].name="Demo song";demoSetlist.active=demoSetlist.rows[pos].id; }
+        else if(op===5) demoSetlist.rows[pos].name=String.fromCharCode(...a.slice(2));
+        b(rc);b(demoSetlist.pick);b(demoSetlist.active);b(0);
+        demoSetlist.rows.forEach(row=>{b(row.id);b(row.used);s(row.name)});break;
+      }
       case CMD.GET: case CMD.SET: {
         if (a.length < 2) return null;
         const d = desc(a[0], a[1]);
@@ -2863,7 +2890,7 @@ async function connect() {
   sayK("connecting");
   try {
     if (!access) {
-      if (MOCK) { mock = makeMockDevice({ legacy: QS.get("legacy") === "1" }); access = mock.access; }
+      if (MOCK) { mock = makeMockDevice({ legacy: QS.get("legacy") === "1", setlist: QS.get("setlist") === "1" }); access = mock.access; }
       else {
         try { access = await navigator.requestMIDIAccess({ sysex: true }); }
         catch (e) { sayK("denied"); return; }
@@ -2965,6 +2992,7 @@ async function load(d) {
       try { d.slotUsed[k] = parse[CMD.PROJECT](await sessionRequest(d, req.project(2, k))).used; }
       catch (e) { if (e.message === "closed") throw e; }
     }
+    await readSetlist(d);
     try { d.smp = parse[CMD.SMP_INFO](await sessionRequest(d, req.smpInfo())); }
     catch (e) { if (e.message === "closed") throw e; d.smp = null; }   /* older firmware, or no flash */
     d.keys = paramKeys(d.pdesc, d.info.pe0, d.info.pcount);
@@ -3251,6 +3279,7 @@ async function afterSoundChange(msg = "ready", d = dev) {
   refreshAll();
   await loadSteps(d);                                /* (a sound load keeps them; read anyway after a RELOAD) */
   if (hasTracks()) await readMixer(d);               /* the sound names and the selected strip */
+  await readSetlist(d);
   sayK(msg);
 }
 $("init").addEventListener("click", async () => {
@@ -3270,15 +3299,59 @@ function report(err) { if (err && err.message !== "closed") { console.warn(err);
 function renderSlots() {
   renderSong();
   renderBackup();
+  renderSetlist();
   const box = $("slots");
   box.replaceChildren();
-  for (let i = 0; i < 4; i++) {
+  box.hidden=!!dev.info.setlistCount;
+  for (let i = 0; i < (dev.info.setlistCount ? 0 : 4); i++) {
     const u = dev.slotUsed[i];
     box.append(el("span", { text: String.fromCharCode(65 + i) }),
       el("span", { class: "dim", text: u == null ? t("unknown") : t(u ? "used" : "empty") }),
       el("button", { ic: "symbol_folder_open", onclick: () => project(0, i) }, t("load")),
       el("button", { ic: "port_disk", onclick: () => project(1, i) }, t("save")));
   }
+}
+function renderSetlist() {
+  const panel=$("setlist-panel"); panel.hidden=!dev?.setlist;
+  if(panel.hidden) return;
+  const box=$("setlist-rows"); box.replaceChildren();
+  dev.setlist.rows.forEach((row,pos)=>{
+    const line=el("p",{class:"bar"});
+    line.append(el("span",{text:`${pos+1}. ${row.name || (row.used?"Untitled":"Empty")}${row.id===dev.setlist.active?" · Current":""}`}),
+      el("button",{disabled:!row.used,onclick:()=>setlistAction(3,pos)},"Load"),
+      el("button",{onclick:()=>setlistAction(4,pos)},"Save here"),
+      el("button",{disabled:!row.used,onclick:()=>setlistRename(pos,row.name)},"Rename"),
+      el("button",{disabled:pos===0,onclick:()=>setlistMove(pos,pos-1)},"↑"),
+      el("button",{disabled:pos===11,onclick:()=>setlistMove(pos,pos+1)},"↓"));
+    box.append(line);
+  });
+  $("setlist-status").textContent=dev.setlist.pending?"Waiting for silence before loading…":"";
+}
+async function readSetlist(d=dev) {
+  if(!d?.info?.setlistCount) return;
+  d.setlist=parse[CMD.SETLIST](await sessionRequest(d,[CMD.SETLIST,[0]]));
+  renderSetlist();
+}
+async function setlistAction(op,pos) {
+  if(!dev || op===4 && !confirm(`Save current music into song ${pos+1}?`)) return;
+  try {
+    const r=parse[CMD.SETLIST](await rq([CMD.SETLIST,[op,pos]],{timeout:4000,retries:0}));
+    if(r.rc) throw new Error(({2:"Empty song",3:"Stop playback first",4:"Save failed"})[r.rc]||"Setlist request failed");
+    dev.setlist=r;renderSetlist();
+    if(op===3) { $("setlist-status").textContent="Waiting for five seconds of silence…"; }
+    else if(op===4) $("setlist-status").textContent="Song saved. Future edits autosave.";
+    else $("setlist-status").textContent="Order updated. Autosave waits for five seconds of silence.";
+  } catch(err) { report(err); }
+}
+async function setlistRename(pos,current) {
+  const name=prompt("Song name (up to 12 characters)",current); if(name==null) return;
+  if(!/^[ -~]{1,12}$/.test(name)) { report(new Error("Use 1–12 plain characters")); return; }
+  try { const r=parse[CMD.SETLIST](await rq([CMD.SETLIST,[5,pos,...Array.from(name,c=>c.charCodeAt(0))]],{timeout:4000,retries:0}));
+    if(r.rc) throw new Error("Stop playback and try renaming again"); dev.setlist=r;renderSetlist();
+  } catch(err) {report(err);}
+}
+async function setlistMove(from,to) {
+  await setlistAction(1,from); await setlistAction(2,to);
 }
 async function project(op, slot) {
   if (!dev) return;
@@ -3335,7 +3408,7 @@ setInterval(async () => {
   if (!dev?.info?.chainRows || busy || document.hidden || !dev.link.idle || tab !== "projects") return;
   const releaseBusy = beginBusy();
   const d = dev;
-  try { const r = parse[CMD.SONG](await rq(req.song())); if (d === dev) { d.song = r; renderSong(); } }
+  try { const r = parse[CMD.SONG](await rq(req.song())); if (d === dev) { d.song = r; renderSong(); await readSetlist(d); } }
   catch (err) { report(err); } finally { releaseBusy(); }
 }, 1000);
 

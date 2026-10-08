@@ -66,6 +66,8 @@ typedef struct {
 } midi_notice_t;
 static volatile midi_notice_t midi_notice;
 static volatile uint8_t midi_notice_pending, midi_track_steps;
+static volatile int8_t midi_setlist_step;
+static uint8_t midi_setlist_held[2];
 static uint8_t midi_click_held;
 static void midi_notify(track_t *t, const param_desc_t *d, int32_t value, uint32_t kind)
 {
@@ -343,6 +345,12 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         perf_k[0] = (int8_t)(v < 63 ? (v - 63) * 100 / 63 : v > 64 ? (v - 64) * 100 / 63 : 0);
         midi_notify(midi_track(ch), 0, perf_k[0], 1);
         return;
+    }
+    case 110: case 111: {
+        uint32_t k=cc-110u;
+        if (ch!=15u) return;
+        if (value>=64u && !midi_setlist_held[k]) midi_setlist_step=k?1:-1;
+        midi_setlist_held[k]=value>=64u; return;
     }
     case 115: /* Main encoder click: one displayed-track step per rising edge. */
         if (value >= 64u && !midi_click_held)

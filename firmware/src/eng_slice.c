@@ -63,7 +63,7 @@ static const slc_src_t SLC_PIANO = SLC_PIANO_INIT;
 static slc_src_t slc_usr[SMP_USER_SLOTS];
 static int16_t slc_rbuf[NPART][NVOICE][SLC_RB];       /* reverse windows, one per part voice */
 /* append-only: stored sounds keep their SRC numbers (1.0.4 added PIANO) */
-static const char *const N_SLC_SRC[] = {"BREAK", "USR1", "USR2", "USR3", "PIANO"};
+static const char *const N_SLC_SRC[] = {"BREAK", "USR1", "USR2", "USR2", "PIANO"};
 #define SLC_SRC_PIANO 4u
 #define SLC_NSRC 5
 #define SLC_SINE 7u                  /* a voice's source when it has no material: the sine */
