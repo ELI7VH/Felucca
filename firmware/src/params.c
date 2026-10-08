@@ -109,6 +109,8 @@ static const param_desc_t TP[P_COUNT] = {
     [P_VOIC] = PE("VOIC", N_VOIC, 0),
 };
 
+static const param_desc_t DRUM_LEVEL_DESC=PD("LVL",F_DB,0,112,112);
+
 static const param_desc_t GP[G_COUNT] = {
     [G_BPM] = PD("BPM", F_BPM, 40, 240, 120),
     [G_SWING] = PD("SWG", F_PCT, 0, 100, 0),
@@ -378,6 +380,7 @@ static const page_t PAGES[] = {
     {"SONG", FAM_SEQ, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"CHANCE", FAM_SEQ, SC_STEP, GR_CHANCE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_MOTION, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"DRUM MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_LEVEL,P_PAN,P_CHOR,P_REV}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
@@ -399,6 +402,6 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     }
     if (pg->graph == GR_MOD)                          /* SRC DST AMT of the slot shown */
         id += 3u * mod_ui_slot;
-    *valp = &TSEL->p[id];
-    return track_desc(TSEL, id);
+    *valp = id==P_LEVEL && !str_eq(pg->title,"DRUM MIX") ? &TSEL->p[id] : drum_param_ref(TSEL,id,0);
+    return id==P_LEVEL && str_eq(pg->title,"DRUM MIX") ? &DRUM_LEVEL_DESC : track_desc(TSEL,id);
 }

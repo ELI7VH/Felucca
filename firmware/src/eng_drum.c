@@ -100,6 +100,20 @@ static uint32_t drum_lane(uint32_t note)
     return DV_TYPE_LANE[DRUM_GM[n - 35u][0]];
 }
 
+/* Live hits select a drum lane; sequencer hits never move the editing focus.
+ * A track remembers its lane even when another track is displayed. */
+static uint8_t drum_focus[NTRK];
+static volatile uint8_t drum_focus_pending; /* latest live track + 1 */
+static void drum_focus_note(track_t *t, uint32_t note)
+{
+    if (t->eng_req != ENGI_DRUM || t < trk || t >= trk + NTRK) return;
+    uint32_t k = (uint32_t)(t - trk);
+    drum_focus[k] = (uint8_t)drum_lane(note);
+    drum_focus_pending = (uint8_t)(k + 1u);
+}
+
+#include "drum_control.c"
+
 /* KIT's swaps of lanes 6..8 (1 TOM -> CONGA, 2 RIM -> CLAVE, 4 BELL -> CYM) */
 static uint32_t drum_swaps(const track_t *t)
 {
@@ -206,8 +220,10 @@ static void drum_note_on(track_t *t, voice_t *v)
     int32_t st;
     if (!K || i >= NVOICE)
         return;
-    role = drum_gm(t->p, v->note, &st);
     lane = drum_lane(v->note);
+    role = drum_gm(t->p, v->note, &st);
+    if (drum_kit_plays(t->p[P_E0]) < DK_80 && (role==DVT_PUNCH || role==DVT_ROUND))
+        role=drum_value(t,lane,P_E6) ? DVT_ROUND : DVT_PUNCH;
     L = &K[(uint32_t)v->s[0] & (DV_NLANE - 1u)];
     if (L->owner == i + 1u)                              /* this voice played another lane: it stops there */
         L->owner = 0;
@@ -249,22 +265,24 @@ static int32_t drum_amp(track_t *t, voice_t *v, int32_t adsr)
 
 static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
-    const int16_t *p = t->p;
     drum_lane_t *L = drum_lane_of(t, v);
     dv_param_t k;
-    int32_t y[CTL], mb[CTL], acc = clamp(p[P_E5] * v->vel * 4, 0, 65536), drv = p[P_E7], g = 0, mk = 0;   /* acc Q16 */
+    int32_t y[CTL], mb[CTL], acc, drv, g = 0, mk = 0;   /* acc Q16 */
     uint32_t i, r;
     if (!L)
         return;
     if (n > CTL)
         n = CTL;
+    uint32_t lane=(uint32_t)v->s[0] & (NLANE-1u);
+    acc=clamp(drum_value(t,lane,P_E5)*v->vel*4,0,65536);
+    drv=drum_value(t,lane,P_E7);
     r = L->role;
     dv_default(&k, r);                                   /* the knobs move every lane from its design (64) */
-    k.decay = (uint8_t)clamp(k.decay + p[P_E3] - 64, 0, 127);
-    k.tone = (uint8_t)clamp(k.tone + p[P_E2] - 64, 0, 127);
-    k.extra = (uint8_t)clamp(k.extra + p[P_E4] - 64, 0, 127);
+    k.decay = (uint8_t)clamp(k.decay + drum_value(t,lane,P_E3) - 64, 0, 127);
+    k.tone = (uint8_t)clamp(k.tone + drum_value(t,lane,P_E2) - 64, 0, 127);
+    k.extra = (uint8_t)clamp(k.extra + drum_value(t,lane,P_E4) - 64, 0, 127);
     k.accent = (uint8_t)clamp(acc >> 9, 0, 127);         /* (Q16 -> 0..127) */
-    k.tune = (int16_t)(L->st * 16 + (p[P_E1] - 64) * 3);   /* +-12 semitones */
+    k.tune = (int16_t)(L->st * 16 + (drum_value(t,lane,P_E1) - 64) * 3);   /* +-12 semitones */
     if (((const uint32_t *)&k)[0] != ((const uint32_t *)&L->key)[0] ||
         ((const uint32_t *)&k)[1] != ((const uint32_t *)&L->key)[1]) {
         dv_setup(&L->c, &k);                             /* (a parameter moved) */

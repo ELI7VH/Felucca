@@ -80,8 +80,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi9
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi9.fwsc
+./build.sh --release 1.0.5.2-midi10
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi10.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -133,3 +133,21 @@ The controller preset assigns B-bank pads 5–8 to Gate CC106–109 on channel 1
 Integration tests cover deferred record, selected-track snapshot, press/release edges, start/stop ordering, non-toggling Play, tap timestamps, external clock protection, modal/chain recording guards and Stop at queue saturation.
 
 Validation: midi9 builds within target flash/RAM/pool limits and is installed with INFO readback. All firmware tests and 92 unchanged golden renders passed. The full run had one web mock `PING keeps WATCH on` timing failure; rerunning `node web/test_web.mjs` passed. Live USB confirmed non-toggling Play, Stop, Record on the displayed track independent of channel, and three taps producing 119 BPM for a 120 BPM input. Original tempo/clock were restored after the check. Complete four-track parameter dumps and selected track matched after firmware restart; the pre-update runtime musical payload matched the saved resume project.
+
+## midi10: per-drum controls
+
+Live MIDI/local drum hits update a remembered lane per track and defer screen selection to the UI thread. Sequencer note events never steal editing focus. Eight GM-derived lanes share kit/model selection but have optional overrides for tune, tone, decay, snap, accent, kick variant, drive, volume, pan, distortion and three sends. Unedited controls inherit kit values; volume starts at unity (112 on the existing dB scale), pan at zero offset. Track level and pan remain final kit controls.
+
+DRUM uses CC21/22/23 for lane pan/reverb/delay and CC76 for lane volume. CC28–30 remain tune/tone/decay. CC17 is an alternate drum-volume control. Non-drum mappings are unchanged. Eligible FM-1 page/editor edits also address the selected lane, except normal track LEVEL. A drum-only DRUM MIX page exposes lane LEVEL/PAN/CHOR/REV. Popups include the drum name. Per-drum edits skip the global motion recording path; independent lane automation is not added.
+
+A track with custom mixing renders to eight small lane buses, applies lane distortion/volume/pan/sends, then the track fader. Chorus/delay/reverb remain shared returns. SLICER remains one kit insert; its dry mono correction uses track pan, with lane sends tapped before the insert. Synths and kits with no mix overrides retain the original mixing path.
+
+Projects reuse the unused 128-byte FM6 payload of each DRUM track: `DRM1`, selected lane, eight 13-bit masks (two 7-bit bytes each), then eight × 13 values. Signed pan is biased by 64; bytes 125–127 are reserved. Older projects without the signature inherit kit settings. User presets reuse the tagged secondary patch object internally; the public FM6 editor protocol still rejects DRUM payloads. Legacy FM6 bank migration remains FM6-only. Project archives, autosave and sound undo/redo include lane overrides.
+
+Existing sequencer storage already supports 64 steps. The change selects the lane from live hits; it does not extend pattern storage or reduce compatibility.
+
+MiniLab User 5 was backed up, stored over the controller configuration SysEx interface and read back parameter-by-parameter (319 values). The command framing was checked against the original [MiniLab 3 Configurator implementation](https://minilab3.klangsoft.com/). Controller gestures still need hands-on testing over direct DIN.
+
+Validation: final midi10 full host suite passed, including persistence, backup, editor, UI, USB/TRS input, modulation and target cost checks. All 92 golden renders stayed unchanged. Target image is 436112 bytes, static RAM 92576/98304 bytes, pool 330208/344064 bytes. Shared audio IRQ estimate is 38659 against the existing 37502 baseline (within its 10% tolerance); modulation budgets remain unchanged.
+
+Installed INFO identity is FELUCCA v1.0.5.2-midi10. Live USB verified separate kick/snare tune, selected-drum pan/reverb/delay and drum-hit screen selection. A complete backup protected the session. New user edits arrived during verification, so cleanup removed only still-identical temporary test overrides, preserving every other current value. The latest musical payload and per-drum overrides matched the CRC-verified Project 4 autosave after silence. On firmware restart, four full track parameter dumps matched that save; subsequent live notes changed the screen selection, and later tweaks changed sounds. Physical DIN gestures, popup appearance and a quiet screen-selection check remain hands-on validation.

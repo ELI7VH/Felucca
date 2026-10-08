@@ -1002,6 +1002,10 @@ static void draw_midi_popup(void)
         fmt_int(number, n->track + 1u);
         str_cpy(head + str_len(head), number, sizeof head - str_len(head));
     }
+    if (n->kind==3u) {
+        str_cpy(head + str_len(head)," ",sizeof head-str_len(head));
+        str_cpy(head + str_len(head),drum_lane_name(&trk[n->track],n->lane),sizeof head-str_len(head));
+    }
     if (n->kind == 1u) {
         str_cpy(label, n->value < 0 ? "LOW PASS" : n->value > 0 ? "HIGH PASS" : "FILTER", sizeof label);
         if (!n->value) str_cpy(value, "BYPASS", sizeof value);

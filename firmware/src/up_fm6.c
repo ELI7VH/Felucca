@@ -90,7 +90,7 @@ static int upf_get(uint32_t k, uint8_t *pk)
 {
     uint32_t i, acc = 0, n = 0, o = 0;
     const uint8_t *d;
-    if (k >= UP_SLOTS || !upf_valid(&upf) || !((upf.used >> k) & 1u) || !upf_fm6(k) ||
+    if (k >= UP_SLOTS || !upf_valid(&upf) || !((upf.used >> k) & 1u) || !(upf_fm6(k) || (up_used(k) && up_rec(k)->engine==ENGI_DRUM)) ||
         upf.e[k].tag != upf_tag(up_rec(k)))
         return 1;
     d = upf.e[k].pk;
@@ -115,8 +115,8 @@ static void upf_set(uint32_t k, const uint8_t *pk)
         return;
     if (!upf_valid(&upf))
         upf_empty();
-    fm6_unpack(pk, v);
-    fm6_pack(v, c);
+    if (up_used(k) && up_rec(k)->engine==ENGI_DRUM) memcpy(c,pk,FM6_PACKED);
+    else { fm6_unpack(pk,v); fm6_pack(v,c); }
     memset(upf.e[k].pk, 0, UPF_PK);
     for (i = 0; i < FM6_PACKED; i++) {
         acc |= (uint32_t)(c[i] & 127u) << n;
@@ -192,6 +192,12 @@ static void upf_track_load(track_t *t, uint32_t k)
 {
     uint8_t pk[FM6_PACKED], v[FP_SIZE + 1u];
     uint32_t tr = (uint32_t)(t - trk);
+    if (tr<NTRK && t->eng_req==ENGI_DRUM) {
+        if (!upf_get(k,pk)) drum_controls_unpack(t,pk);
+        else drum_controls_reset(t);
+        return;
+    }
+    drum_controls_reset(t);
     if (tr >= NTRK || t->eng_req != ENGI_FM6)
         return;
     if (upf_get(k, pk)) {
@@ -207,7 +213,8 @@ static void upf_track_load(track_t *t, uint32_t k)
 static int upf_store(uint32_t k, uint32_t tr)
 {
     uint8_t pk[FM6_PACKED];
-    fm6_pack(fm6_patch[tr % NTRK], pk);
+    if (trk[tr % NTRK].eng_req==ENGI_DRUM) drum_controls_pack(&trk[tr % NTRK],pk);
+    else fm6_pack(fm6_patch[tr % NTRK], pk);
     upf_set(k, pk);
     return upf_save();
 }

@@ -541,6 +541,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
             pe_new[i] = t->p[P_E0 + i];
             t->p[P_E0 + i] = t->pe_old[i];
         }
+    if (drum_mix_enabled)
+        memset(drum_mix_buf,0,sizeof drum_mix_buf);
     track_lfo_tick(t);
     if (e->block)                                       /* the engine's per-part work (WHEEL: bars, rotor) */
         e->block(t);
@@ -594,7 +596,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         m.shape = (64 << 8) + ((lfo * p[P_LD_SHP]) >> 7) + ((m.envq15 * p[P_ED_SHP]) >> 7);
         if (mod.on)                                     /* the modulation matrix (mod.c) */
             mod_voice(t, v, &m, v->fine + tune_fine + bend_fine);
-        e->render(t, v, out, n, &m);
+        int32_t *voice_out=drum_mix_enabled ? drum_mix_buf[(uint32_t)v->s[0] & (NLANE-1u)] : out;
+        e->render(t, v, voice_out, n, &m);
         nr++;
     }
     if (fade) {

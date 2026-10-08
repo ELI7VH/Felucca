@@ -723,7 +723,8 @@ static void project_capture(project_t *p)
         p->t[i].engine = trk[i].eng_req;
         p->t[i].preset = trk[i].preset;
         memcpy(p->t[i].step, trk[i].step, sizeof trk[i].step);
-        fm6_pack(fm6_patch[i], p->fm6[i]);
+        if (trk[i].eng_req==ENGI_DRUM) drum_controls_pack(&trk[i],p->fm6[i]);
+        else fm6_pack(fm6_patch[i], p->fm6[i]);
     }
     p->motion = motion;
     motion_unguard(f);
@@ -850,6 +851,8 @@ static int project_restore_runtime(const project_t *input)
         t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
         memcpy(t->step, s->step, sizeof t->step);
         proj_steps(t->step);
+        if (e==ENGI_DRUM) drum_controls_unpack(t,p->fm6[k]);
+        else drum_controls_reset(t);
         {   /* the project's own FM6 patch, never reloaded from SLOT: F n if it is that factory patch, else OWN */
             uint8_t v[FP_SIZE + 1u];
             fm6_unpack(p->fm6[k], v);
@@ -858,6 +861,8 @@ static int project_restore_runtime(const project_t *input)
         }
     }
     song.sel = (uint8_t)(p->sel < NTRK ? p->sel : 0u);
+    if (drum_track(TSEL)) ui.lane=drum_focus[song.sel];
+    drum_focus_pending=0;
     fm1_irq_on();
     proj_name_get(proj_name, (const uint8_t *)p->name);
     proj_cur = PROJ_NO_SLOT;                            /* (project_load: its slot) */

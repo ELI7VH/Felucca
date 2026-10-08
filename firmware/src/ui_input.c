@@ -427,8 +427,10 @@ static void grid_edit(uint32_t slot, int32_t steps)
 {
     if (slot == 0u)
         cursor_set(ui.cursor + steps);
-    else if (slot == 1u)
+    else if (slot == 1u) {
         ui.lane = (uint8_t)clamp((int32_t)ui.lane + (steps > 0 ? 1 : -1), 0, NLANE - 1);
+        drum_focus[song.sel] = ui.lane;
+    }
     else if (slot == 2u)
         grid_hit(TSEL, ui.cursor, ui.lane, steps > 0);
     else
@@ -456,6 +458,7 @@ static void grid_keys(uint32_t pressed)
             cursor_set((int32_t)i);
         } else if (p < NLANE) {
             ui.lane = (uint8_t)p;
+            drum_focus[song.sel] = ui.lane;
         } else if (p != GK_ACC) {
             page_go(p == GK_PGUP ? 1 : -1);
         }
@@ -598,9 +601,14 @@ static void edit_param(uint32_t slot, int32_t steps)
     d = page_desc(pg, slot, &vp);
     if (!d || !vp || d->max == d->min)
         return;
+    if (pg->scope!=SC_GLOBAL) {
+        uint32_t id=pg->id[slot];
+        if (pg->graph==GR_MOD) id+=3u*mod_ui_slot;
+        if (id!=P_LEVEL || str_eq(pg->title,"DRUM MIX")) vp=drum_param_ref(TSEL,id,1);
+    }
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
     *vp = (int16_t)v;
-    if (pg->scope != SC_GLOBAL) motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
+    if (pg->scope != SC_GLOBAL && (uintptr_t)vp>=(uintptr_t)TSEL->p && (uintptr_t)vp<(uintptr_t)(TSEL->p+P_COUNT)) motion_capture(TSEL,(uint32_t)(vp-TSEL->p),*vp);
 }
 
 /* OCT+ on an action page: the picked action. A load stays picked (browse and load again); the others
@@ -1174,8 +1182,10 @@ static void ui_input(void)
         if (ui.home) {
             int16_t *vp;
             const param_desc_t *d = home_param(k, &vp);
+            uint32_t id=ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
+            vp=drum_param_ref(TSEL,id,1);
             *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min));
-            motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
+            if (vp==&TSEL->p[id]) motion_capture(TSEL,id,*vp);
         } else {
             edit_param(k, s);
         }

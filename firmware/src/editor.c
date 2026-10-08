@@ -144,7 +144,7 @@ static struct {
     uint32_t tpos;
 } ed_w;
 
-static int16_t *ed_val(uint32_t i) { return i < P_COUNT ? &TSEL->p[i] : &song.g[i - P_COUNT]; }
+static int16_t *ed_val(uint32_t i) { return i < P_COUNT ? (i==P_LEVEL ? &TSEL->p[i] : drum_param_ref(TSEL,i,0)) : &song.g[i - P_COUNT]; }
 static uint32_t ed_step_sig(const step_t *s)
 {
     return ((uint32_t)s->note[0] | (uint32_t)s->note[1] << 7 | (uint32_t)s->note[2] << 14 | (uint32_t)s->note[3] << 21) ^
@@ -278,7 +278,7 @@ static const param_desc_t *ed_tdesc(const track_t *t, uint32_t id) { return para
 static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
 {
     if (scope == 0 && id < P_COUNT) {
-        *vp = &TSEL->p[id];
+        *vp = id==P_LEVEL ? &TSEL->p[id] : drum_param_ref(TSEL,id,0);
         return ed_tdesc(TSEL, id);
     }
     if (scope == 1 && id < G_COUNT) {
@@ -453,8 +453,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                 set_engine((uint32_t)clamp(ed_rv(a + 2), 0, NENGINES - 1));
                 ed_load_after(&b);
             } else if (d->max > d->min) {
+                if (!a[0] && a[1]!=P_LEVEL) vp=drum_param_ref(TSEL,a[1],1);
                 *vp = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
-                if (a[0] == 0) {
+                if (a[0] == 0 && vp==&TSEL->p[a[1]]) {
                     (void)motion_capture(TSEL, a[1], *vp);
                     load_extend(TSEL);                      /* (ui.c undo: an audition's values after G_ENGSEL) */
                 }
@@ -790,15 +791,16 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         t = &trk[a[0]];
         d = ed_tdesc(t, a[1]);
         if (na >= 4u && !(chain_busy() && a[1] >= P_SLEN && a[1] <= P_SGATE)) {
-            if (d->max > d->min)                           /* as SET: clamped; a fixed value stays */
-                t->p[a[1]] = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
-            (void)motion_capture(t, a[1], t->p[a[1]]);
+            int16_t *target=a[1]==P_LEVEL ? &t->p[a[1]] : drum_param_ref(t,a[1],1);
+            if (d->max > d->min)
+                *target=(int16_t)enum_orig(d,clamp(ed_rv(a+2),d->min,d->max));
+            if (target==&t->p[a[1]]) (void)motion_capture(t,a[1],*target);
             ed_known(a[0], a[1]);
             ui.force = 1;
         }
         ed_b(a[0]);
         ed_b(a[1]);
-        ed_v(t->p[a[1]]);
+        ed_v(a[1]==P_LEVEL ? t->p[a[1]] : *drum_param_ref(t,a[1],0));
         break;
     }
     case ED_SONG: {

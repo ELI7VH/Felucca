@@ -49,9 +49,9 @@ _Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (S
  * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
  * make-up gain (straight into tanh over the full band, it would sound like a
  * broken digital fuzz). State per part (track_t dist_*). */
-static void track_dist(track_t *t, int32_t *b, uint32_t n)
+static void dist_run(int32_t d, int32_t *hp, int32_t *lp1, int32_t *lp2, int32_t *b, uint32_t n)
 {
-    int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
+    int32_t i, g, k, mk, bias = 2400, b0;
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
@@ -60,13 +60,18 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
     b0 = softclip(bias);
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x = b[i], y;
-        t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
-        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
+        (*hp) += (x - (*hp) + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
+        x = clamp(x - (*hp), -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
         y = softclip((((x >> 2) * g) >> 10) + bias) - b0;   /* >> 2 first: no overflow for loud poly */
-        t->dist_lp1 += mulq15(y - t->dist_lp1, k);         /* two poles: tames the fizz */
-        t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
-        b[i] = mulq15(t->dist_lp2, mk);
+        (*lp1) += mulq15(y - (*lp1), k);         /* two poles: tames the fizz */
+        (*lp2) += mulq15((*lp1) - (*lp2), k);
+        b[i] = mulq15((*lp2), mk);
     }
+}
+
+static void track_dist(track_t *t, int32_t *b, uint32_t n)
+{
+    dist_run(t->p[P_DIST], &t->dist_hp, &t->dist_lp1, &t->dist_lp2, b, n);
 }
 
 /* master: peak limiter in front of the soft clipper. Fast attack (~0.1 ms),
@@ -336,20 +341,77 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
 static void events_block(uint32_t n);                    /* seq.c */
 static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_r[CTL];
 
+static int32_t drum_dist_state[NTRK][NLANE][3];
+/* Separate lane buses retain pan/send differences; the existing track fader
+ * scales all lanes together. Chorus/delay/reverb remain shared return buses. */
+static __attribute__((noinline)) void mix_drum_lanes(track_t *t, uint32_t n)
+{
+    uint32_t k=(uint32_t)(t-trk), i;
+    int32_t *sum=part_buf, original[CTL], level=LEVEL_Q12[t->p[P_LEVEL]&127], pk=t->peak;
+    memset(sum,0,n*sizeof *sum);
+    for (uint32_t l=0;l<NLANE;l++) {
+        int32_t *b=drum_mix_buf[l], *state=drum_dist_state[k][l];
+        dist_run(drum_value(t,l,P_DIST),state,state+1,state+2,b,n);
+        int32_t gain=LEVEL_Q12[drum_value(t,l,P_LEVEL)&127];
+        int32_t pan=clamp(t->p[P_PAN]+drum_value(t,l,P_PAN),-64,63);
+        int32_t gl=4096-(pan>0 ? pan*64 : 0), gr=4096+(pan<0 ? pan*64 : 0);
+        int32_t c=drum_value(t,l,P_CHOR)*258,d=drum_value(t,l,P_DLY)*258,r=drum_value(t,l,P_REV)*258;
+        int32_t xmax=c>d ? c:d; xmax=0x7fffffff/((xmax>r ? xmax:r)|1);
+        if ((pf.mute>>k)&1u) {
+            int32_t start=pf.mg[k];
+            perf_mute(k,b,n);
+            if (l+1u<NLANE) pf.mg[k]=start;
+        }
+        for (i=0;i<n;i++) {
+            int32_t mono=((b[i]>>2)*gain)>>10;
+            sum[i]+=mono;
+            int32_t x=((mono>>2)*level)>>10, xs=clamp(x,-xmax,xmax), a=x<0 ? -x:x;
+            if (a>pk) pk=a;
+            send_c[i]+=mulq15(xs,c); send_d[i]+=mulq15(xs,d); send_r[i]+=mulq15(xs,r);
+            mix_l[i]+=(x*gl)>>12; mix_r[i]+=(x*gr)>>12;
+        }
+    }
+    /* SLICER stays one insert for the kit. Its mono change is added with the
+     * track pan; individual FX sends are tapped before this shared insert. */
+    memcpy(original,sum,n*sizeof *sum); slicer_track(t,sum,n);
+    int32_t pan=t->p[P_PAN],gl=4096-(pan>0 ? pan*64:0),gr=4096+(pan<0 ? pan*64:0);
+    for (i=0;i<n;i++) {
+        int32_t x=(((sum[i]-original[i])>>2)*level)>>10;
+        mix_l[i]+=(x*gl)>>12; mix_r[i]+=(x*gr)>>12;
+    }
+    t->peak=pk;
+}
+
+/* Keep drum-only modulation work out of the shared synth modulation path. */
+static __attribute__((noinline)) void drum_mod_prepare(const track_t *t)
+{
+    drum_mod_active=(uint8_t)(t->engine==ENGI_DRUM && mod.on);
+    if (!drum_mod_active) return;
+    memset(drum_mod_delta,0,sizeof drum_mod_delta);
+    for (uint32_t j=0;j<mod.nk;j++) {
+        uint32_t id=mod.kid[j]; int di=drum_control_index(id);
+        if (di>=0 && id!=P_PAN) drum_mod_delta[di]=(int16_t)(t->p[id]-mod.keep[j]);
+    }
+}
+
 /* one synth part into the dry mix and the sends; a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
 static void mix_part(track_t *t, uint32_t n)
 {
     int32_t *b = part_buf;
     uint32_t i;
-    mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
+    drum_mix_enabled=(uint8_t)(t->engine==ENGI_DRUM && !t->xf_on && drum_mix_custom(t));
+    mod_begin(t);                                       /* matrix values for this part's block */
+    drum_mod_prepare(t);
     if (track_render(t, b, n))
         t->tail = 16;                                   /* blocks of DIST state to run out after the last voice */
-    else if ((!t->tail || !t->p[P_DIST] || !--t->tail) && !slicer_busy(t)) {
+    else if ((!t->tail || (!t->p[P_DIST] && !drum_mix_enabled) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
-        if (mod.on)
-            mod_end(t);
-        return;
+        goto done;
+    }
+    if (drum_mix_enabled) {
+        mix_drum_lanes(t,n);
+        goto done;
     }
     {
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
@@ -377,8 +439,10 @@ static void mix_part(track_t *t, uint32_t n)
         }
         t->peak = pk;
     }
+done:
     if (mod.on)
         mod_end(t);                                     /* the stored values back */
+    drum_mod_active=0;
 }
 
 /* the master with the FX layer's effects between its level and master_out (perform.c) */

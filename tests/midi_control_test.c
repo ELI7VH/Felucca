@@ -14,6 +14,8 @@ static void midi_blit_watch(unsigned x, unsigned y, unsigned w, unsigned h)
 static void midi_test_reset(void)
 {
     ui_power_on();
+    memset(drum_control,0,sizeof drum_control); memset(drum_focus,0,sizeof drum_focus); drum_focus_pending=0;
+    memset(drum_dist_state,0,sizeof drum_dist_state); drum_mix_enabled=0;
     midi_browse_r = midi_browse_w = 0;
     midi_transport_r = midi_transport_w = 0;
     memset(midi_transport_held, 0, sizeof midi_transport_held);
@@ -376,11 +378,12 @@ static int standalone_cc_test(void)
     for (uint32_t source = 1; source <= 2; source++) {
         for (uint32_t ch = 0; ch < NPART; ch++) {
             for (uint32_t k = 0; k < 8u; k++) {
+                if (drum_track(&trk[ch]) && k>=1u && k<=3u) continue;
                 const param_desc_t *d = track_desc(&trk[ch], P_E0 + k);
                 queued(0xB0u | ch, 20u + k, 0, source);
-                bad += check("USB/TRS engine CC minimum follows its channel", trk[ch].p[P_E0 + k] == param_fit(d, d->min));
+                bad += check("USB/TRS engine CC minimum follows its channel", *drum_param_ref(&trk[ch],P_E0+k,0) == param_fit(d,d->min));
                 queued(0xB0u | ch, 20u + k, 127, source);
-                bad += check("USB/TRS engine CC maximum follows its channel", trk[ch].p[P_E0 + k] == param_fit(d, d->max));
+                bad += check("USB/TRS engine CC maximum follows its channel", *drum_param_ref(&trk[ch],P_E0+k,0) == param_fit(d,d->max));
             }
             queued(0xB0u | ch, 7, 17u + ch, source);
             bad += check("four CC7 mixer strips are independent", trk[ch].p[P_LEVEL] == (int32_t)midi_volume(17u + ch));
@@ -395,14 +398,15 @@ static int standalone_cc_test(void)
     for (uint32_t engine = 0; engine < NENGINES; engine++) {
         trk[1].eng_req = (uint8_t)engine;
         for (uint32_t k = 0; k < 8u; k++) {
+            if (engine==ENGI_DRUM && k>=1u && k<=3u) continue;
             const param_desc_t *d = track_desc(&trk[1], P_E0 + k);
             int16_t before = trk[0].p[P_E0 + k];
             queued(0xB1, 20u + k, 0, 1);
             if (d->max > d->min)
-                bad += check("every engine maps its own minimum", trk[1].p[P_E0 + k] == param_fit(d, d->min));
+                bad += check("every engine maps its own minimum", *drum_param_ref(&trk[1],P_E0+k,0) == param_fit(d,d->min));
             queued(0xB1, 20u + k, 127, 2);
             if (d->max > d->min)
-                bad += check("every engine maps its own maximum", trk[1].p[P_E0 + k] == param_fit(d, d->max));
+                bad += check("every engine maps its own maximum", *drum_param_ref(&trk[1],P_E0+k,0) == param_fit(d,d->max));
             bad += check("an engine edit never leaks into another track", trk[0].p[P_E0 + k] == before);
         }
     }
@@ -468,9 +472,9 @@ static int home_knob_test(void)
             const param_desc_t *desc = track_desc(&trk[1], id);
             int16_t other = trk[0].p[id];
             queued(0xB1, 28 + knob, 127, 2);
-            bad += check("bottom row matches HOME knob maximum in every engine", trk[1].p[id] == param_fit(desc, desc->max));
+            bad += check("bottom row matches HOME knob maximum in every engine", *drum_param_ref(&trk[1],id,0) == param_fit(desc,desc->max));
             queued(0xB1, 28 + knob, 0, 1);
-            bad += check("bottom row matches HOME knob minimum in every engine", trk[1].p[id] == param_fit(desc, desc->min));
+            bad += check("bottom row matches HOME knob minimum in every engine", *drum_param_ref(&trk[1],id,0) == param_fit(desc,desc->min));
             bad += check("HOME knob CC stays on its MIDI channel", trk[0].p[id] == other);
         }
     }
@@ -520,6 +524,54 @@ static int browse_test(void)
     return bad;
 }
 
+static int drum_controls_test(void)
+{
+    int bad=0; midi_test_reset(); track_t *t=&trk[1]; set_engine_of(t,ENGI_DRUM); events_block(CTL);
+    int16_t base=t->p[P_E1]; song.sel=0;
+    queued(0x91,36,100,2); queued(0xB1,28,127,2);
+    bad+=check("a live DIN kick selects only its drum for the next knob", drum_focus[1]==0 && drum_value(t,0,P_E1)==127 && drum_value(t,1,P_E1)==base && t->p[P_E1]==base);
+    queued(0x91,38,100,2); queued(0xB1,28,0,2); midi_ui_poll();
+    bad+=check("a live snare selects its displayed drum track and lane", song.sel==1 && ui.lane==1 && drum_value(t,1,P_E1)==0 && drum_value(t,0,P_E1)==127);
+    bad+=check("popup captures the edited drum name with the parameter", midi_popup.notice.kind==3 && midi_popup.notice.lane==1);
+    queued(0xB1,21,127,2); queued(0xB1,22,127,2); queued(0xB1,23,0,2); queued(0xB1,76,0,2);
+    bad+=check("DRUM top row controls selected pan/reverb/delay and bottom 8 volume", drum_value(t,1,P_PAN)==63 && drum_value(t,1,P_REV)==127 && drum_value(t,1,P_DLY)==0 && drum_value(t,1,P_LEVEL)==0);
+    bad+=check("snare mix edits leave kick volume and sends untouched", drum_value(t,0,P_LEVEL)==112 && drum_value(t,0,P_REV)==t->p[P_REV]);
+    queued(0xB1,7,100,2);
+    bad+=check("fader continues to mix the whole drum track", t->p[P_LEVEL]==midi_volume(100) && drum_value(t,1,P_LEVEL)==0);
+    trk_note_on(t,36,100); midi_ui_poll();
+    bad+=check("sequencer-style hits never steal drum editing focus", drum_focus[1]==1 && ui.lane==1);
+    ui.home=0; ui.page=(uint8_t)page_first(FAM_SEQ); ui.cursor=0; ui.bank=0;
+    grid_keys(1u);
+    bad+=check("FM-1 white step key sequences the lane selected by MIDI", (step_lanes(&t->step[0]) & (1u<<1))!=0);
+    t->p[P_SLEN]=64; page_go(1); page_go(1); page_go(1); grid_keys(1u);
+    bad+=check("64-step drum pattern edits the fourth 16-step page", ui.bank==3 && ui.cursor==48 && (step_lanes(&t->step[48])&(1u<<1)));
+    project_capture(&proj_scratch); uint8_t keep[128]; memcpy(keep,proj_scratch.fm6[1],128);
+    drum_controls_reset(t); project_restore_runtime(&proj_scratch);
+    bad+=check("project and autosave restore per-drum sound/mix and selected lane", drum_value(t,0,P_E1)==127 && drum_value(t,1,P_E1)==0 && drum_value(t,1,P_LEVEL)==0 && drum_focus[1]==1 && ui.lane==1 && !memcmp(keep,"DRM1",4));
+    up_store(30,"DRUM TEST"); drum_controls_reset(t); up_load_to(t,30);
+    bad+=check("user presets retain independent drums", drum_value(t,0,P_E1)==127 && drum_value(t,1,P_E1)==0 && drum_value(t,1,P_LEVEL)==0);
+    undo.keep=0; set_engine_of(t,ENGI_DRUM); undo_swap();
+    bad+=check("undo sound load restores the independent drum settings", drum_value(t,0,P_E1)==127 && drum_value(t,1,P_E1)==0 && drum_value(t,1,P_LEVEL)==0);
+    /* Render snare alone: only the snare is muted; the kick's nonzero send cannot leak. */
+    midi_test_reset(); t=&trk[1]; set_engine_of(t,ENGI_DRUM); events_block(CTL);
+    t->p[P_DIST]=t->p[P_CHOR]=t->p[P_DLY]=t->p[P_REV]=0;
+    drum_focus[1]=0; *drum_param_ref(t,P_REV,1)=127;
+    drum_focus[1]=1; *drum_param_ref(t,P_LEVEL,1)=0;
+    trk_note_on(t,38,100); int32_t out[2*CTL]; mix_block(out,CTL);
+    int dry=0,send=0; for (uint32_t i=0;i<CTL;i++) {dry|=mix_l[i]|mix_r[i];send|=send_r[i];}
+    bad+=check("muting snare yields no dry signal or kick reverb leakage", !dry && !send);
+    memset(t->v,0,sizeof t->v); memset(drum_kit[1],0,sizeof drum_kit[1]);
+    trk_note_on(t,36,100); mix_block(out,CTL); dry=send=0;
+    for (uint32_t i=0;i<CTL;i++) {dry|=mix_l[i]|mix_r[i];send|=send_r[i];}
+    bad+=check("kick remains audible and reaches its own reverb bus", dry && send);
+    drum_focus[1]=0; *drum_param_ref(t,P_PAN,1)=-64;
+    t->p[P_PAN]=0; memset(t->v,0,sizeof t->v); memset(drum_kit[1],0,sizeof drum_kit[1]);
+    trk_note_on(t,36,100); memset(mix_l,0,sizeof mix_l); memset(mix_r,0,sizeof mix_r); mod_begin(t); drum_mix_enabled=1; track_render(t,part_buf,CTL); mix_drum_lanes(t,CTL);
+    int left=0,right=0;for (uint32_t i=0;i<CTL;i++) {left|=mix_l[i];right|=mix_r[i];}
+    bad+=check("kick pan routes its dry sound independently to the left", left && !right);
+    return bad;
+}
+
 static int transport_controls_test(void)
 {
     int bad = 0; midi_test_reset(); song.rec = 0; song.sel = 2;
@@ -561,7 +613,7 @@ static int transport_controls_test(void)
 
 int main(void)
 {
-    int bad = transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+    int bad = drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
               arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

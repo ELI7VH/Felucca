@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi9.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi10.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -26,7 +26,7 @@ On MiniLab, hold Shift and tap Pad 3 (Prog) to select Felucca.
 Hold Shift and press the keyboard key labelled MIDI CH 1, 2, 3 or 4 to choose the track.
 On FM-1, set GLO > SYSTEM > ROUT to CH1-4. Connect MiniLab DIN MIDI OUT to FM-1 TRS MIDI IN with the correct adapter. The Mac is needed only for initial setup.
 
-The bottom row's first three knobs follow the current engine's HOME knob assignments. Its fourth knob always controls LFO speed, including the mod-wheel vibrato speed. Top knob 1 controls the master filter; top knobs 2–4 control EDIT parameters 2–4. The master filter uses the existing FX macro smoothing and affects all four tracks. MIDI values 63 and 64 bypass it. It works without holding FX, and follows the existing performance-effect reset behavior when the FX layer closes or effects are cleared. Values span the full range, including signed/enum parameters. The main encoder wraps through the current engine's factory sounds followed by saved user sounds for that engine. Shift + turn wraps through the visible engines and loads their first factory sound. Both follow ROUT, preserve the mixer and sequencer, and replace unsaved sound edits. Controls are absolute; switching channels or sounds can cause a value jump when a knob moves.
+The bottom row's first three knobs follow the current engine's HOME knob assignments. Its fourth knob controls LFO speed on synth engines, including mod-wheel vibrato speed; DRUM uses it for selected-drum volume. Top knob 1 controls the master filter; top knobs 2–4 control EDIT parameters 2–4. The master filter uses the existing FX macro smoothing and affects all four tracks. MIDI values 63 and 64 bypass it. It works without holding FX, and follows the existing performance-effect reset behavior when the FX layer closes or effects are cleared. Values span the full range, including signed/enum parameters. The main encoder wraps through the current engine's factory sounds followed by saved user sounds for that engine. Shift + turn wraps through the visible engines and loads their first factory sound. Both follow ROUT, preserve the mixer and sequencer, and replace unsaved sound edits. Controls are absolute; switching channels or sounds can cause a value jump when a knob moves.
 
 CC1 adds up to ±0.5 semitone of vibrato using the track's LFO rate, waveform and fade. An explicit active MODW matrix assignment overrides this default. DRUM ignores vibrato. The wheel does not overwrite saved LFO pitch depth.
 
@@ -34,7 +34,7 @@ A-bank pads use Gate notes 36–43 on fixed MIDI channel 16. They affect the who
 
 Additional direct CCs: pan 10; sustain level 70; release 72; attack 73; decay 75; LFO rate 76; distortion 90; reverb 91; chorus 93; delay 94. All follow ROUT, except CC7 on channels 1–4 always controls the corresponding track volume. CH1-4 ignores channels 5–16 except the dedicated channel 16 pad notes and pad panic/reset.
 
-Save a sound/project normally to retain edits. MIDI edits participate in existing motion recording. Pitch bend, sustain and panic retain their existing behavior.
+Save a sound/project normally to retain edits. Synth MIDI edits participate in existing motion recording. Per-drum overrides persist as sound settings; they do not record separate lane automation. Pitch bend, sustain and panic retain their existing behavior.
 
 Source base: hugelton/Felucca commit 7414269c4392cde8f4a4351c5f566314903b9116 (1.0.5.2). This is a local custom build. Back up projects/presets before flashing. See ../BUILDING.md for building and installation.
 
@@ -63,3 +63,21 @@ Firmware also accepts Arturia's CC106–109 transport messages on any MIDI chann
 Record toggles only the FM-1 track selected when the press arrives, regardless of the keyboard's MIDI channel. It starts playback when arming from stopped. Play starts playback without toggling it off; on the SONG page it starts the configured song chain. Stop stops playback and the chain. Record respects menu/dialog protections and refuses recording during a song chain.
 
 Tap uses the last four press timestamps, starts applying tempo from the third tap, and resets after a gap longer than two seconds. It respects the existing BPM limits and leaves external USB/TRS clock tempo unchanged. Releases and pad pressure do not retrigger transport.
+
+## Per-drum editing and longer patterns
+
+Play a drum to select its lane for editing and the sequencer. Sequencer playback does not change your selection. Channels still choose the FM-1 track.
+
+| DRUM knob | Selected drum control |
+| --- | --- |
+| Top 1 | Whole-mix DJ filter |
+| Top 2–4 | Pan, reverb, delay |
+| Bottom 5–8 | Pitch, tone, decay, volume |
+
+The eight lanes are kick, snare, clap, closed hat, open hat, tom, rim and bell. Kit variants may replace the last three; GM notes sharing a lane share its controls. Kit selection stays shared. Faders remain the four track volumes. Drum volume ranges from silence to unity; the track fader supplies the kit level.
+
+Selected-drum controls also follow the FM-1 HOME/EDIT/FX pages. The **DRUM MIX** page provides drum volume, pan, chorus and reverb. Direct CCs: 10 pan, 17 volume, 24 snap, 25 accent, 26 kick variant, 27 drive, 90 distortion, 91 reverb, 93 chorus, 94 delay. CC20 still changes the whole kit.
+
+Edits survive projects, autosave and user presets, and sound undo/redo. Untouched drum controls inherit the kit settings. Loading a new factory preset starts fresh drum settings. Effect returns are shared; per-drum pan controls dry sound. With custom drum mixing, sends feed effects before the kit's shared SLICER insert.
+
+For longer patterns, set **SEQ → PATTERN → LEN** to 32, 48 or 64 (any length up to 64 works). On the drum grid, black keys 10 and 11 page backward/forward for steps 1–16, 17–32, 33–48 and 49–64. Play kick/snare/etc. to choose the lane, then use the FM-1's 16 step buttons on that page.

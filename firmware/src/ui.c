@@ -190,6 +190,7 @@ static uint32_t layer_btn(void);
  * a SLICE track's (ui_slice.c) */
 static int page_visible(uint32_t i)
 {
+    if (str_eq(PAGES[i].title,"DRUM MIX")) return drum_track(TSEL);
 #if FELUCCA_SLICE
     if (PAGES[i].graph == GR_SLICES)
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_SLICE;
@@ -452,6 +453,8 @@ static struct {
     uint8_t fm6[FP_SIZE + 1u];   /* patch is the track's own, not a factory one */
     int16_t p[P_COUNT];
     step_t step[NSTEP];
+    drum_control_t drum;
+    uint8_t drum_lane;
     motion_store_t motion_backup; /* one track only, swaps with the shared event pool on undo */
     uint32_t after;              /* track_sig right after the last load */
     uint32_t pat;                /* pat_sig[] of the copy */
@@ -475,6 +478,7 @@ static uint32_t track_sig(const track_t *t)      /* the sound (an FM6 track's pa
 {
     uint8_t id[3] = {t->eng_req, t->preset, t->user};
     uint32_t h = fnv(fnv(steps_sig(t), t->p, sizeof t->p), id, 3), k = trk_index(t);
+    if (t->eng_req==ENGI_DRUM) h=fnv(h,&drum_control[k],sizeof drum_control[k]);
     h = fnv(h, fm6_patch[k], sizeof fm6_patch[k]); /* (a patch the editor sent between two loads) */
     for (uint32_t j = 0; j < motion.count; j++)
         if ((motion.event[j].place >> 6) == k) h = fnv(h, &motion.event[j], sizeof motion.event[j]);
@@ -497,6 +501,7 @@ static void load_begin(track_t *t, uint32_t what)
     undo.eng = t->eng_req;
     undo.preset = t->preset;
     undo.user = t->user;
+    undo.drum=drum_control[i]; undo.drum_lane=drum_focus[i];
     memcpy(undo.p, t->p, sizeof undo.p);
     memcpy(undo.step, t->step, sizeof undo.step);
     memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
@@ -552,6 +557,11 @@ static void undo_swap(void)
     undo.motion_backup = current_motion;
     fm1_irq_off();                                /* the audio ISR must not see half a sound */
     if (undo.what & UNDO_SOUND) {
+        uint32_t di=trk_index(t);
+        drum_control_t current=drum_control[di];
+        uint8_t lane=drum_focus[di];
+        drum_control[di]=undo.drum; drum_focus[di]=undo.drum_lane;
+        undo.drum=current; undo.drum_lane=lane;
         uint8_t e = t->eng_req, pr = t->preset, u = t->user;
         panic_req |= (uint8_t)(1u << trk_index(t));
         t->eng_req = undo.eng;
@@ -598,8 +608,10 @@ static void undo_swap(void)
         undo.fm6_slot = sl;
     }
     undo.keep = 0;                                /* the next load copies the track as it is now */
-    if (t == TSEL)
+    if (t == TSEL) {
         sync_reload = 1;
+        if (drum_track(t)) ui.lane=drum_focus[trk_index(t)];
+    }
     b[1] = (char)('1' + trk_index(t));
     ui_say("UNDO/REDO ", b);
     ui.force = 1;
@@ -825,6 +837,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
         for (i = 0; i < 4u; i++)
             t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
     }
+    drum_controls_reset(t);
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);
 }
@@ -1068,7 +1081,7 @@ static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
     uint32_t id = ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
-    *vp = &TSEL->p[id];
+    *vp = drum_param_ref(TSEL,id,0);
     return track_desc(TSEL, id);
 }
 
@@ -1078,6 +1091,7 @@ static void track_select(uint32_t i)
     if (i >= NTRK || i == song.sel)
         return;
     song.sel = (uint8_t)i;
+    if (drum_track(TSEL)) ui.lane = drum_focus[i];
     ui.entry_open = 0;
     ui.hot_t = 0;
     ui.cursor = 0;
@@ -1092,18 +1106,30 @@ static struct {
     uint8_t active, dirty;
 } midi_popup;
 
+static int name_on(void);
 static void midi_ui_poll(void)
 {
     midi_notice_t notice;
     uint32_t steps;
     int pending;
-    if (!midi_notice_pending && !midi_track_steps) return;
+    uint8_t drum_target;
+    if (!midi_notice_pending && !midi_track_steps && !drum_focus_pending) return;
     fm1_irq_off();
     pending = midi_notice_pending;
     notice = midi_notice;
     steps = midi_track_steps;
+    drum_target = drum_focus_pending;
+    drum_focus_pending = 0;
     midi_notice_pending = midi_track_steps = 0;
     fm1_irq_on();
+    if (drum_target && !ui.menu && !ui.confirm && !name_on()) {
+        uint32_t k = drum_target - 1u;
+        if (k < NTRK && drum_track(&trk[k])) {
+            track_select(k);
+            ui.lane = drum_focus[k];
+            ui.force = 1;
+        }
+    }
     if (steps) {
         track_select((song.sel + steps) % NTRK);
         notice.desc = 0; notice.track = song.sel; notice.value = (int16_t)(song.sel + 1u); notice.kind = 2;

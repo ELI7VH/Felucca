@@ -7,6 +7,9 @@ Direct DIN MIDI control; no computer needed while playing.
 
 | Problem | Solution |
 | --- | --- |
+| Wanted separate kick/snare edits and mixing | Each drum lane keeps its own sound, volume, pan and effect sends. |
+| Wanted playing a drum to select its sequencer lane | Hit a drum, then edit that lane with the step buttons. |
+| Needed patterns longer than 16 steps | Up to 64 steps: PATTERN → LEN, then page keys. |
 | Wanted transport and tap without a computer | B-bank pads 5–8: Stop, Play, selected-track Record, Tap. |
 | Never wanted to press Save or rebuild a session | Autosave after five seconds of silence; restore at power-on. |
 | Needed a standalone setup | MiniLab plugs directly into FM-1 over DIN MIDI. |
@@ -14,7 +17,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Faders felt too sensitive near the top | More travel for fine upper-level mixing; bottom reaches silence. |
 | Wanted knobs to follow the MIDI channel | Channels 1–4 control the corresponding tracks. |
 | Wanted the bottom row to match FM-1’s main knobs | Bottom knobs 5–7 follow HOME controls 1–3. |
-| Needed quick vibrato-speed control | Bottom knob 8 always controls LFO speed. |
+| Needed quick vibrato-speed control | Bottom knob 8 controls LFO speed on synths; drum volume on DRUM. |
 | Wanted mod-wheel pitch modulation | Mod strip adds vibrato; LFO controls its speed and shape. |
 | Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
 | Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
@@ -38,7 +41,16 @@ Hold to engage; release to stop. Works even with FX latch enabled.
 - **Top 1:** master DJ filter.
 - **Top 2–4:** engine EDIT parameters 2–4.
 - **Bottom 5–7:** engine HOME controls 1–3.
-- **Bottom 8:** LFO/vibrato speed.
+- **Bottom 8:** LFO/vibrato speed on synths.
+
+On **DRUM**, play the drum first:
+
+- **Top 2–4:** pan, reverb, delay.
+- **Bottom 5–8:** pitch, tone, decay, volume.
+
+Each of eight drum lanes remembers its edits. Faders still mix whole tracks.
+Chorus, distortion, snap, accent and drive are available on FM-1 pages or additional CCs.
+Set **SEQ → PATTERN → LEN** up to 64; page keys move between groups of 16.
 
 Encoder click changes the screen’s track; the keyboard MIDI channel stays independent.
 
@@ -51,6 +63,6 @@ Use the correct DIN-to-TRS adapter. A computer is needed for initial setup.
 
 [Full setup guide](controllers/MiniLab-3.md) · [Technical details and validation](docs/MIDI-IMPLEMENTATION.md)
 
-**Status:** midi9 installed; all firmware/host checks and live USB transport/tap checks passed; the web suite passed on rerun after one watch-timing failure. Current sounds and selected track survived the update. The updated MiniLab preset still needs hardware store/readback; direct DIN transport and hardware popup need hands-on verification.
+**Status:** midi10 installed; full host suite, target processor budgets and 92 unchanged golden renders passed. MiniLab User 5 stored and all 319 parameters read back exactly. Live USB drum isolation and CRC-verified silent autosave passed; four complete track dumps matched on restart. Subsequent live notes/tweaks changed selection and sounds, so screen-selection stability needs a quiet hands-on check. Direct DIN gestures and the physical popup remain hands-on checks.
 
 Based on [hugelton/Felucca](https://github.com/hugelton/Felucca) 1.0.5.2, commit `7414269c4392cde8f4a4351c5f566314903b9116`. Original credits and GPL-3.0-only licensing retained.

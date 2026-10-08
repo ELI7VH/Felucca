@@ -62,7 +62,7 @@ static void midi_transport_cc(uint32_t ch, uint32_t cc, uint32_t value)
 typedef struct {
     const param_desc_t *desc;
     int16_t value;
-    uint8_t track, kind; /* 0 parameter, 1 master filter, 2 track selection */
+    uint8_t track, kind, lane; /* 0 parameter, 1 master filter, 2 track, 3 drum parameter */
 } midi_notice_t;
 static volatile midi_notice_t midi_notice;
 static volatile uint8_t midi_notice_pending, midi_track_steps;
@@ -73,6 +73,7 @@ static void midi_notify(track_t *t, const param_desc_t *d, int32_t value, uint32
     midi_notice.value = (int16_t)value;
     midi_notice.track = (uint8_t)trk_index(t);
     midi_notice.kind = (uint8_t)kind;
+    midi_notice.lane = drum_focus[trk_index(t)];
     midi_notice_pending = 1;
 }
 /* Concave taper: slope 1.5 at silence -> 0.5 at full level. More travel for
@@ -204,6 +205,7 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
         /* Repeated notes replace the previous press, including a pedal-held one. */
         if (id)
             midi_release(ch, note);
+        drum_focus_note(t, note);
         midi_expression(t, c);
         if (t != TSEL)
             midi_hint = (uint8_t)(trk_index(t) + 1u);
@@ -284,8 +286,9 @@ static void midi_parameter(track_t *t, uint32_t id, uint32_t value)
     int32_t v = d->min + ((int32_t)value * (d->max - d->min) + 63) / 127;
     if (d->max <= d->min)
         return;
-    t->p[id] = (int16_t)param_fit(d, v);
-    (void)motion_capture(t, id, t->p[id]);
+    int16_t *vp = id==P_LEVEL ? &t->p[id] : drum_param_ref(t,id,1);
+    *vp=(int16_t)param_fit(d,v);
+    if (vp==&t->p[id]) (void)motion_capture(t,id,*vp);
 }
 
 static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
@@ -298,6 +301,7 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
         id = ENGINES[t->eng_req % NENGINES]->knob[cc - 28u];
     else switch (cc) {
     case 7: t = ch < NPART ? &trk[ch] : t; id = P_LEVEL; break;
+    case 17: if (!drum_track(t)) return 0; id=P_LEVEL; break;
     case 10: id = P_PAN; break;
     case 70: id = P_SUS; break;
     case 72: id = P_REL; break;
@@ -310,8 +314,19 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
     case 94: id = P_DLY; break;
     default: return 0;
     }
-    midi_parameter(t, id, cc == 7u ? midi_volume(value) : value);
-    midi_notify(t, track_desc(t, id), t->p[id], 0);
+    if (drum_track(t)) {
+        /* DRUM layout: top 2..4 pan/reverb/delay; bottom 8 drum volume. */
+        if (cc==21u) id=P_PAN;
+        else if (cc==22u) id=P_REV;
+        else if (cc==23u) id=P_DLY;
+        else if (cc==76u || cc==17u) id=P_LEVEL;
+    }
+    if (drum_track(t) && id==P_LEVEL && cc!=7u) {
+        const param_desc_t *d=&DRUM_LEVEL_DESC;
+        *drum_param_ref(t,id,1)=(int16_t)param_fit(d,(midi_volume(value)*112u+63u)/127u);
+    } else midi_parameter(t,id,cc==7u ? midi_volume(value):value);
+    int perdrum=drum_track(t) && cc!=7u && drum_control_index(id)>=0;
+    midi_notify(t,perdrum && id==P_LEVEL ? &DRUM_LEVEL_DESC : track_desc(t,id),perdrum ? *drum_param_ref(t,id,0):t->p[id],perdrum ? 3u:0u);
     return 1;
 }
 
