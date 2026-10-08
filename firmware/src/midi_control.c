@@ -13,6 +13,23 @@ typedef struct {
     uint8_t rpn_msb, rpn_lsb;
 } midi_channel_t;
 static midi_channel_t midi_ch[16];
+/* Preset loads belong on the UI thread, never in the audio callback. Keep
+ * arrival order and the resolved track even if SEL changes before polling. */
+#define MIDI_BROWSE_N 16u
+typedef struct { uint8_t track, bank; int8_t step; } midi_browse_t;
+static midi_browse_t midi_browse_q[MIDI_BROWSE_N];
+static volatile uint8_t midi_browse_r, midi_browse_w;
+static void midi_browse_enqueue(uint32_t ch, uint32_t bank, uint32_t value)
+{
+    int32_t step = (int32_t)value - 64; /* MiniLab main encoder: 63 down, 65 up */
+    uint8_t w = midi_browse_w, next = (uint8_t)((w + 1u) % MIDI_BROWSE_N);
+    if (!step || next == midi_browse_r) return;
+    midi_browse_q[w].track = (uint8_t)trk_index(midi_track(ch));
+    midi_browse_q[w].bank = (uint8_t)bank;
+    midi_browse_q[w].step = (int8_t)clamp(step, -8, 8);
+    midi_browse_w = next;
+}
+
 /* Low bits: track + 1. High bit: key released, held by its channel's pedal. */
 static uint8_t midi_sel_on[16][128];
 #define midi_notes midi_sel_on
@@ -250,6 +267,9 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
     if (midi_parameter_cc(ch, cc, value))
         return;
     switch (cc) {
+    case 114: case 112:
+        midi_browse_enqueue(ch, cc == 112u, value);
+        return;
     case 1:
         c->wheel = (uint8_t)value;
         break;

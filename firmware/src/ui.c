@@ -23,6 +23,7 @@ static uint32_t up_pat_count(void);
 static uint32_t up_pat_nth(uint32_t n);
 static uint32_t up_pat_rank(uint32_t slot);
 static void up_pat_load(track_t *t, uint32_t k);
+static int up_load_to(track_t *t, uint32_t k);
 static void up_auto_name(char *b, uint32_t e, uint32_t k);   /* naming (ui_name.c) */
 static void up_ui_named(uint32_t op, uint32_t k, const char *name);
 static int project_save_as(uint32_t slot, const char *name);
@@ -980,11 +981,11 @@ static void preset_go(uint32_t n)                    /* load list index n into t
 
 /* the EDIT layer's KNOB 2 (ui_layer.c): the selected track's engine only: its factory presets, then the used user presets
  * made with it (slot order). List index of the current sound; *total the length */
-static uint32_t eng_list_pos(uint32_t *total)
+static uint32_t eng_list_pos_of(track_t *t, uint32_t *total)
 {
-    const engine_t *en = ENGINES[TSEL->eng_req % NENGINES];
-    uint32_t e = TSEL->eng_req % NENGINES, np = preset_shown(e), u = user_of(TSEL), k, n = 0;
-    uint32_t cur = np ? preset_rank(en, preset_orig(en, TSEL->preset % en->npresets)) : 0u;   /* (#124: the aliases
+    const engine_t *en = ENGINES[t->eng_req % NENGINES];
+    uint32_t e = t->eng_req % NENGINES, np = preset_shown(e), u = user_of(t), k, n = 0;
+    uint32_t cur = np ? preset_rank(en, preset_orig(en, t->preset % en->npresets)) : 0u;   /* (#124: the aliases
                                         * skipped, as on PRESETS: SAMPLE 1 loads as 0, so counting it stuck KNOB 2) */
     for (k = 0; k < UP_SLOTS; k++)
         if (up_used(k) && up_engine(k) == e) {
@@ -996,25 +997,49 @@ static uint32_t eng_list_pos(uint32_t *total)
     return cur;
 }
 
-static void eng_list_step(int32_t direction)         /* the next / previous sound of the engine (wraps) */
+static void eng_list_step_of(track_t *t, int32_t direction)         /* the next / previous sound of the engine (wraps) */
 {
-    uint32_t total, cur = eng_list_pos(&total), e = TSEL->eng_req % NENGINES, np = preset_shown(e), k, n;
+    uint32_t total, cur = eng_list_pos_of(t, &total), e = t->eng_req % NENGINES, np = preset_shown(e), k, n;
     if (total < 2u)
         return;
     n = (cur + (direction > 0 ? 1u : total - 1u)) % total;
     if (n < np) {
         for (k = 0; preset_orig(ENGINES[e], k) != k || n--; k++)   /* the n-th shown preset */
             ;
-        apply_preset(k);
+        apply_preset_to(t, k);
     } else {
         n -= np;
         for (k = 0; k < UP_SLOTS; k++)
             if (up_used(k) && up_engine(k) == e && !n--) {
-                up_load(k);
+                up_load_to(t, k);
                 break;
             }
     }
-    preset_hinted();
+    if (t == TSEL) preset_hinted();
+    ui.force = 1;
+}
+
+static uint32_t eng_list_pos(uint32_t *total) { return eng_list_pos_of(TSEL, total); }
+static void eng_list_step(int32_t direction) { eng_list_step_of(TSEL, direction); }
+
+static void midi_browse_poll(void)
+{
+    /* One request per UI poll bounds work; rapid turns remain ordered. */
+    midi_browse_t request;
+    fm1_irq_off();
+    if (midi_browse_r == midi_browse_w) { fm1_irq_on(); return; }
+    request = midi_browse_q[midi_browse_r];
+    midi_browse_r = (uint8_t)((midi_browse_r + 1u) % MIDI_BROWSE_N);
+    fm1_irq_on();
+    track_t *t = &trk[request.track];
+    int32_t direction = request.step > 0 ? 1 : -1;
+    uint32_t count = (uint32_t)(request.step > 0 ? request.step : -request.step);
+    while (count--) {
+        if (request.bank) set_engine_of(t, eng_step(t->eng_req, direction));
+        else eng_list_step_of(t, direction);
+    }
+    if (t != TSEL) midi_hint = (uint8_t)(request.track + 1u);
+    ui.force = 1;
 }
 
 static void preset_step(int32_t direction)

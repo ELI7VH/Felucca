@@ -4,6 +4,8 @@ Use the custom `felucca-1.0.5.2-midi.fwsc` firmware and `Felucca.minilab3` prese
 
 | Control | Mapping |
 | --- | --- |
+| Main encoder | Previous/next preset in current engine, on keyboard channel (CC114 relative 64) |
+| Shift + main encoder | Previous/next sound engine, on keyboard channel (CC112 relative 64); loads first preset |
 | Knobs 1–8 | CC20–27; engine EDIT parameters 1–8 on the keyboard channel |
 | Faders 1–4 | CC7; fixed MIDI channels 1–4; track volumes |
 | Mod strip | CC1 on keyboard channel; vibrato |

@@ -7,6 +7,7 @@
 static void midi_test_reset(void)
 {
     ui_power_on();
+    midi_browse_r = midi_browse_w = 0;
     memset(midi_ch, 0, sizeof midi_ch); memset(midi_notes, 0, sizeof midi_notes);
     memset(midi_owners, 0, sizeof midi_owners); memset(midi_bend_q8, 0, sizeof midi_bend_q8);
     memset(midi_bend_target, 0, sizeof midi_bend_target); memset(&midi_clock, 0, sizeof midi_clock);
@@ -346,9 +347,52 @@ static int standalone_cc_test(void)
     return bad;
 }
 
+static int browse_test(void)
+{
+    int bad = 0; midi_test_reset();
+    track_t *t = &trk[1];
+    set_engine_of(t, 0u);
+    int16_t keep_level = t->p[P_LEVEL] = 77;
+    t->step[0].note[0] = 64;
+    uint32_t original = t->preset, other = trk[0].preset;
+    queued(0xB1, 114, 65, 1);
+    bad += check("preset browsing is deferred outside the audio callback", t->preset == original);
+    midi_browse_poll();
+    bad += check("main encoder browses only its MIDI channel", t->preset != original && trk[0].preset == other && song.sel == 0);
+    queued(0xB1, 114, 63, 2); midi_browse_poll();
+    bad += check("reverse encoder returns to previous sound", t->preset == original);
+    queued(0xB1, 112, 65, 2); midi_browse_poll();
+    bad += check("shift encoder selects next visible engine", t->eng_req == eng_step(0u, 1));
+    bad += check("browsing preserves volume and sequencer", t->p[P_LEVEL] == keep_level && t->step[0].note[0] == 64);
+    queued(0xB1, 112, 63, 1); midi_browse_poll();
+    bad += check("reverse bank restores previous engine", t->eng_req == 0u);
+    queued(0xB1, 114, 64, 1);
+    bad += check("relative centre value is ignored", midi_browse_r == midi_browse_w);
+    queued(0xB4, 112, 65, 2);
+    bad += check("CH1-4 ignores browse on channel 5", midi_browse_r == midi_browse_w);
+    song.g[G_ROUTE] = 1; song.sel = 2;
+    queued(0xB7, 112, 65, 1); uint32_t before = trk[2].eng_req;
+    song.sel = 0; midi_browse_poll();
+    bad += check("SEL resolves browse target when MIDI arrives", trk[2].eng_req == eng_step(before, 1) && song.sel == 0);
+    for (uint32_t n = 0; n < 32; n++) queued(0xB0, 114, 65, 1);
+    bad += check("rapid browse queue stays bounded", (midi_browse_w + MIDI_BROWSE_N - midi_browse_r) % MIDI_BROWSE_N == MIDI_BROWSE_N - 1);
+    while (midi_browse_r != midi_browse_w) midi_browse_poll();
+    midi_test_reset(); song.sel = 0; set_engine_of(TSEL, 0u);
+    midi_parameter(TSEL, P_E0, 7); int16_t saved = TSEL->p[P_E0]; up_store(31, "BROWSE");
+    song.sel = 1; set_engine_of(TSEL, 0u); song.sel = 0;
+    uint32_t total; (void)eng_list_pos_of(&trk[1], &total);
+    for (uint32_t n = 0; n < total - 1u; n++) {
+        queued(0xB1, 114, 65, 2); midi_browse_poll();
+    }
+    bad += check("engine browsing reaches saved user sound on addressed track", trk[1].user == 32u && trk[1].p[P_E0] == saved && song.sel == 0);
+    queued(0xB1, 114, 65, 1); midi_browse_poll();
+    bad += check("preset list wraps from user sound to first factory sound", !trk[1].user && trk[1].preset == 0);
+    return bad;
+}
+
 int main(void)
 {
     int bad = controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
-              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test();
+              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }
