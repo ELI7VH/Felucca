@@ -80,8 +80,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi8
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi8.fwsc
+./build.sh --release 1.0.5.2-midi9
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi9.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -108,7 +108,7 @@ The midi6 host run passed audio regression (92 unchanged golden renders), MIDI i
 
 The FM-1 LCD applies each region transfer immediately. Rendering the changing graph before repainting the popup exposed both images each frame, despite correct final draw order. While a popup is visible, only the header and changed popup card now draw; graph/layer/footer drawing pauses. Popup expiry restores the entire current page in the same frame. Transfer-level regression tests verify that live graph changes and forced redraws never write underneath the popup, unchanged popups do not redraw, changed values repaint only the card, and expiry restores the exact page. The controller preset is unchanged from midi6.
 
-### Five-second silent autosave (midi8)
+### Five-second silent autosave (midi9)
 
 A detector observes the rendered master before DAC attenuation. Every stereo sample must remain within ±2 Q15 counts (about −84 dBFS) for five seconds; louder samples restart the interval. The UI-thread saver also requires a stopped transport/song chain, no held local/MIDI/gated voices or queued MIDI, and a project snapshot unchanged for five seconds. Continuous tweaking coalesces, unchanged packed snapshots skip flash, and errors retry after five seconds.
 
@@ -118,8 +118,18 @@ Boot loads the newest valid flash copy after audio/MIDI initialization, restores
 
 Persistence tests exercise silence timing/tails, edit debounce, unchanged-write suppression, held notes, running transport, PLAY races, interrupted program operations, boot restoration and protection of an ordinary Project 4.
 
-The midi8 full host suite passed, including 92 unchanged golden audio renders. Additional persistence/backup tests passed after adding backup-staging protection and resume-metadata retention. Live USB verification restored every pre-update track parameter from a complete backup, observed Project 4 being created automatically with a valid CRC, and verified that sounds and the selected track stayed unchanged.
+The midi9 full host suite passed, including 92 unchanged golden audio renders. Additional persistence/backup tests passed after adding backup-staging protection and resume-metadata retention. Live USB verification restored every pre-update track parameter from a complete backup, observed Project 4 being created automatically with a valid CRC, and verified that sounds and the selected track stayed unchanged.
 
 USB BACKUP_LIST/GET/PUT reserve shared staging for 15 seconds after the last request, preventing autosave from invalidating an active archive. Backup restore preserves the resume marker and extra metadata. Live verification checks the stored snapshot’s actual sound parameters, not only its marker/CRC; this allows the staging lease and stability window to finish before checking the save.
 
 Live restart verification passed: after a firmware reinstall/restart, all four complete track dumps and the selected track matched the verified pre-update session exactly. The host cold-boot test also discards retained project RAM before restoring from flash. Physical power removal is not automated here; interrupted-write and lost-RAM behavior are covered by the persistence tests.
+
+## midi9 transport and tap
+
+CC106 Stop, CC107 Play, CC108 Record, CC109 Tap are consumed before track routing and modulation mapping on every channel. A bounded 16-slot queue defers work to the UI thread; rising edges suppress repeated on values and releases. Record snapshots `song.sel` at receipt. Tap snapshots `fm1_ms` and shares the local GLO tap algorithm. Queue saturation prioritizes Stop. CC120/121/123 clear transport button state for their channel.
+
+The controller preset assigns B-bank pads 5–8 to Gate CC106–109 on channel 16. A-bank effects and B-bank pads 1–4 remain intact. Shift transport over DIN depends on MiniLab firmware and is not claimed as verified.
+
+Integration tests cover deferred record, selected-track snapshot, press/release edges, start/stop ordering, non-toggling Play, tap timestamps, external clock protection, modal/chain recording guards and Stop at queue saturation.
+
+Validation: midi9 builds within target flash/RAM/pool limits and is installed with INFO readback. All firmware tests and 92 unchanged golden renders passed. The full run had one web mock `PING keeps WATCH on` timing failure; rerunning `node web/test_web.mjs` passed. Live USB confirmed non-toggling Play, Stop, Record on the displayed track independent of channel, and three taps producing 119 BPM for a 120 BPM input. Original tempo/clock were restored after the check. Complete four-track parameter dumps and selected track matched after firmware restart; the pre-update runtime musical payload matched the saved resume project.

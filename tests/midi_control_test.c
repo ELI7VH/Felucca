@@ -15,6 +15,8 @@ static void midi_test_reset(void)
 {
     ui_power_on();
     midi_browse_r = midi_browse_w = 0;
+    midi_transport_r = midi_transport_w = 0;
+    memset(midi_transport_held, 0, sizeof midi_transport_held);
     midi_notice_pending = midi_track_steps = midi_click_held = 0;
     memset(&midi_popup, 0, sizeof midi_popup);
     memset(midi_ch, 0, sizeof midi_ch); memset(midi_notes, 0, sizeof midi_notes);
@@ -518,9 +520,48 @@ static int browse_test(void)
     return bad;
 }
 
+static int transport_controls_test(void)
+{
+    int bad = 0; midi_test_reset(); song.rec = 0; song.sel = 2;
+    queued(0xBF,108,127,2);
+    bad += check("DIN record waits for UI thread", !song.rec && !song.playing);
+    song.sel = 0; midi_transport_poll();
+    bad += check("record arms displayed track at receipt, not channel 16 or later selection", song.rec==4 && transport_req==1);
+    events_block(CTL);
+    bad += check("record starts stopped sequencer", song.playing);
+    queued(0xBF,108,127,2); midi_transport_poll();
+    bad += check("held record does not toggle twice", song.rec==4);
+    queued(0xBF,108,0,2); song.sel=2; queued(0xBF,108,127,2); midi_transport_poll();
+    bad += check("second record press disarms only that track", !song.rec && song.playing);
+    queued(0xBF,106,127,2); midi_transport_poll(); events_block(CTL);
+    bad += check("STOP stops playback regardless of ROUT", !song.playing);
+    queued(0xB0,107,127,1); midi_transport_poll(); events_block(CTL);
+    bad += check("USB PLAY starts transport", song.playing);
+    queued(0xB0,107,0,1); queued(0xB0,107,127,1); uint32_t step=trk[0].seq_pos; midi_transport_poll();
+    bad += check("PLAY while playing does not toggle or restart", song.playing && !transport_req && trk[0].seq_pos==step);
+    queued(0xBF,106,0,2); queued(0xBF,106,127,2);
+    queued(0xB0,107,0,1); queued(0xB0,107,127,1); midi_transport_poll(); events_block(CTL);
+    bad += check("queued STOP then PLAY preserves last command", song.playing);
+    midi_test_reset(); song.g[G_BPM]=90;
+    for (uint32_t k=0;k<3;k++) { fm1_ms=1000+500*k; queued(0xBF,109,127,2); queued(0xBF,109,0,2); }
+    fm1_ms=7000; midi_transport_poll();
+    bad += check("tap uses input timestamps even when UI polling is delayed", song.g[G_BPM]==120);
+    song.g[G_CLOCK]=2; queued(0xBF,109,127,2); midi_transport_poll();
+    bad += check("tap never overwrites external clock tempo", song.g[G_BPM]==120);
+    midi_test_reset(); song.rec=0; ui.menu=1; queued(0xBF,108,127,2); midi_transport_poll();
+    bad += check("record respects modal UI", !song.rec && !transport_req);
+    ui.menu=0; queued(0xBF,108,0,2); chain.armed=1; queued(0xBF,108,127,2); midi_transport_poll();
+    bad += check("record never edits while song chain is armed", !song.rec && !transport_req);
+    midi_test_reset(); song.rec=0;
+    for (uint32_t k=0;k<20;k++) { queued(0xBF,109,127,2); queued(0xBF,109,0,2); }
+    queued(0xBF,106,127,2);
+    bad += check("queue saturation cannot lose STOP", transport_req==2 && midi_transport_r==midi_transport_w);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+    int bad = transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
               arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

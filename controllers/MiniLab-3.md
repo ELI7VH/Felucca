@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi8.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi9.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -15,7 +15,11 @@ Use the custom `felucca-1.0.5.2-midi8.fwsc` firmware and `Felucca.minilab3` pres
 | Mod strip | CC1 on keyboard channel; vibrato |
 | Pitch strip | Pitch bend on keyboard channel |
 | A-bank pads 1–8 | Hold for repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
-| B-bank pads | Factory notes on keyboard channel |
+| B-bank pads 1–4 | Factory notes on keyboard channel |
+| B-bank pad 5 / Stop | CC106 Gate; stop transport |
+| B-bank pad 6 / Play | CC107 Gate; start transport |
+| B-bank pad 7 / Record | CC108 Gate; toggle recording for the displayed FM-1 track; start if stopped |
+| B-bank pad 8 / Tap | CC109 Gate; set internal tempo from three or more taps |
 
 In Arturia MIDI Control Center, Import `Felucca.minilab3`, then Store To an unused User slot.
 On MiniLab, hold Shift and tap Pad 3 (Prog) to select Felucca.
@@ -49,3 +53,13 @@ On startup it restores sounds, parameters, four track levels, recorded patterns,
 Keep Project 4 for autosave. A/B flash copies retain the last valid session if power fails during writing. Power off before AUTOSAVED and changes since the previous save can be lost. Flash writes briefly block the processor, so the save gate waits for silence and a stopped sequencer.
 
 USB archive backup/restore temporarily reserves the save buffer; autosave resumes after that transfer lease expires. This does not affect standalone DIN use.
+
+## Transport and tap tempo
+
+The updated User preset puts Stop, Play, Record and Tap on **B-bank pads 5–8**, matching their printed labels. Switch banks with Shift + Pad 2, then press these pads without Shift. A-bank effects remain unchanged; B-bank pads 1–4 still play notes. Import and Store To the updated preset once before using these controls.
+
+Firmware also accepts Arturia's CC106–109 transport messages on any MIDI channel, independently of ROUT. If Shift + the labeled pads sends these through DIN on your MiniLab firmware, those shortcuts work too. That shortcut's direct-DIN output has not been verified; the B-bank mapping is the supported standalone path. Arturia documents a separate USB MCU/HUI port for DAW transport; changing FM-1 firmware cannot create DIN messages the controller does not send. See [Arturia's MIDI ports and CC chart](https://support.arturia.com/hc/en-us/articles/6189475866396-MiniLab-3-General-Questions).
+
+Record toggles only the FM-1 track selected when the press arrives, regardless of the keyboard's MIDI channel. It starts playback when arming from stopped. Play starts playback without toggling it off; on the SONG page it starts the configured song chain. Stop stops playback and the chain. Record respects menu/dialog protections and refuses recording during a song chain.
+
+Tap uses the last four press timestamps, starts applying tempo from the third tap, and resets after a gap longer than two seconds. It respects the existing BPM limits and leaves external USB/TRS clock tempo unchanged. Releases and pad pressure do not retrigger transport.

@@ -286,21 +286,21 @@ static void edit_load(uint32_t e, int32_t step)
 }
 
 /* GLO TAP: from the third tap the tempo of the taps (the last 4); 2 s without one starts over. INT clock only */
-static void glo_tap(void)
+static void glo_tap_at(uint32_t ms)
 {
     uint32_t n = lys.ntap, i;
     if (song.g[G_CLOCK]) {
         ui_message("TAP: CLK IS EXT");
         return;
     }
-    if (n && fm1_ms - lys.tap[n - 1u] > 2000u)
+    if (n && ms - lys.tap[n - 1u] > 2000u)
         n = 0;
     if (n == 4u) {
         for (i = 0; i < 3u; i++)
             lys.tap[i] = lys.tap[i + 1u];
         n = 3;
     }
-    lys.tap[n++] = fm1_ms;
+    lys.tap[n++] = ms;
     lys.ntap = (uint8_t)n;
     if (n >= 3u && lys.tap[n - 1u] != lys.tap[0]) {
         song.g[G_BPM] = (int16_t)clamp((int32_t)(60000u * (n - 1u) / (lys.tap[n - 1u] - lys.tap[0])),
@@ -308,6 +308,8 @@ static void glo_tap(void)
         ui.bpm_t = 40;
     }
 }
+
+static void glo_tap(void) { glo_tap_at(fm1_ms); }
 
 /* a key pressed in layer l (k: 0 = F3 .. 26 = G5) */
 static void layer_key(uint32_t l, uint32_t k)

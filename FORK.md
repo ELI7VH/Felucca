@@ -7,6 +7,7 @@ Direct DIN MIDI control; no computer needed while playing.
 
 | Problem | Solution |
 | --- | --- |
+| Wanted transport and tap without a computer | B-bank pads 5–8: Stop, Play, selected-track Record, Tap. |
 | Never wanted to press Save or rebuild a session | Autosave after five seconds of silence; restore at power-on. |
 | Needed a standalone setup | MiniLab plugs directly into FM-1 over DIN MIDI. |
 | Wanted four independent track volumes | Faders 1–4 always mix tracks 1–4. |
@@ -50,6 +51,6 @@ Use the correct DIN-to-TRS adapter. A computer is needed for initial setup.
 
 [Full setup guide](controllers/MiniLab-3.md) · [Technical details and validation](docs/MIDI-IMPLEMENTATION.md)
 
-**Status:** midi8 installed; full host tests and live USB checks completed; the current session autosaved and restored exactly after restart. The latest MiniLab preset still needs hardware store/readback; direct DIN/audio play and the hardware popup need hands-on verification.
+**Status:** midi9 installed; all firmware/host checks and live USB transport/tap checks passed; the web suite passed on rerun after one watch-timing failure. Current sounds and selected track survived the update. The updated MiniLab preset still needs hardware store/readback; direct DIN transport and hardware popup need hands-on verification.
 
 Based on [hugelton/Felucca](https://github.com/hugelton/Felucca) 1.0.5.2, commit `7414269c4392cde8f4a4351c5f566314903b9116`. Original credits and GPL-3.0-only licensing retained.

@@ -348,6 +348,37 @@ static void rec_tap(void)
         ui_message("KEYS RECORD LIVE");               /* (seq_entry pauses while armed and playing) */
 }
 
+static void glo_tap_at(uint32_t ms); /* shared with the local GLO tap key */
+static void midi_transport_poll(void)
+{
+    while (midi_transport_r != midi_transport_w) {
+        midi_transport_t event;
+        fm1_irq_off();
+        event = midi_transport_q[midi_transport_r];
+        midi_transport_r = (uint8_t)((midi_transport_r + 1u) % MIDI_TRANSPORT_N);
+        fm1_irq_on();
+        switch (event.command) {
+        case 106: transport_req = 2; ui.force = 1; break;
+        case 107:
+            if (transport_req == 1u || (transport_req != 2u && (song.playing || chain_busy()))) break;
+            if (!ui.home && cur_page()->graph == GR_SONG && !ui.menu && !ui.confirm && !name_on())
+                chain_play_ui();
+            else transport_req = 1;
+            ui.force = 1;
+            break;
+        case 108:
+            if (ui.menu || ui.confirm || name_on()) break;
+            if (chain_busy()) { ui_message("STOP TO RECORD"); break; }
+            song.rec ^= (uint8_t)(1u << event.track);
+            if ((song.rec & (1u << event.track)) && !song.playing) transport_req = 1;
+            ui.force = 1;
+            ui_message(song.rec & (1u << event.track) ? "RECORD ON" : "RECORD OFF");
+            break;
+        case 109: glo_tap_at(event.ms); ui.force = 1; break;
+        }
+    }
+}
+
 /* live recording into the selected track now: the STEP page's key entry pauses meanwhile */
 static int live_rec_sel(void) { return ((song.rec >> song.sel) & 1u) && (song.playing || transport_req == 1u); }
 
@@ -853,6 +884,7 @@ static void ui_input(void)
 {
     midi_browse_poll();
     midi_ui_poll();
+    midi_transport_poll();
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
     uint32_t home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     uint32_t rec = btn_hold(&ui.rec_t0, B_REC, now, rec_hold_page());   /* (#91: held on SEQ: the clear) */

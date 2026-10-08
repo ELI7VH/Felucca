@@ -30,6 +30,33 @@ static void midi_browse_enqueue(uint32_t ch, uint32_t bank, uint32_t value)
     midi_browse_w = next;
 }
 
+/* Transport commands are global, independent of ROUT and keyboard channel.
+ * Record remembers the displayed track at receipt; tap timing survives UI delay. */
+#define MIDI_TRANSPORT_N 16u
+typedef struct { uint32_t ms; uint8_t command, track; } midi_transport_t;
+static midi_transport_t midi_transport_q[MIDI_TRANSPORT_N];
+static volatile uint8_t midi_transport_r, midi_transport_w;
+static uint8_t midi_transport_held[16];
+static void midi_transport_cc(uint32_t ch, uint32_t cc, uint32_t value)
+{
+    uint32_t bit = 1u << (cc - 106u);
+    uint8_t w = midi_transport_w, next = (uint8_t)((w + 1u) % MIDI_TRANSPORT_N);
+    if (value >= 64u && !(midi_transport_held[ch] & bit)) {
+        if (next != midi_transport_r) {
+            midi_transport_q[w].command = (uint8_t)cc;
+            midi_transport_q[w].track = song.sel;
+            midi_transport_q[w].ms = fm1_ms;
+            midi_transport_w = next;
+        } else if (cc == 106u) {
+            /* A full UI queue must never swallow STOP. */
+            midi_transport_r = midi_transport_w;
+            transport_req = 2;
+        }
+    }
+    if (value >= 64u) midi_transport_held[ch] |= (uint8_t)bit;
+    else midi_transport_held[ch] &= (uint8_t)~bit;
+}
+
 /* Audio/ISR -> UI mailbox. Coalesce rapid knob movement to the latest value;
  * formatting and drawing are entirely on the UI thread. */
 typedef struct {
@@ -387,6 +414,12 @@ static void __attribute__((noinline)) midi_route_ch14(void)
  * channel aftertouch, except dedicated channel 16 master-effect pads/panic below. */
 static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
 {
+    if (st == 0xB0u && d1 >= 106u && d1 <= 109u) {
+        midi_transport_cc(ch, d1, d2);
+        return;
+    }
+    if (st == 0xB0u && (d1 == 120u || d1 == 121u || d1 == 123u))
+        midi_transport_held[ch] = 0;
     /* A-bank pads use notes 36..43 on dedicated channel 16. Consume them
      * before track routing: pads always affect the master, never play notes. */
     if (ch == 15u) {
