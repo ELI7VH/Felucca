@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi3.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -17,7 +17,7 @@ On MiniLab, hold Shift and tap Pad 3 (Prog) to select Felucca.
 Hold Shift and press the keyboard key labelled MIDI CH 1, 2, 3 or 4 to choose the track.
 On FM-1, set GLO > SYSTEM > ROUT to CH1-4. Connect MiniLab DIN MIDI OUT to FM-1 TRS MIDI IN with the correct adapter. The Mac is needed only for initial setup.
 
-The eight engine knobs use the engine's eight EDIT parameters, with its names and ranges. Values span the full range, including signed/enum parameters. Controls are absolute; switching channels or sounds can cause a value jump when a knob moves.
+The eight engine knobs use the engine's eight EDIT parameters, with its names and ranges. Values span the full range, including signed/enum parameters. The main encoder wraps through the current engine's factory sounds followed by saved user sounds for that engine. Shift + turn wraps through the visible engines and loads their first factory sound. Both follow ROUT, preserve the mixer and sequencer, and replace unsaved sound edits. Controls are absolute; switching channels or sounds can cause a value jump when a knob moves.
 
 CC1 adds up to ±0.5 semitone of vibrato using the track's LFO rate, waveform and fade. An explicit active MODW matrix assignment overrides this default. DRUM ignores vibrato. The wheel does not overwrite saved LFO pitch depth.
 
