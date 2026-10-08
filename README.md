@@ -1,8 +1,8 @@
 > **MiniLab 3 mod:** [Features and controls](https://eli7vh.github.io/Felucca/mod/) · [Install](https://eli7vh.github.io/Felucca/) · [Editor](https://eli7vh.github.io/Felucca/webapp/editor/). 12 evolving songs, silent autosave, per-drum control.
 
-# Felucca
+# WaveLoop FM-1
 
-## Felucca Mod — MiniLab 3
+## WaveLoop FM-1 — MiniLab 3
 
 Standalone MIDI control for **M-VAVE FM-1 + Arturia MiniLab 3**: four track faders,
 channel-dependent knobs, preset/engine browsing, vibrato, a master DJ filter,
