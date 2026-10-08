@@ -1089,7 +1089,7 @@ static void track_select(uint32_t i)
 static struct {
     midi_notice_t notice;
     uint32_t stamp;
-    uint8_t active;
+    uint8_t active, dirty;
 } midi_popup;
 
 static void midi_ui_poll(void)
@@ -1112,7 +1112,7 @@ static void midi_ui_poll(void)
     if (pending) {
         midi_popup.notice = notice;
         midi_popup.stamp = fm1_ms;
-        midi_popup.active = 1;
+        midi_popup.active = midi_popup.dirty = 1;
     }
 }
 

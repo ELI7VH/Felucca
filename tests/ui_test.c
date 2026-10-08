@@ -85,6 +85,9 @@ static uint32_t host_blit_rows;                    /* rows blitted (what a frame
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *p)
 {
     uint32_t i, j;
+#ifdef UI_BLIT_HOOK
+    UI_BLIT_HOOK(x, y, w, h);
+#endif
     host_blit_rows += h;
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++) host_screen[(y + j) * 240u + x + i] = p[j * w + i];

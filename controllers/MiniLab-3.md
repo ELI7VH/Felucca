@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi6.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi7.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -38,4 +38,4 @@ Pad Gate behavior is documented in [Arturia’s MiniLab 3 MIDI Control Center ma
 
 Fader travel uses a smooth concave taper: level = round(value × (381 − value) / 254). The slope falls from 1.5 near the bottom to 0.5 near the top, giving about three times as much travel per upper-level step. MIDI 0 is silence and 127 remains full level. Stored levels and the synth’s dB scale are unchanged; this spreads the existing level steps across physical travel.
 
-Moving a parameter knob or fader shows a 1.2-second popup with its track, actual parameter name and formatted value. The master filter shows LPF/HPF amount or BYPASS. The popup preserves the current page and clears cleanly; menus, naming and confirmation dialogs take priority. Encoder click changes the displayed track only, not the MiniLab keyboard MIDI channel. Turned knobs and played notes still follow ROUT and the keyboard channel.
+Moving a parameter knob or fader shows a 1.2-second popup with its track, actual parameter name and formatted value. The master filter shows LPF/HPF amount or BYPASS. The popup temporarily pauses page drawing to prevent LCD flicker, then restores the current page; menus, naming and confirmation dialogs take priority. Encoder click changes the displayed track only, not the MiniLab keyboard MIDI channel. Turned knobs and played notes still follow ROUT and the keyboard channel.

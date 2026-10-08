@@ -80,8 +80,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi6
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi6.fwsc
+./build.sh --release 1.0.5.2-midi7
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi7.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -103,3 +103,7 @@ CC115 rising edges queue displayed-track changes on the UI thread via the normal
 Live USB midi6 checks verified the nonlinear fader values at 0, 32, 64, 96, 112 and 127, and encoder-click track cycling/release across all four tracks. All track parameters and the original selection were restored afterwards. Host tests verify popup content, expiry and exact screen restoration; every formatted parameter value across all engines fits the popup. The new MiniLab encoder-click template still requires controller import/store; the MiniLab was not connected over USB during this update.
 
 The midi6 host run passed audio regression (92 unchanged golden renders), MIDI integration, UI behavior/layout, persistence, DSP and target-cost checks. The only initial failure was the font-spacing reference under system Python without RAQM; rerunning that check with `.venv-build/bin/python` passed. Browser emulator and optional DaisySP reference checks remain unavailable.
+
+### Popup LCD flicker fix (midi7)
+
+The FM-1 LCD applies each region transfer immediately. Rendering the changing graph before repainting the popup exposed both images each frame, despite correct final draw order. While a popup is visible, only the header and changed popup card now draw; graph/layer/footer drawing pauses. Popup expiry restores the entire current page in the same frame. Transfer-level regression tests verify that live graph changes and forced redraws never write underneath the popup, unchanged popups do not redraw, changed values repaint only the card, and expiry restores the exact page. The controller preset is unchanged from midi6.

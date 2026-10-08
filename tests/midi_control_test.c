@@ -1,6 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * End-to-end channel input and external-clock tests using the real queues,
  * UART parser, ownership model, sequencer, voice renderer and UI source. */
+static unsigned popup_blits, page_overwrites;
+static void midi_blit_watch(unsigned x, unsigned y, unsigned w, unsigned h)
+{
+    if (x==12 && y==84 && w==216 && h==104) popup_blits++;
+    else if (x<228 && x+w>12 && y<188 && y+h>84) page_overwrites++;
+}
+#define UI_BLIT_HOOK(x,y,w,h) midi_blit_watch(x,y,w,h)
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 
@@ -41,11 +48,21 @@ static int controller_feedback_test(void)
     bad += check("upper travel changes level less than lower travel", midi_volume(32)-midi_volume(0) > midi_volume(127)-midi_volume(95));
     queued(0xB1,76,70,2); midi_ui_poll();
     bad += check("TRS knob popup carries actual track, descriptor and value", midi_popup.active && midi_popup.notice.track==1 && midi_popup.notice.desc==track_desc(&trk[1],P_LRATE) && midi_popup.notice.value==70);
-    ui_draw(); screen_save("/tmp", "felucca-midi-popup");
+    popup_blits = page_overwrites = 0;
+    ui_draw();
+    bad += check("first popup paints once without transmitting the underlying graph", popup_blits==1 && !page_overwrites);
+    popup_blits = page_overwrites = 0;
+    for (uint32_t k=0;k<12;k++) {
+        scope_w += 16; trk[0].p[P_E0]++; ui.force=1; ui_draw();
+    }
+    bad += check("live graph changes and forced refreshes never overwrite a held popup", !popup_blits && !page_overwrites);
+    queued(0xB1,76,71,2); midi_ui_poll(); ui_draw();
+    bad += check("changed knob popup transfers only its new card", popup_blits==1 && !page_overwrites);
+    screen_save("/tmp", "felucca-midi-popup");
     uint32_t stamp=midi_popup.stamp; fm1_ms=stamp+1199; ui_draw();
     bad += check("popup persists briefly while idle", midi_popup.active);
     fm1_ms=stamp+1200; ui_draw();
-    bad += check("popup expires and invalidates underlying cached page", !midi_popup.active && ui.force);
+    bad += check("popup expires and restores the page in the same frame", !midi_popup.active && !ui.force);
     ui_draw(); static uint16_t restored[240*240]; memcpy(restored,host_screen,sizeof restored);
     ui.force=1; ui_draw();
     bad += check("popup expiry restores exactly the original page", !memcmp(restored,host_screen,sizeof restored));

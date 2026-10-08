@@ -48,6 +48,6 @@ Use the correct DIN-to-TRS adapter. A computer is needed for initial setup.
 
 [Full setup guide](controllers/MiniLab-3.md) · [Technical details and validation](docs/MIDI-IMPLEMENTATION.md)
 
-**Status:** midi6 installed; host tests and live USB checks completed. The latest MiniLab preset still needs hardware store/readback; direct DIN/audio play and the hardware popup need hands-on verification.
+**Status:** midi7 installed; host tests and live USB checks completed. The latest MiniLab preset still needs hardware store/readback; direct DIN/audio play and the hardware popup need hands-on verification.
 
 Based on [hugelton/Felucca](https://github.com/hugelton/Felucca) 1.0.5.2, commit `7414269c4392cde8f4a4351c5f566314903b9116`. Original credits and GPL-3.0-only licensing retained.

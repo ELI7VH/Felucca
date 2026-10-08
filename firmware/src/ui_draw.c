@@ -988,19 +988,15 @@ static void style_apply(void)
     }
 }
 
-/* MIDI feedback floats over the graph; it never changes the current page.
- * A full redraw on expiry restores pixels hidden under the cached page. */
+/* The LCD receives each blit immediately, so painting the live graph then a
+ * popup causes visible alternation. While visible, the popup owns the page:
+ * only the header and changed popup are drawn; expiry fully restores the page. */
 static void draw_midi_popup(void)
 {
     char head[24], value[24], label[24], number[8];
     const char *unit = "";
     const midi_notice_t *n = &midi_popup.notice;
     if (!midi_popup.active) return;
-    if (fm1_ms - midi_popup.stamp >= 1200u) {
-        midi_popup.active = 0;
-        ui.force = 1;
-        return;
-    }
     str_cpy(head, n->kind == 1u ? "MASTER" : "TRACK ", sizeof head);
     if (n->kind != 1u) {
         fmt_int(number, n->track + 1u);
@@ -1034,6 +1030,24 @@ static void ui_draw(void)
     if (ui.uboot || ui.menu || ui.confirm || name_on()) {
         if (midi_popup.active) ui.force = 1;
         midi_popup.active = 0;
+    }
+    if (midi_popup.active && fm1_ms - midi_popup.stamp >= 1200u) {
+        midi_popup.active = 0;
+        ui.force = 1;
+    }
+    if (midi_popup.active) {
+        /* Preserve pending page redraws without repeatedly forcing the header.
+         * No graph/layer/footer transfer may overwrite the popup between frames. */
+        uint8_t force = ui.force;
+        ui.force = 0;
+        draw_head();
+        ui.force = force;
+        if (midi_popup.dirty) {
+            draw_midi_popup();
+            midi_popup.dirty = 0;
+        }
+        ui.force = 1;
+        return;
     }
     if (ui.uboot) {
         draw_uboot();
@@ -1072,7 +1086,6 @@ static void ui_draw(void)
         if (ui.bpm_t)
             ui.bpm_t--;
         ui.force = 0;
-        draw_midi_popup();
         return;
     }
     if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
@@ -1101,5 +1114,4 @@ static void ui_draw(void)
     felucca_dbg.stage = 6;
     draw_foot();
     ui.force = 0;
-    draw_midi_popup();
 }
