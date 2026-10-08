@@ -347,6 +347,26 @@ static int standalone_cc_test(void)
     return bad;
 }
 
+static int home_knob_test(void)
+{
+    int bad = 0; midi_test_reset();
+    for (uint32_t e = 0; e < NENGINES; e++) {
+        set_engine_of(&trk[1], e);
+        const engine_t *engine = ENGINES[trk[1].eng_req % NENGINES];
+        for (uint32_t knob = 0; knob < 4; knob++) {
+            uint32_t id = engine->knob[knob];
+            const param_desc_t *desc = track_desc(&trk[1], id);
+            int16_t other = trk[0].p[id];
+            queued(0xB1, 28 + knob, 127, 2);
+            bad += check("bottom row matches HOME knob maximum in every engine", trk[1].p[id] == param_fit(desc, desc->max));
+            queued(0xB1, 28 + knob, 0, 1);
+            bad += check("bottom row matches HOME knob minimum in every engine", trk[1].p[id] == param_fit(desc, desc->min));
+            bad += check("HOME knob CC stays on its MIDI channel", trk[0].p[id] == other);
+        }
+    }
+    return bad;
+}
+
 static int browse_test(void)
 {
     int bad = 0; midi_test_reset();
@@ -393,6 +413,6 @@ static int browse_test(void)
 int main(void)
 {
     int bad = controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
-              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test();
+              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

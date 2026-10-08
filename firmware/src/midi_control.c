@@ -242,6 +242,8 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
     uint32_t id;
     if (cc >= 20u && cc <= 27u)
         id = P_E0 + cc - 20u;
+    else if (cc >= 28u && cc <= 31u)
+        id = ENGINES[t->eng_req % NENGINES]->knob[cc - 28u];
     else switch (cc) {
     case 7: t = ch < NPART ? &trk[ch] : t; id = P_LEVEL; break;
     case 10: id = P_PAN; break;
