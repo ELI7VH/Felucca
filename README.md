@@ -1,13 +1,12 @@
 # Felucca
 
-## Standalone MiniLab 3 MIDI fork
+## Felucca Mod — MiniLab 3
 
-This fork adds direct MIDI control for the M-VAVE FM-1 with an Arturia MiniLab 3:
-channel-dependent knobs, four independent track-volume faders, preset/engine browsing,
-and mod-wheel vibrato. Use the MiniLab's DIN MIDI output directly into the FM-1; a computer
-is needed only for setup.
+Standalone MIDI control for **M-VAVE FM-1 + Arturia MiniLab 3**: four track faders,
+channel-dependent knobs, preset/engine browsing, vibrato, a master DJ filter,
+momentary effect pads, parameter popups and encoder-click track switching.
 
-- [Why this fork exists and what changed](FORK.md)
+- [My problems → solutions: brief mod summary](FORK.md)
 - [MiniLab mapping and setup](controllers/MiniLab-3.md)
 - [Custom firmware and preset downloads](https://github.com/ELI7VH/Felucca/releases)
 

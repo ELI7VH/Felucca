@@ -1,105 +1,53 @@
-# Why this fork exists
+# Felucca Mod — MiniLab 3
 
-Felucca turns the M-VAVE FM-1 into a four-track, multi-engine synthesizer. At the upstream
-1.0.5.2 base used here, standard MIDI input supports notes, clock and performance controls,
-but does not directly expose the engine's editable parameters or preset/engine browsing to
-an ordinary controller. Full parameter editing is available through the computer-based
-SysEx web editor. That leaves a practical gap for playing the FM-1 from a MiniLab 3 over
-DIN MIDI, with no computer in the performance setup.
+An unofficial Felucca firmware mod for the **M-VAVE FM-1 + Arturia MiniLab 3**.
+Direct DIN MIDI control; no computer needed while playing.
 
-This fork fills that gap with a shared USB/TRS CC implementation and a MiniLab user preset.
-It is an unofficial extension of [hugelton/Felucca](https://github.com/hugelton/Felucca),
-based on commit `7414269c4392cde8f4a4351c5f566314903b9116` (1.0.5.2).
+## My problems → solutions
 
-## MiniLab mapping
-
-With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
-
-| MiniLab control | Behavior |
+| Problem | Solution |
 | --- | --- |
-| Top knob 1 | Master DJ filter: left low-pass, centre bypass, right high-pass |
-| Top knobs 2–4 | EDIT parameters 2–4 of the addressed track's engine |
-| Bottom knobs 5–7 | FM-1 HOME knobs 1–3, following that engine's actual assignments |
-| Bottom knob 8 | LFO speed, including mod-wheel vibrato speed |
-| Faders 1–4 | Fixed volumes for tracks 1–4, with finer upper-range travel |
-| Main encoder click | Cycle the displayed track 1 → 2 → 3 → 4 → 1; keyboard channel stays unchanged |
-| Main encoder | Previous/next factory or saved user preset within the current engine |
-| Shift + main encoder | Previous/next visible sound engine; loads its first factory preset |
-| Modulation strip | Vibrato depth on the keyboard channel |
-| Pitch strip | Existing pitch bend on the keyboard channel |
-| A-bank pads 1–8 | Momentary repeat 1/8, 1/16, 1/32, reverse, tape stop, freeze, octave up/down |
+| Needed a standalone setup | MiniLab plugs directly into FM-1 over DIN MIDI. |
+| Wanted four independent track volumes | Faders 1–4 always mix tracks 1–4. |
+| Faders felt too sensitive near the top | More travel for fine upper-level mixing; bottom reaches silence. |
+| Wanted knobs to follow the MIDI channel | Channels 1–4 control the corresponding tracks. |
+| Wanted the bottom row to match FM-1’s main knobs | Bottom knobs 5–7 follow HOME controls 1–3. |
+| Needed quick vibrato-speed control | Bottom knob 8 always controls LFO speed. |
+| Wanted mod-wheel pitch modulation | Mod strip adds vibrato; LFO controls its speed and shape. |
+| Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
+| Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
+| Wanted a DJ filter for the whole mix | Top knob 1: left low-pass, centre clean, right high-pass. |
+| Wanted effects that only engage while held | A-bank pads engage on press and disengage on release. |
+| Couldn’t see what a MIDI knob was changing | Brief popup shows track, parameter name and value. |
+| Needed quick screen-track switching | Encoder click cycles the displayed track 1 → 2 → 3 → 4 → 1. |
 
-See [the setup guide](controllers/MiniLab-3.md) and import
-[`Felucca.minilab3`](controllers/Felucca.minilab3) in Arturia MIDI Control Center.
-The preset can be stored in any enabled User slot; User 5 was used during development.
-Use the correct DIN-to-TRS adapter for the FM-1 input and supply power to both devices.
+## Eight effect pads
 
-## Firmware behavior
+- **1–3:** repeat 1/8, 1/16, 1/32.
+- **4:** reverse.
+- **5:** tape stop.
+- **6:** freeze.
+- **7–8:** octave up/down.
 
-- CC19 controls the existing smoothed master FILTER macro without holding FX. Values 0–62
-  sweep low-pass, 63–64 bypass, and 65–127 sweep high-pass. This is a live performance
-  control, not a saved patch parameter; normal FX-layer resets also reset it.
-- CC20–27 expose all eight engine EDIT parameters, scaled to their own signed or enum ranges.
-- CC28–31 follow the engine's four HOME knob assignments. The supplied MiniLab preset uses
-  CC28–30 for its first three bottom knobs and CC76 for its fourth.
-- CC7 on channels 1–4 always targets the corresponding track's volume, including ROUT SEL.
-  Other parameter controls follow the existing ROUT setting. CH1-4 ignores channels 5–16,
-  except the dedicated channel 16 master-effect pad notes and pad panic/reset.
-- CC114 browses presets; CC112 browses engines. Both use MiniLab relative values centred
-  at 64 (63 = previous, 65 = next). These are custom CCs, not MIDI Program Change or Bank Select.
-- Preset loads are queued for the UI thread, outside the audio callback. They preserve track
-  mixing and sequencer patterns, and replace unsaved sound edits. Rapid turns use a bounded queue.
-- Parameter changes use the existing motion/automation capture path.
-- CC1 adds up to approximately ±0.5 semitone of pitch modulation using the track's LFO
-  rate, waveform and fade. An explicit active MODW matrix assignment overrides this fallback;
-  DRUM ignores it. The wheel does not overwrite saved LFO pitch depth.
-- Additional CCs cover pan, envelope, LFO rate and effect sends; the setup guide lists them.
+Hold to engage; release to stop. Works even with FX latch enabled.
 
-This is a focused controller extension, not a claim that every synth parameter is exposed
-through standard MIDI CC. Existing pitch bend, sustain and panic handling remain in place.
+## Final knob layout
 
-## Validation and limits
+- **Top 1:** master DJ filter.
+- **Top 2–4:** engine EDIT parameters 2–4.
+- **Bottom 5–7:** engine HOME controls 1–3.
+- **Bottom 8:** LFO/vibrato speed.
 
-The full host suite passed during development, including 92 unchanged golden audio renders.
-Additional integration tests cover all engines' parameter ranges, HOME knob assignments,
-channel isolation, USB/TRS parsing, automation, mod-wheel behavior and preset/engine browsing.
-The target build passes code and RAM budgets. The midi6 MIDI integration and performance DSP
-tests passed, including all eight momentary pads reaching/releasing the real performance stage,
-latch independence, overlapping holds, zero-velocity releases and channel 16 panic/reset.
+Encoder click changes the screen’s track; the keyboard MIDI channel stays independent.
 
-Firmware midi6 was installed on an FM-1 and its reported version verified. Live USB filter
-and pad messages left all four track parameter dumps unchanged; the filter was centred and
-all pads released afterwards. Effect sound through the physical DIN setup is not yet verified. Live USB tests
-verified independent track volumes, parameter controls, HOME controls and preset/engine
-browsing. Earlier MiniLab mappings were stored and read back successfully. The final bottom-row,
-LFO-speed, master filter and momentary-pad preset is provided here; its hardware store/readback was blocked by editor UI
-automation timeouts. Direct DIN/audio performance still needs hands-on verification.
+## Get the mod
 
-## Build and install
+[Download firmware + controller preset](https://github.com/ELI7VH/Felucca/releases/latest).
+Import the MiniLab preset, Store To an enabled User slot, and set FM-1 **ROUT = CH1-4**.
+Use the correct DIN-to-TRS adapter. A computer is needed for initial setup.
 
-Follow [BUILDING.md](BUILDING.md) for the JieLi toolchain and SDK. For this build:
+[Full setup guide](controllers/MiniLab-3.md) · [Technical details and validation](docs/MIDI-IMPLEMENTATION.md)
 
-```sh
-./build.sh --release 1.0.5.2-midi6
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi6.fwsc
-```
+**Status:** midi6 installed; host tests and live USB checks completed. The latest MiniLab preset still needs hardware store/readback; direct DIN/audio play and the hardware popup need hands-on verification.
 
-Back up projects and presets before flashing. The custom release archive includes the
-firmware, MiniLab template, setup guide and upstream license/attribution files. Upstream's
-web installer installs its own firmware; it does not install this fork's changes.
-
-Original copyrights, GPL-3.0-only licensing and third-party attribution are retained.
-
-### Momentary A-bank effects
-
-Pads 1–8 hold repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up and octave down. They send Gate notes 36–43 on fixed channel 16, intercepted before track routing. They never sound notes and ignore FX LATCH. A separate MIDI hold mask preserves local FX keys when pads release. The last held buffer effect wins; channel 16 panic/reset clears MIDI holds. B-bank retains ordinary notes.
-
-### Fader taper and controller feedback
-
-CC7 uses a smooth concave taper with exact silence/full-level endpoints. Upper levels get more physical travel; stored parameter format and the existing dB scale stay unchanged. Parameter knobs/faders show the addressed track, engine-specific parameter name and formatted value in a 1.2-second popup. CC19 shows the master filter. Formatting/rendering run on the UI thread via a latest-value mailbox. Popup expiry invalidates the underlying cached screen.
-
-CC115 rising edges queue displayed-track changes on the UI thread via the normal track-selection helper. Release/repeated held messages do not advance tracks. The supplied preset enables the main encoder’s click as Gate CC115; this requires importing/storing the updated MiniLab preset. Keyboard channel routing remains independent.
-
-Live USB midi6 checks verified the nonlinear fader values at 0, 32, 64, 96, 112 and 127, and encoder-click track cycling/release across all four tracks. All track parameters and the original selection were restored afterwards. Host tests verify popup content, expiry and exact screen restoration; every formatted parameter value across all engines fits the popup. The new MiniLab encoder-click template still requires controller import/store; the MiniLab was not connected over USB during this update.
-
-The midi6 host run passed audio regression (92 unchanged golden renders), MIDI integration, UI behavior/layout, persistence, DSP and target-cost checks. The only initial failure was the font-spacing reference under system Python without RAQM; rerunning that check with `.venv-build/bin/python` passed. Browser emulator and optional DaisySP reference checks remain unavailable.
+Based on [hugelton/Felucca](https://github.com/hugelton/Felucca) 1.0.5.2, commit `7414269c4392cde8f4a4351c5f566314903b9116`. Original credits and GPL-3.0-only licensing retained.
