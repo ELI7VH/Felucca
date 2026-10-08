@@ -220,6 +220,58 @@ static int mig_test(void)
     return bad;
 }
 
+static int session_test(void)
+{
+    int bad=0; reset(); session_boot();
+    int32_t quiet[CTL*2]={0};
+    session_quiet_frames=SESSION_QUIET_FRAMES-CTL;
+    session_audio_observe(quiet,CTL);
+    bad += check("five seconds of rendered silence arms session saving",session_quiet_frames==SESSION_QUIET_FRAMES);
+    quiet[CTL]=3; session_audio_observe(quiet,CTL);
+    bad += check("even a quiet effect tail resets the five-second silence counter",!session_quiet_frames);
+    quiet[CTL]=0; session_quiet_frames=SESSION_QUIET_FRAMES;
+    trk[0].p[P_LEVEL]=91; song.sel=2; perf_k[0]=-37; ui.home=0; ui.page=3;
+    fm1_ms=250; session_poll(); fm1_ms=5000; session_poll();
+    bad += check("changes must settle for five seconds before any erase",!erases);
+    fm1_ms=5250; session_poll();
+    bad += check("quiet changed session commits automatically in reserved project 4",erases==1 && proj_slot[3].raw[65]==SESSION_MARK);
+    uint32_t before=erases; fm1_ms+=10000; session_poll();
+    bad += check("unchanged idle session never wears flash",erases==before);
+    project_store_t saved=proj_slot[3];
+    trk[0].p[P_LEVEL]=92; fm1_ms+=250; session_poll();
+    session_quiet_frames=0; fm1_ms+=6000; session_poll();
+    bad += check("settled edits cannot save during audible output",erases==before);
+    session_quiet_frames=SESSION_QUIET_FRAMES; trk[0].v[0].active=trk[0].v[0].gate=1;
+    fm1_ms+=250; session_poll();
+    bad += check("held muted notes block saving even when output is silent",erases==before);
+    trk[0].v[0].active=trk[0].v[0].gate=0;
+    song.playing=1; fm1_ms+=250; session_poll();
+    bad += check("running sequencer blocks automatic flash writes",erases==before);
+    song.playing=0; fm1_ms+=250; session_poll();
+    fm1_ms+=5000; fail_after=2; session_poll(); fail_after=-1;
+    bad += check("torn autosave leaves previous valid flash copy and RAM session",!memcmp(&saved,&proj_slot[3],sizeof saved) && session_error);
+    trk[0].p[P_LEVEL]=12; perf_k[0]=0; song.sel=0; ui.home=1;
+    memset(proj_slot,0,sizeof proj_slot); /* complete loss of retained RAM on power-off */
+    session_boot();
+    bad += check("cold-style boot restores last valid level, track, filter and view",trk[0].p[P_LEVEL]==91 && song.sel==2 && perf_k[0]==-37 && !ui.home && ui.page==3 && !song.playing);
+    bad += check("boot does not immediately rewrite flash",session_quiet_frames==0);
+    for(int cut=0;cut<16;cut++) {
+        memcpy(&proj_slot[3],&saved,sizeof saved);
+        trk[0].p[P_LEVEL]=99; session_seen=0; session_quiet_frames=SESSION_QUIET_FRAMES;
+        fm1_ms+=250; session_poll(); fm1_ms+=5000; fail_after=cut; session_poll(); fail_after=-1;
+        session_boot();
+        bad += check("every interrupted autosave retains a valid musical session",trk[0].p[P_LEVEL]==91 || trk[0].p[P_LEVEL]==99);
+    }
+    reset(); project_save_as(3,"MY PROJECT"); before=erases;
+    session_seen=0; session_error=0; session_quiet_frames=SESSION_QUIET_FRAMES;
+    fm1_ms=250; session_poll(); fm1_ms=6000; session_poll();
+    bad += check("ordinary project in slot 4 is never overwritten",erases==before && proj_slot[3].raw[65]!=SESSION_MARK);
+    reset(); session_seen=0;session_error=0; session_quiet_frames=SESSION_QUIET_FRAMES;
+    fm1_ms=250; session_poll();fm1_ms=6000;transport_req=1;irq_start_race=1;session_poll();
+    bad += check("PLAY arriving at the snapshot blocks autosave",!erases && song.playing);
+    reset(); return bad;
+}
+
 int main(void)
 {
     int bad = 0, ok;
@@ -496,6 +548,7 @@ int main(void)
     bad += check("PLAY consumed before the settings snapshot defers the write",
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
     bad += mig_test();
+    bad += session_test();
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
     return bad != 0;
 }

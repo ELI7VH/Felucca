@@ -4,6 +4,8 @@
  * shared buses (chorus, tempo delay, reverb). Mono buses, stereo dry mix. */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 at 40 BPM fits */
 #define CHO_LEN 2048u
+#include "session_audio.c"
+
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 static const uint16_t REV_COMB[4] = {1116, 1188, 1277, 1356};

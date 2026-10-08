@@ -4,7 +4,7 @@
 
 Standalone MIDI control for **M-VAVE FM-1 + Arturia MiniLab 3**: four track faders,
 channel-dependent knobs, preset/engine browsing, vibrato, a master DJ filter,
-momentary effect pads, parameter popups and encoder-click track switching.
+momentary effect pads, parameter popups, encoder-click track switching and automatic session resume.
 
 - [My problems → solutions: brief mod summary](FORK.md)
 - [MiniLab mapping and setup](controllers/MiniLab-3.md)

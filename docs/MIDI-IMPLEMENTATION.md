@@ -80,8 +80,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi7
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi7.fwsc
+./build.sh --release 1.0.5.2-midi8
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi8.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -107,3 +107,19 @@ The midi6 host run passed audio regression (92 unchanged golden renders), MIDI i
 ### Popup LCD flicker fix (midi7)
 
 The FM-1 LCD applies each region transfer immediately. Rendering the changing graph before repainting the popup exposed both images each frame, despite correct final draw order. While a popup is visible, only the header and changed popup card now draw; graph/layer/footer drawing pauses. Popup expiry restores the entire current page in the same frame. Transfer-level regression tests verify that live graph changes and forced redraws never write underneath the popup, unchanged popups do not redraw, changed values repaint only the card, and expiry restores the exact page. The controller preset is unchanged from midi6.
+
+### Five-second silent autosave (midi8)
+
+A detector observes the rendered master before DAC attenuation. Every stereo sample must remain within ±2 Q15 counts (about −84 dBFS) for five seconds; louder samples restart the interval. The UI-thread saver also requires a stopped transport/song chain, no held local/MIDI/gated voices or queued MIDI, and a project snapshot unchanged for five seconds. Continuous tweaking coalesces, unchanged packed snapshots skip flash, and errors retry after five seconds.
+
+Project 4 uses its existing atomic A/B sector pair. An ordinary unmarked project in that slot is never overwritten. FUN8 reserved byte 65 marks resume snapshots; byte 67 retains the bipolar master filter. Eight unused bytes before the FM6 patch payload retain other master FX macros and UI view metadata, guarded by a compile-time overlap check. CRCs cover all metadata. No additional project-sized RAM is allocated.
+
+Boot loads the newest valid flash copy after audio/MIDI initialization, restores the project and view, then leaves transport stopped and clears the silence counter. Momentary MIDI/local key ownership is not resumed. User samples and preferences retain their existing storage paths. A cut before the quiet interval/save completes retains the previous committed snapshot. Firmware updates retain Project 4, so a verified resume snapshot also survives reinstalling this custom firmware.
+
+Persistence tests exercise silence timing/tails, edit debounce, unchanged-write suppression, held notes, running transport, PLAY races, interrupted program operations, boot restoration and protection of an ordinary Project 4.
+
+The midi8 full host suite passed, including 92 unchanged golden audio renders. Additional persistence/backup tests passed after adding backup-staging protection and resume-metadata retention. Live USB verification restored every pre-update track parameter from a complete backup, observed Project 4 being created automatically with a valid CRC, and verified that sounds and the selected track stayed unchanged.
+
+USB BACKUP_LIST/GET/PUT reserve shared staging for 15 seconds after the last request, preventing autosave from invalidating an active archive. Backup restore preserves the resume marker and extra metadata. Live verification checks the stored snapshot’s actual sound parameters, not only its marker/CRC; this allows the staging lease and stability window to finish before checking the save.
+
+Live restart verification passed: after a firmware reinstall/restart, all four complete track dumps and the selected track matched the verified pre-update session exactly. The host cold-boot test also discards retained project RAM before restoring from flash. Physical power removal is not automated here; interrupted-write and lost-RAM behavior are covered by the persistence tests.

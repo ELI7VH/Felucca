@@ -95,10 +95,22 @@ static uint32_t ed_bk_commit(void)
     if (ed_bk_pos != ed_bk_len || st_crc32(raw, ed_bk_len) != ed_bk_crc) return 2;
     if (ed_bk_id == 0u || (ed_bk_id >= 2u && ed_bk_id <= 5u)) {
         if (ed_bk_len && !proj_import(&proj_scratch, raw, (int)ed_bk_len)) return 2;
+        uint8_t resume_meta[10];
+        int resume = ed_bk_id == 5u && ed_bk_len == sizeof(project_store_t) && raw[65] == SESSION_MARK;
+        if (resume) {
+            resume_meta[0] = raw[65]; resume_meta[1] = raw[67];
+            memcpy(resume_meta + 2, raw + SESSION_UI_OFF, 8);
+        }
         if (ed_bk_len) {                            /* an older format becomes FUN8 inside its ranges */
             proj_bound(&proj_scratch);
             if (!proj_pack((project_store_t *)raw, &proj_scratch)) return 2;
             ed_bk_len = sizeof(project_store_t);
+        }
+        if (resume) {
+            raw[65] = resume_meta[0]; raw[67] = resume_meta[1];
+            memcpy(raw + SESSION_UI_OFF, resume_meta + 2, 8);
+            uint32_t hash = proj_hash(raw, sizeof(project_store_t)-4u);
+            memcpy(raw + sizeof(project_store_t)-4u, &hash, 4);
         }
         if (ed_bk_id == 0u) {
             if (!ed_bk_len) return 2;
@@ -190,6 +202,9 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 }
 static int ed_backup_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
+    if (cmd == ED_BACKUP_LIST || cmd == ED_BACKUP_GET || cmd == ED_BACKUP_PUT) {
+        session_external_hold = 1; session_external_ms = fm1_ms;
+    }
     if (cmd == ED_BACKUP_LIST) {
         uint32_t rc = n ? 1u : ed_bk_capture();
         ed_b(1); ed_b(rc); ed_b(rc ? 0u : ED_BK_N);

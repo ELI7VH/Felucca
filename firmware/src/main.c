@@ -167,6 +167,7 @@ static void fm1_main(void)
         settings_save();
     }
     fm1_delay_ms(400);
+    session_boot();
     lcd_fill(0, 0, 240, 240, T_BG);
 
     for (;;) {
@@ -249,6 +250,7 @@ static void fm1_main(void)
         felucca_dbg.home = ui.home;
         felucca_dbg.stage = 1;
         ui_input();
+        session_poll();
         settings_poll();                              /* queued settings save: only while stopped */
         felucca_dbg.stage = 2;
         ui_leds();

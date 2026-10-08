@@ -30,6 +30,7 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
 {
     uint32_t i;
     mix_block(out, n);
+    session_audio_observe(out, n);
 #if FELUCCA_UAC
     uac_tap(out, n);                                    /* the USB audio input: the same master output */
 #endif

@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi7.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi8.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -39,3 +39,13 @@ Pad Gate behavior is documented in [Arturia’s MiniLab 3 MIDI Control Center ma
 Fader travel uses a smooth concave taper: level = round(value × (381 − value) / 254). The slope falls from 1.5 near the bottom to 0.5 near the top, giving about three times as much travel per upper-level step. MIDI 0 is silence and 127 remains full level. Stored levels and the synth’s dB scale are unchanged; this spreads the existing level steps across physical travel.
 
 Moving a parameter knob or fader shows a 1.2-second popup with its track, actual parameter name and formatted value. The master filter shows LPF/HPF amount or BYPASS. The popup temporarily pauses page drawing to prevent LCD flicker, then restores the current page; menus, naming and confirmation dialogs take priority. Encoder click changes the displayed track only, not the MiniLab keyboard MIDI channel. Turned knobs and played notes still follow ROUT and the keyboard channel.
+
+## Automatic session resume
+
+Project 4 is the autosave slot. After the sequencer stops, five seconds of rendered silence (including effect tails) and five seconds without session edits, the firmware saves automatically. Held notes and queued MIDI prevent saving. Unchanged sessions cause no flash writes. The screen briefly says AUTOSAVED on success or AUTOSAVE ERROR if writing fails. An ordinary project already occupying Project 4 is protected: AUTOSAVE SLOT4 USED means move that project before using automatic resume.
+
+On startup it restores sounds, parameters, four track levels, recorded patterns, automation, tempo/global settings, song chain configuration, selected track, view and master FX macros. Playback starts stopped; held notes, pitch bend, mod-strip position and momentary pads do not resume. Existing samples, presets and settings keep their normal persistent storage. The physical master-volume knob still sets hardware output level.
+
+Keep Project 4 for autosave. A/B flash copies retain the last valid session if power fails during writing. Power off before AUTOSAVED and changes since the previous save can be lost. Flash writes briefly block the processor, so the save gate waits for silence and a stopped sequencer.
+
+USB archive backup/restore temporarily reserves the save buffer; autosave resumes after that transfer lease expires. This does not affect standalone DIN use.

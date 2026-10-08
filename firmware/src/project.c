@@ -1024,6 +1024,8 @@ static void settings_save(void)
     settings_poll();
 }
 
+#include "session.c"
+
 #if FELUCCA_FLASH
 _Static_assert(sizeof(project_store_t) <= ST_PAYLOAD_MAX, "project does not fit one flash sector");
 _Static_assert(sizeof(persist_t) <= ST_PAYLOAD_MAX, "settings do not fit one flash sector");

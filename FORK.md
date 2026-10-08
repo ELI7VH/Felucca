@@ -7,6 +7,7 @@ Direct DIN MIDI control; no computer needed while playing.
 
 | Problem | Solution |
 | --- | --- |
+| Never wanted to press Save or rebuild a session | Autosave after five seconds of silence; restore at power-on. |
 | Needed a standalone setup | MiniLab plugs directly into FM-1 over DIN MIDI. |
 | Wanted four independent track volumes | Faders 1–4 always mix tracks 1–4. |
 | Faders felt too sensitive near the top | More travel for fine upper-level mixing; bottom reaches silence. |
@@ -44,10 +45,11 @@ Encoder click changes the screen’s track; the keyboard MIDI channel stays inde
 
 [Download firmware + controller preset](https://github.com/ELI7VH/Felucca/releases/latest).
 Import the MiniLab preset, Store To an enabled User slot, and set FM-1 **ROUT = CH1-4**.
+Autosave uses **Project 4**; keep it for session recovery.
 Use the correct DIN-to-TRS adapter. A computer is needed for initial setup.
 
 [Full setup guide](controllers/MiniLab-3.md) · [Technical details and validation](docs/MIDI-IMPLEMENTATION.md)
 
-**Status:** midi7 installed; host tests and live USB checks completed. The latest MiniLab preset still needs hardware store/readback; direct DIN/audio play and the hardware popup need hands-on verification.
+**Status:** midi8 installed; full host tests and live USB checks completed; the current session autosaved and restored exactly after restart. The latest MiniLab preset still needs hardware store/readback; direct DIN/audio play and the hardware popup need hands-on verification.
 
 Based on [hugelton/Felucca](https://github.com/hugelton/Felucca) 1.0.5.2, commit `7414269c4392cde8f4a4351c5f566314903b9116`. Original credits and GPL-3.0-only licensing retained.

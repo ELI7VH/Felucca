@@ -391,6 +391,22 @@ int main(void)
         b.nslot = 3;
         bad += check("a bank with the wrong slot count is refused", put_all(7, &b, sizeof b, st_crc32(&b, sizeof b)) == 2u);
     }
+    reset();
+    {
+        project_store_t resume;
+        project_capture(&proj_scratch); proj_pack(&resume,&proj_scratch);
+        resume.raw[65]=SESSION_MARK; resume.raw[67]=63;
+        resume.raw[SESSION_UI_OFF+3]=1;
+        uint32_t h=proj_hash(resume.raw,sizeof resume-4);
+        memcpy(resume.raw+sizeof resume-4,&h,4);
+        bad += check("backup restore retains autosave marker and view/filter metadata",put_all(5,&resume,sizeof resume,st_crc32(&resume,sizeof resume))==0 && proj_slot[3].raw[65]==SESSION_MARK && proj_slot[3].raw[67]==63);
+        session_boot();
+        bad += check("restored autosave archive resumes at boot",perf_k[0]==-37 && ui.home);
+        call(ED_BACKUP_LIST,0,0); uint32_t gen=proj_wire_gen;
+        session_quiet_frames=SESSION_QUIET_FRAMES; fm1_ms+=1000;
+        session_poll();
+        bad += check("autosave leaves an active backup staging buffer untouched",proj_wire_gen==gen && session_external_hold);
+    }
     printf("backup test %s\n", bad ? "FAILED" : "passed");
     return bad != 0;
 }
