@@ -1,16 +1,17 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi5.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi6.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
+| Main encoder click | Cycle the displayed track 1 → 2 → 3 → 4 → 1 (CC115 Gate) |
 | Main encoder | Previous/next preset in current engine, on keyboard channel (CC114 relative 64) |
 | Shift + main encoder | Previous/next sound engine, on keyboard channel (CC112 relative 64); loads first preset |
 | Top knob 1 | CC19; master DJ filter: left low-pass, centre bypass, right high-pass |
 | Top knobs 2–4 | CC21–23; engine EDIT parameters 2–4 on keyboard channel |
 | Bottom knobs 5–7 | CC28–30; FM-1 HOME knobs 1–3 for the current engine, on keyboard channel |
 | Bottom knob 8 | CC76; LFO speed on keyboard channel |
-| Faders 1–4 | CC7; fixed MIDI channels 1–4; track volumes |
+| Faders 1–4 | CC7; fixed MIDI channels 1–4; track volumes with finer upper-range travel |
 | Mod strip | CC1 on keyboard channel; vibrato |
 | Pitch strip | Pitch bend on keyboard channel |
 | A-bank pads 1–8 | Hold for repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
@@ -34,3 +35,7 @@ Save a sound/project normally to retain edits. MIDI edits participate in existin
 Source base: hugelton/Felucca commit 7414269c4392cde8f4a4351c5f566314903b9116 (1.0.5.2). This is a local custom build. Back up projects/presets before flashing. See ../BUILDING.md for building and installation.
 
 Pad Gate behavior is documented in [Arturia’s MiniLab 3 MIDI Control Center manual](https://downloads.arturia.net/products/minilab-3/manual/minilab-3-mcc_Manual_1_14_1_EN.pdf).
+
+Fader travel uses a smooth concave taper: level = round(value × (381 − value) / 254). The slope falls from 1.5 near the bottom to 0.5 near the top, giving about three times as much travel per upper-level step. MIDI 0 is silence and 127 remains full level. Stored levels and the synth’s dB scale are unchanged; this spreads the existing level steps across physical travel.
+
+Moving a parameter knob or fader shows a 1.2-second popup with its track, actual parameter name and formatted value. The master filter shows LPF/HPF amount or BYPASS. The popup preserves the current page and clears cleanly; menus, naming and confirmation dialogs take priority. Encoder click changes the displayed track only, not the MiniLab keyboard MIDI channel. Turned knobs and played notes still follow ROUT and the keyboard channel.

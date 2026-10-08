@@ -988,10 +988,53 @@ static void style_apply(void)
     }
 }
 
+/* MIDI feedback floats over the graph; it never changes the current page.
+ * A full redraw on expiry restores pixels hidden under the cached page. */
+static void draw_midi_popup(void)
+{
+    char head[24], value[24], label[24], number[8];
+    const char *unit = "";
+    const midi_notice_t *n = &midi_popup.notice;
+    if (!midi_popup.active) return;
+    if (fm1_ms - midi_popup.stamp >= 1200u) {
+        midi_popup.active = 0;
+        ui.force = 1;
+        return;
+    }
+    str_cpy(head, n->kind == 1u ? "MASTER" : "TRACK ", sizeof head);
+    if (n->kind != 1u) {
+        fmt_int(number, n->track + 1u);
+        str_cpy(head + str_len(head), number, sizeof head - str_len(head));
+    }
+    if (n->kind == 1u) {
+        str_cpy(label, n->value < 0 ? "LOW PASS" : n->value > 0 ? "HIGH PASS" : "FILTER", sizeof label);
+        if (!n->value) str_cpy(value, "BYPASS", sizeof value);
+        else { fmt_int(value, n->value < 0 ? -n->value : n->value); unit = "%"; }
+    } else if (n->kind == 2u) {
+        str_cpy(label, "SELECTED", sizeof label);
+        fmt_int(value, n->value);
+    } else {
+        str_cpy(label, n->desc->label, sizeof label);
+        param_format(n->desc, n->value, value, &unit);
+    }
+    cv_begin(216, 104, T_BG);
+    cv_rrect(0, 0, 216, 104, 8, T_RULE, T_BG);
+    cv_rrect(1, 1, 214, 102, 7, T_SURF, T_RULE);
+    cv_text_in(8, 8, 200, &AF_S, head, T_MID, T_SURF);
+    cv_text_in(8, 27, 200, &AF_M, label, T_TEXT, T_SURF);
+    cv_text_in(8, 49, 200, &AF_L, value, T_ACCENT, T_SURF);
+    cv_text_in(8, 84, 200, &AF_S, unit, T_MID, T_SURF);
+    cv_blit(12, 84);
+}
+
 static void ui_draw(void)
 {
     style_apply();
     ui.frame++;
+    if (ui.uboot || ui.menu || ui.confirm || name_on()) {
+        if (midi_popup.active) ui.force = 1;
+        midi_popup.active = 0;
+    }
     if (ui.uboot) {
         draw_uboot();
         draw_head();
@@ -1029,6 +1072,7 @@ static void ui_draw(void)
         if (ui.bpm_t)
             ui.bpm_t--;
         ui.force = 0;
+        draw_midi_popup();
         return;
     }
     if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
@@ -1057,4 +1101,5 @@ static void ui_draw(void)
     felucca_dbg.stage = 6;
     draw_foot();
     ui.force = 0;
+    draw_midi_popup();
 }

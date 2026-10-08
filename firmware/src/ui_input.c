@@ -852,6 +852,7 @@ static void ui_notices(void)
 static void ui_input(void)
 {
     midi_browse_poll();
+    midi_ui_poll();
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
     uint32_t home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     uint32_t rec = btn_hold(&ui.rec_t0, B_REC, now, rec_hold_page());   /* (#91: held on SEQ: the clear) */

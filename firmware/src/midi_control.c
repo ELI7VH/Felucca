@@ -30,6 +30,31 @@ static void midi_browse_enqueue(uint32_t ch, uint32_t bank, uint32_t value)
     midi_browse_w = next;
 }
 
+/* Audio/ISR -> UI mailbox. Coalesce rapid knob movement to the latest value;
+ * formatting and drawing are entirely on the UI thread. */
+typedef struct {
+    const param_desc_t *desc;
+    int16_t value;
+    uint8_t track, kind; /* 0 parameter, 1 master filter, 2 track selection */
+} midi_notice_t;
+static volatile midi_notice_t midi_notice;
+static volatile uint8_t midi_notice_pending, midi_track_steps;
+static uint8_t midi_click_held;
+static void midi_notify(track_t *t, const param_desc_t *d, int32_t value, uint32_t kind)
+{
+    midi_notice.desc = d;
+    midi_notice.value = (int16_t)value;
+    midi_notice.track = (uint8_t)trk_index(t);
+    midi_notice.kind = (uint8_t)kind;
+    midi_notice_pending = 1;
+}
+/* Concave taper: slope 1.5 at silence -> 0.5 at full level. More travel for
+ * the upper levels, exact silence/full endpoints, no floating-point ISR work. */
+static uint32_t midi_volume(uint32_t value)
+{
+    return (value * (381u - value) + 127u) / 254u;
+}
+
 /* Low bits: track + 1. High bit: key released, held by its channel's pedal. */
 static uint8_t midi_sel_on[16][128];
 #define midi_notes midi_sel_on
@@ -258,7 +283,8 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
     case 94: id = P_DLY; break;
     default: return 0;
     }
-    midi_parameter(t, id, value);
+    midi_parameter(t, id, cc == 7u ? midi_volume(value) : value);
+    midi_notify(t, track_desc(t, id), t->p[id], 0);
     return 1;
 }
 
@@ -273,8 +299,14 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
                 * Uses the existing smoothed FX macro; never edits a sound. */
         int32_t v = (int32_t)value;
         perf_k[0] = (int8_t)(v < 63 ? (v - 63) * 100 / 63 : v > 64 ? (v - 64) * 100 / 63 : 0);
+        midi_notify(midi_track(ch), 0, perf_k[0], 1);
         return;
     }
+    case 115: /* Main encoder click: one displayed-track step per rising edge. */
+        if (value >= 64u && !midi_click_held)
+            midi_track_steps = (uint8_t)((midi_track_steps + 1u) % NTRK);
+        midi_click_held = value >= 64u;
+        return;
     case 114: case 112:
         midi_browse_enqueue(ch, cc == 112u, value);
         return;

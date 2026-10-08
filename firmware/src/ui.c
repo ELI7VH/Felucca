@@ -1086,6 +1086,36 @@ static void track_select(uint32_t i)
     ui.force = 1;
 }
 
+static struct {
+    midi_notice_t notice;
+    uint32_t stamp;
+    uint8_t active;
+} midi_popup;
+
+static void midi_ui_poll(void)
+{
+    midi_notice_t notice;
+    uint32_t steps;
+    int pending;
+    if (!midi_notice_pending && !midi_track_steps) return;
+    fm1_irq_off();
+    pending = midi_notice_pending;
+    notice = midi_notice;
+    steps = midi_track_steps;
+    midi_notice_pending = midi_track_steps = 0;
+    fm1_irq_on();
+    if (steps) {
+        track_select((song.sel + steps) % NTRK);
+        notice.desc = 0; notice.track = song.sel; notice.value = (int16_t)(song.sel + 1u); notice.kind = 2;
+        pending = 1;
+    }
+    if (pending) {
+        midi_popup.notice = notice;
+        midi_popup.stamp = fm1_ms;
+        midi_popup.active = 1;
+    }
+}
+
 #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
 
 /* ---------------------------------------------------- action pages --- */

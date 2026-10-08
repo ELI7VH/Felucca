@@ -21,7 +21,8 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 | Top knobs 2–4 | EDIT parameters 2–4 of the addressed track's engine |
 | Bottom knobs 5–7 | FM-1 HOME knobs 1–3, following that engine's actual assignments |
 | Bottom knob 8 | LFO speed, including mod-wheel vibrato speed |
-| Faders 1–4 | Fixed volumes for tracks 1–4, independent of keyboard channel |
+| Faders 1–4 | Fixed volumes for tracks 1–4, with finer upper-range travel |
+| Main encoder click | Cycle the displayed track 1 → 2 → 3 → 4 → 1; keyboard channel stays unchanged |
 | Main encoder | Previous/next factory or saved user preset within the current engine |
 | Shift + main encoder | Previous/next visible sound engine; loads its first factory preset |
 | Modulation strip | Vibrato depth on the keyboard channel |
@@ -62,11 +63,11 @@ through standard MIDI CC. Existing pitch bend, sustain and panic handling remain
 The full host suite passed during development, including 92 unchanged golden audio renders.
 Additional integration tests cover all engines' parameter ranges, HOME knob assignments,
 channel isolation, USB/TRS parsing, automation, mod-wheel behavior and preset/engine browsing.
-The target build passes code and RAM budgets. The midi5 MIDI integration and performance DSP
+The target build passes code and RAM budgets. The midi6 MIDI integration and performance DSP
 tests passed, including all eight momentary pads reaching/releasing the real performance stage,
 latch independence, overlapping holds, zero-velocity releases and channel 16 panic/reset.
 
-Firmware midi5 was installed on an FM-1 and its reported version verified. Live USB filter
+Firmware midi6 was installed on an FM-1 and its reported version verified. Live USB filter
 and pad messages left all four track parameter dumps unchanged; the filter was centred and
 all pads released afterwards. Effect sound through the physical DIN setup is not yet verified. Live USB tests
 verified independent track volumes, parameter controls, HOME controls and preset/engine
@@ -79,8 +80,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi5
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi5.fwsc
+./build.sh --release 1.0.5.2-midi6
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi6.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -92,3 +93,13 @@ Original copyrights, GPL-3.0-only licensing and third-party attribution are reta
 ### Momentary A-bank effects
 
 Pads 1–8 hold repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up and octave down. They send Gate notes 36–43 on fixed channel 16, intercepted before track routing. They never sound notes and ignore FX LATCH. A separate MIDI hold mask preserves local FX keys when pads release. The last held buffer effect wins; channel 16 panic/reset clears MIDI holds. B-bank retains ordinary notes.
+
+### Fader taper and controller feedback
+
+CC7 uses a smooth concave taper with exact silence/full-level endpoints. Upper levels get more physical travel; stored parameter format and the existing dB scale stay unchanged. Parameter knobs/faders show the addressed track, engine-specific parameter name and formatted value in a 1.2-second popup. CC19 shows the master filter. Formatting/rendering run on the UI thread via a latest-value mailbox. Popup expiry invalidates the underlying cached screen.
+
+CC115 rising edges queue displayed-track changes on the UI thread via the normal track-selection helper. Release/repeated held messages do not advance tracks. The supplied preset enables the main encoder’s click as Gate CC115; this requires importing/storing the updated MiniLab preset. Keyboard channel routing remains independent.
+
+Live USB midi6 checks verified the nonlinear fader values at 0, 32, 64, 96, 112 and 127, and encoder-click track cycling/release across all four tracks. All track parameters and the original selection were restored afterwards. Host tests verify popup content, expiry and exact screen restoration; every formatted parameter value across all engines fits the popup. The new MiniLab encoder-click template still requires controller import/store; the MiniLab was not connected over USB during this update.
+
+The midi6 host run passed audio regression (92 unchanged golden renders), MIDI integration, UI behavior/layout, persistence, DSP and target-cost checks. The only initial failure was the font-spacing reference under system Python without RAQM; rerunning that check with `.venv-build/bin/python` passed. Browser emulator and optional DaisySP reference checks remain unavailable.

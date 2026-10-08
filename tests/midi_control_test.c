@@ -8,6 +8,8 @@ static void midi_test_reset(void)
 {
     ui_power_on();
     midi_browse_r = midi_browse_w = 0;
+    midi_notice_pending = midi_track_steps = midi_click_held = 0;
+    memset(&midi_popup, 0, sizeof midi_popup);
     memset(midi_ch, 0, sizeof midi_ch); memset(midi_notes, 0, sizeof midi_notes);
     memset(midi_owners, 0, sizeof midi_owners); memset(midi_bend_q8, 0, sizeof midi_bend_q8);
     memset(midi_bend_target, 0, sizeof midi_bend_target); memset(&midi_clock, 0, sizeof midi_clock);
@@ -25,6 +27,42 @@ static int gate_note(const track_t *t, uint32_t note)
 {
     for (uint32_t i = 0; i < NVOICE; i++) if (t->v[i].active && t->v[i].gate && t->v[i].note == note) return 1;
     return 0;
+}
+static int controller_feedback_test(void)
+{
+    int bad = 0; midi_test_reset();
+    int16_t previous = -1;
+    for (uint32_t v = 0; v < 128u; v++) {
+        queued(0xB0,7,v,1);
+        bad += trk[0].p[P_LEVEL] < previous || trk[0].p[P_LEVEL] > 127;
+        previous = trk[0].p[P_LEVEL];
+    }
+    bad += check("fader taper is monotonic with exact silence/full endpoints", !bad && midi_volume(0)==0 && trk[0].p[P_LEVEL]==127);
+    bad += check("upper travel changes level less than lower travel", midi_volume(32)-midi_volume(0) > midi_volume(127)-midi_volume(95));
+    queued(0xB1,76,70,2); midi_ui_poll();
+    bad += check("TRS knob popup carries actual track, descriptor and value", midi_popup.active && midi_popup.notice.track==1 && midi_popup.notice.desc==track_desc(&trk[1],P_LRATE) && midi_popup.notice.value==70);
+    ui_draw(); screen_save("/tmp", "felucca-midi-popup");
+    uint32_t stamp=midi_popup.stamp; fm1_ms=stamp+1199; ui_draw();
+    bad += check("popup persists briefly while idle", midi_popup.active);
+    fm1_ms=stamp+1200; ui_draw();
+    bad += check("popup expires and invalidates underlying cached page", !midi_popup.active && ui.force);
+    ui_draw(); static uint16_t restored[240*240]; memcpy(restored,host_screen,sizeof restored);
+    ui.force=1; ui_draw();
+    bad += check("popup expiry restores exactly the original page", !memcmp(restored,host_screen,sizeof restored));
+    for (uint32_t k=0; k<8; k++) {
+        uint32_t before=song.sel;
+        queued(0xB0,115,127,1); queued(0xB0,115,127,1);
+        bad += check("click selection is deferred outside audio callback", song.sel==before);
+        midi_ui_poll();
+        bad += check("one encoder press cycles one displayed track, including wrap", song.sel==(before+1u)%4u);
+        queued(0xB0,115,0,1); midi_ui_poll();
+        bad += check("click release does not advance track", song.sel==(before+1u)%4u);
+    }
+    queued(0xB4,115,127,1); midi_ui_poll();
+    bad += check("unsupported MIDI channel cannot change selected track", song.sel==0);
+    queued(0xB0,19,0,1); midi_ui_poll();
+    bad += check("master filter popup identifies the master and LPF", midi_popup.notice.kind==1 && midi_popup.notice.value==-100);
+    midi_test_reset(); return bad;
 }
 static int pads_test(void)
 {
@@ -326,7 +364,7 @@ static int standalone_cc_test(void)
                 bad += check("USB/TRS engine CC maximum follows its channel", trk[ch].p[P_E0 + k] == param_fit(d, d->max));
             }
             queued(0xB0u | ch, 7, 17u + ch, source);
-            bad += check("four CC7 mixer strips are independent", trk[ch].p[P_LEVEL] == (int32_t)(17u + ch));
+            bad += check("four CC7 mixer strips are independent", trk[ch].p[P_LEVEL] == (int32_t)midi_volume(17u + ch));
         }
     }
     queued(0xB0, 10, 0, 1); queued(0xB1, 10, 127, 2);
@@ -352,12 +390,12 @@ static int standalone_cc_test(void)
     midi_test_reset(); song.sel = 2;
     um_byte(0xB1); um_byte(7); um_byte(64); um_byte(20); um_byte(127); events_block(CTL);
     const param_desc_t *uart_d = track_desc(&trk[1], P_E0);
-    bad += check("real TRS parser with running status reaches track 2 volume and engine", trk[1].p[P_LEVEL] == 64 && trk[1].p[P_E0] == param_fit(uart_d, uart_d->max) && trk[0].p[P_LEVEL] == TP[P_LEVEL].def);
+    bad += check("real TRS parser with running status reaches track 2 volume and engine", trk[1].p[P_LEVEL] == (int32_t)midi_volume(64) && trk[1].p[P_E0] == param_fit(uart_d, uart_d->max) && trk[0].p[P_LEVEL] == TP[P_LEVEL].def);
     int16_t keep = trk[0].p[P_LEVEL]; queued(0xB4, 7, 99, 1);
     bad += check("CH1-4 ignores unsupported channels' parameter CCs", trk[0].p[P_LEVEL] == keep);
     song.g[G_ROUTE] = 1; events_block(CTL);
     queued(0xB0, 7, 61, 1); queued(0xB1, 7, 62, 2);
-    bad += check("fixed faders remain independent in SEL mode", trk[0].p[P_LEVEL] == 61 && trk[1].p[P_LEVEL] == 62 && trk[2].p[P_LEVEL] == TP[P_LEVEL].def);
+    bad += check("fixed faders remain independent in SEL mode", trk[0].p[P_LEVEL] == (int32_t)midi_volume(61) && trk[1].p[P_LEVEL] == (int32_t)midi_volume(62) && trk[2].p[P_LEVEL] == TP[P_LEVEL].def);
     queued(0xB0, 73, 90, 1);
     bad += check("other parameter CCs preserve SEL routing", trk[2].p[P_ATK] == 90);
     midi_test_reset(); trk[0].p[P_REV] = 23; song.sel = 0; song.rec = 1;
@@ -465,7 +503,7 @@ static int browse_test(void)
 
 int main(void)
 {
-    int bad = pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+    int bad = controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
               arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }
