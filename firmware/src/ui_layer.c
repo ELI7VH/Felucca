@@ -447,7 +447,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 static int glo_sounding(uint32_t t) { return !trk[t].p[P_MUTE] && (!perf_solo || ((perf_solo >> t) & 1u)); }
 static uint32_t layer_leds(uint32_t *br)
 {
-    uint32_t k, m = 0, n = 0, l = ui.layer, held = perf_held | perf_latched, ok = perf_avail();
+    uint32_t k, m = 0, n = 0, l = ui.layer, held = perf_held | perf_midi_held | perf_latched, ok = perf_avail();
     uint32_t mask = scale_mask(TSEL), root = (uint32_t)TSEL->p[P_ROOT] % 12u;
     for (k = 0; k < 27u; k++) {
         uint32_t p = key_place(k), b = (uint32_t)key_black(k), on = 0, can = 0, e;
@@ -582,7 +582,7 @@ static void bnote(char *n, uint32_t t) { n[0] = B_NOTE[t]; n[1] = '#'; n[2] = 0;
 
 static void layer_fx(void)
 {
-    uint32_t held = perf_kill ? 0u : perf_held | perf_latched, act = perf_act, ok = perf_avail(), e;
+    uint32_t held = perf_kill ? 0u : perf_held | perf_midi_held | perf_latched, act = perf_act, ok = perf_avail(), e;
     char n[3] = {0, 0, 0};
     lc_w = LF_W;
     for (e = 0; e < PF_M1; e++) {                       /* the effects of the white keys F3 .. A4, 5 a row */
@@ -690,7 +690,7 @@ static void draw_layer(void)
     uint32_t l = ui.layer % LAYER_N, sig = l * 7919u + ux.gen * 977u;
     layer_cards(l);
     if (l == LAYER_FX)
-        sig += (perf_kill ? 0u : perf_held | perf_latched) * 31u + perf_latch_on * 11u + perf_act * 131u + perf_avail() * 7u + (uint32_t)perf_harm_on() * 3u;
+        sig += (perf_kill ? 0u : perf_held | perf_midi_held | perf_latched) * 31u + perf_latch_on * 11u + perf_act * 131u + perf_avail() * 7u + (uint32_t)perf_harm_on() * 3u;
     else if (l == LAYER_GLO)
         sig += perf_solo * 31u + (uint32_t)song.g[G_CLOCK] * 5u +
                (uint32_t)(trk[0].p[P_MUTE] | trk[1].p[P_MUTE] << 1 | trk[2].p[P_MUTE] << 2 | trk[3].p[P_MUTE] << 3) * 131u;

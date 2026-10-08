@@ -26,6 +26,38 @@ static int gate_note(const track_t *t, uint32_t note)
     for (uint32_t i = 0; i < NVOICE; i++) if (t->v[i].active && t->v[i].gate && t->v[i].note == note) return 1;
     return 0;
 }
+static int pads_test(void)
+{
+    int bad = 0; midi_test_reset(); perf_midi_held = perf_held = perf_latched = 0;
+    perf_latch_on = 1; perf_kill = 0; song.playing = 0;
+    const uint8_t effects[8] = {PF_R8, PF_R16, PF_R32, PF_REV, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN};
+    for (uint32_t k = 0; k < 8; k++) {
+        queued(0x9F, 36+k, 100, k&1);
+        bad += check("A pad engages its master effect with latch on and CH1-4 routing", perf_midi_held == PF_BIT(effects[k]) && !perf_latched && !midi_notes[15][36+k]);
+        perf_begin(CTL);
+        bad += check("pad hold reaches the real performance DSP", perf_act & PF_BIT(effects[k]));
+        queued(0x8F, 36+k, 0, k&1);
+        perf_begin(CTL);
+        bad += check("pad release removes the DSP activation", !(perf_act & PF_BIT(effects[k])));
+        bad += check("pad lift clears its effect despite FX latch", !perf_midi_held);
+    }
+    queued(0x9F,36,100,1); queued(0x9F,39,100,0);
+    bad += check("last pressed pad wins overlapping buffer holds", perf_pick(perf_midi_held) == PF_REV);
+    queued(0x9F,39,0,0);
+    bad += check("zero-velocity note-on releases and resumes older held pad", perf_pick(perf_midi_held) == PF_R8);
+    perf_held = PF_BIT(PF_R8); queued(0x8F,36,0,1);
+    bad += check("pad release preserves a matching local FX key", perf_held == PF_BIT(PF_R8) && !perf_midi_held);
+    perf_held = 0;
+    for (uint32_t cc = 120; cc <= 123; cc++) if (cc != 122) {
+        queued(0x9F,43,100,1); queued(0xBF,cc,0,1);
+        bad += check("channel 16 panic/reset releases pad effects", !perf_midi_held);
+    }
+    song.g[G_ROUTE] = 1; queued(0x9F,40,100,1); queued(0x8F,40,0,1);
+    bad += check("SEL routing consumes pad notes without creating voices", !midi_notes[15][40] && !gate_note(&trk[0],40));
+    queued(0x90,36,100,1);
+    bad += check("keyboard notes remain ordinary notes", gate_note(&trk[0],36) && !perf_midi_held);
+    perf_latch_on = 0; return bad;
+}
 static int controls_test(void)
 {
     int bad = 0; midi_test_reset(); track_t *t = &trk[0];
@@ -347,6 +379,27 @@ static int standalone_cc_test(void)
     return bad;
 }
 
+static int master_filter_test(void)
+{
+    int bad = 0; midi_test_reset(); perf_k[0] = 0;
+    int16_t original[NTRK][P_COUNT];
+    for (uint32_t k = 0; k < NTRK; k++) memcpy(original[k], trk[k].p, sizeof original[k]);
+    queued(0xB0, 19, 0, 1);
+    bad += check("DJ CC reaches low-pass end without holding FX", perf_k[0] == -100 && perf_begin(CTL));
+    queued(0xB3, 19, 127, 2);
+    bad += check("DJ CC reaches high-pass end from another valid channel", perf_k[0] == 100);
+    queued(0xB4, 19, 0, 2);
+    bad += check("CH1-4 ignores master CC on channel 5", perf_k[0] == 100);
+    queued(0xB1, 19, 63, 1);
+    bad += check("DJ lower centre value bypasses filter", !perf_k[0]);
+    queued(0xB2, 19, 64, 2);
+    bad += check("DJ upper centre value bypasses filter", !perf_k[0]);
+    int unchanged = 1;
+    for (uint32_t k = 0; k < NTRK; k++) unchanged &= !memcmp(original[k], trk[k].p, sizeof original[k]);
+    bad += check("master filter never overwrites track sounds or mixer", unchanged);
+    return bad;
+}
+
 static int home_knob_test(void)
 {
     int bad = 0; midi_test_reset();
@@ -412,7 +465,7 @@ static int browse_test(void)
 
 int main(void)
 {
-    int bad = controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
-              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test();
+    int bad = pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+              arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

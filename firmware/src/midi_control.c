@@ -269,6 +269,12 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
     if (midi_parameter_cc(ch, cc, value))
         return;
     switch (cc) {
+    case 19: { /* Master DJ filter: left LPF, centre bypass, right HPF.
+                * Uses the existing smoothed FX macro; never edits a sound. */
+        int32_t v = (int32_t)value;
+        perf_k[0] = (int8_t)(v < 63 ? (v - 63) * 100 / 63 : v > 64 ? (v - 64) * 100 / 63 : 0);
+        return;
+    }
     case 114: case 112:
         midi_browse_enqueue(ch, cc == 112u, value);
         return;
@@ -346,9 +352,26 @@ static void __attribute__((noinline)) midi_route_ch14(void)
 /* Keep the occasional controller/panic dispatch outside the hot rendering loop. Channel voice messages only
  * (realtime and clock are handled in events_block, SysEx never reaches here). With ROUT CH1-4 channels
  * 5..16 are ignored entirely: notes, bend, CCs (CC1/11/64, RPN, and the CC120/121/123 panic and reset),
- * channel aftertouch, so they stay free for other instruments. */
+ * channel aftertouch, except dedicated channel 16 master-effect pads/panic below. */
 static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
 {
+    /* A-bank pads use notes 36..43 on dedicated channel 16. Consume them
+     * before track routing: pads always affect the master, never play notes. */
+    if (ch == 15u) {
+        if ((st == 0x90u || st == 0x80u) && d1 >= 36u && d1 <= 43u) {
+            static const uint8_t effects[8] = {PF_R8, PF_R16, PF_R32, PF_REV, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN};
+            uint32_t e = effects[d1 - 36u], bit = PF_BIT(e);
+            if (st == 0x90u && d2) {
+                if (!(perf_midi_held & bit)) perf_ord[e] = ++perf_seq;
+                perf_midi_held |= bit;
+            } else perf_midi_held &= ~bit;
+            return;
+        }
+        if (st == 0xB0u && (d1 == 120u || d1 == 121u || d1 == 123u)) {
+            perf_midi_held = 0;
+            return;
+        }
+    }
     if (ch >= NPART && !song.g[G_ROUTE])
         return;
     if (st == 0x90u || st == 0x80u)

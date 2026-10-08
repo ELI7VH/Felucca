@@ -17,7 +17,8 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 
 | MiniLab control | Behavior |
 | --- | --- |
-| Top knobs 1–4 | First four EDIT parameters of the addressed track's engine |
+| Top knob 1 | Master DJ filter: left low-pass, centre bypass, right high-pass |
+| Top knobs 2–4 | EDIT parameters 2–4 of the addressed track's engine |
 | Bottom knobs 5–7 | FM-1 HOME knobs 1–3, following that engine's actual assignments |
 | Bottom knob 8 | LFO speed, including mod-wheel vibrato speed |
 | Faders 1–4 | Fixed volumes for tracks 1–4, independent of keyboard channel |
@@ -25,6 +26,7 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 | Shift + main encoder | Previous/next visible sound engine; loads its first factory preset |
 | Modulation strip | Vibrato depth on the keyboard channel |
 | Pitch strip | Existing pitch bend on the keyboard channel |
+| A-bank pads 1–8 | Momentary repeat 1/8, 1/16, 1/32, reverse, tape stop, freeze, octave up/down |
 
 See [the setup guide](controllers/MiniLab-3.md) and import
 [`Felucca.minilab3`](controllers/Felucca.minilab3) in Arturia MIDI Control Center.
@@ -33,11 +35,15 @@ Use the correct DIN-to-TRS adapter for the FM-1 input and supply power to both d
 
 ## Firmware behavior
 
+- CC19 controls the existing smoothed master FILTER macro without holding FX. Values 0–62
+  sweep low-pass, 63–64 bypass, and 65–127 sweep high-pass. This is a live performance
+  control, not a saved patch parameter; normal FX-layer resets also reset it.
 - CC20–27 expose all eight engine EDIT parameters, scaled to their own signed or enum ranges.
 - CC28–31 follow the engine's four HOME knob assignments. The supplied MiniLab preset uses
   CC28–30 for its first three bottom knobs and CC76 for its fourth.
 - CC7 on channels 1–4 always targets the corresponding track's volume, including ROUT SEL.
-  Other parameter controls follow the existing ROUT setting. CH1-4 ignores channels 5–16.
+  Other parameter controls follow the existing ROUT setting. CH1-4 ignores channels 5–16,
+  except the dedicated channel 16 master-effect pad notes and pad panic/reset.
 - CC114 browses presets; CC112 browses engines. Both use MiniLab relative values centred
   at 64 (63 = previous, 65 = next). These are custom CCs, not MIDI Program Change or Bank Select.
 - Preset loads are queued for the UI thread, outside the audio callback. They preserve track
@@ -56,12 +62,16 @@ through standard MIDI CC. Existing pitch bend, sustain and panic handling remain
 The full host suite passed during development, including 92 unchanged golden audio renders.
 Additional integration tests cover all engines' parameter ranges, HOME knob assignments,
 channel isolation, USB/TRS parsing, automation, mod-wheel behavior and preset/engine browsing.
-The target build passes code and RAM budgets.
+The target build passes code and RAM budgets. The midi5 MIDI integration and performance DSP
+tests passed, including all eight momentary pads reaching/releasing the real performance stage,
+latch independence, overlapping holds, zero-velocity releases and channel 16 panic/reset.
 
-Custom firmware was installed on an FM-1 and its reported version verified. Live USB tests
+Firmware midi5 was installed on an FM-1 and its reported version verified. Live USB filter
+and pad messages left all four track parameter dumps unchanged; the filter was centred and
+all pads released afterwards. Effect sound through the physical DIN setup is not yet verified. Live USB tests
 verified independent track volumes, parameter controls, HOME controls and preset/engine
-browsing. Earlier MiniLab mappings were stored and read back successfully. The final bottom-row
-and LFO-speed preset is provided here; its hardware store/readback was blocked by editor UI
+browsing. Earlier MiniLab mappings were stored and read back successfully. The final bottom-row,
+LFO-speed, master filter and momentary-pad preset is provided here; its hardware store/readback was blocked by editor UI
 automation timeouts. Direct DIN/audio performance still needs hands-on verification.
 
 ## Build and install
@@ -69,8 +79,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi4
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi4.fwsc
+./build.sh --release 1.0.5.2-midi5
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi5.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -78,3 +88,7 @@ firmware, MiniLab template, setup guide and upstream license/attribution files. 
 web installer installs its own firmware; it does not install this fork's changes.
 
 Original copyrights, GPL-3.0-only licensing and third-party attribution are retained.
+
+### Momentary A-bank effects
+
+Pads 1–8 hold repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up and octave down. They send Gate notes 36–43 on fixed channel 16, intercepted before track routing. They never sound notes and ignore FX LATCH. A separate MIDI hold mask preserves local FX keys when pads release. The last held buffer effect wins; channel 16 panic/reset clears MIDI holds. B-bank retains ordinary notes.
