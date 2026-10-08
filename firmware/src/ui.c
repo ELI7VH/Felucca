@@ -1026,8 +1026,8 @@ static void midi_browse_poll(void)
 {
     /* One request per UI poll bounds work; rapid turns remain ordered. */
     midi_browse_t request;
+    if (midi_browse_r == midi_browse_w) return;
     fm1_irq_off();
-    if (midi_browse_r == midi_browse_w) { fm1_irq_on(); return; }
     request = midi_browse_q[midi_browse_r];
     midi_browse_r = (uint8_t)((midi_browse_r + 1u) % MIDI_BROWSE_N);
     fm1_irq_on();
