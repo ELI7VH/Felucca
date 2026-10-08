@@ -34,6 +34,7 @@
   <p><a href="../../mod/">Controls and setup</a> · <a href="../../controllers/Felucca.minilab3" download>MiniLab preset</a></p>
   <p data-t="intro"></p>
   <p data-t="warn"></p>
+  <p>Back up first. This mod uses user sample slot 3 for songs; move that sample before installing.</p>
   <p class="small" data-t="direct"></p>
   <p class="small" data-t="beta"></p>
   <p class="small"><span data-t="brick"></span>
@@ -182,6 +183,7 @@ $("go").addEventListener("click", async () => {
       ota.link.close();
       sayK((await up.resume(image, step, meta.product)) ? "done" : "stopped");
     } else {
+      await prepareModUpgrade(up);
       await up.install(image, meta.product, step);
     }
   } catch (e) {
@@ -202,6 +204,21 @@ $("stock-file").addEventListener("change", async () => {
     stock = verified; sayK("stockValid"); lockInstaller(false);
   } catch (e) { if (epoch === stockFileEpoch) sayK("stockError", e.message); }
 });
+async function prepareModUpgrade(up) {
+  const device=await up.find(id=>id.model==="FM-1");
+  if(!device) throw new Error("Connect the FM-1 and try again");
+  const {input,output}=device.link;device.link.close();
+  if(device.id.version<900) return; // stock firmware needs its own backup tools
+  const link=new BackupConnection(input,output);
+  try {
+    const info=archiveInfo(await link.request([1,[]]));
+    if(!info.supported) throw new Error("This Felucca needs an upstream update before complete backup is available");
+    const archive=await captureBackup((r,o)=>link.request(r,o),info.version,
+      (done,total)=>sayK("backup",`${Math.round(done/Math.max(1,total)*100)}%`));
+    if(archive.objects.some(o=>o.id===34 && o.size)) throw new Error("Move user sample 3 to slot 1 or 2 before installing this mod");
+    saveArchive(archive);
+  } finally {link.close();}
+}
 function saveArchive(archive) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(archive)], {type:"application/json"}));
   const a = document.createElement("a"); a.href = url; a.download = `Felucca-backup-${new Date().toISOString().slice(0,10)}.json`;

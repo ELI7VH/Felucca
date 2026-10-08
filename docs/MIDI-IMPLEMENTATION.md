@@ -151,3 +151,22 @@ MiniLab User 5 was backed up, stored over the controller configuration SysEx int
 Validation: final midi10 full host suite passed, including persistence, backup, editor, UI, USB/TRS input, modulation and target cost checks. All 92 golden renders stayed unchanged. Target image is 436068 bytes, static RAM 92576/98304 bytes, pool 330208/344064 bytes. Shared audio IRQ estimate is 38659 against the existing 37502 baseline (within its 10% tolerance); modulation budgets remain unchanged.
 
 Installed INFO identity is FELUCCA v1.0.5.2-midi10. Live USB verified separate kick/snare tune, selected-drum pan/reverb/delay and drum-hit screen selection. A complete backup protected the session. New user edits arrived during verification, so cleanup removed only still-identical temporary test overrides, preserving every other current value. The latest musical payload and per-drum overrides matched the CRC-verified Project 4 autosave after silence. On firmware restart, four full track parameter dumps matched that save; subsequent live notes changed the screen selection, and later tweaks changed sounds. Physical DIN gestures, popup appearance and a quiet screen-selection check remain hands-on validation.
+
+
+## midi11: evolving 12-song setlist and mod website
+
+Twelve complete songs use projects A–C plus nine A/B pairs at 0xC8000–0xD9FFF. The order has its own A/B pair at 0xDA000/0xDB000. Project 4 remains recovery; sample slots 1/2 and existing settings/preset addresses stay unchanged. Legacy SLICE source 3 becomes a USR2 display alias; PIANO remains source 4.
+
+One additional serialized project cache and nine name/used entries avoid a 13-project RAM allocation. Recovery metadata byte `PROJ_FM6_OFF-1` stores active project slot + 1 (zero means old/unbound). Recovery-only sessions bind to the first empty setlist entry on upgrade; existing named songs are preserved.
+
+After stopped transport, five seconds of rendered silence and five settled seconds, main-loop autosave compares canonical current-song bytes, writes only changed music, saves dirty order and repacks the recovery journal. Queued loads save the previous song before restoring target tempo, tracks, patterns and automation. PLAY cancels a queued load; flash failure blocks it. No auto-advance or writes from the MIDI/audio ISR.
+
+CC110/111 rising edges on channel 16 queue previous/next full song. MiniLab B-bank pads 1/2 send these; synth knobs, four faders, effects and transport mappings stay unchanged. Controller program selection still matters: activate the stored User preset.
+
+Editor command 74: `[0]` read, `[1,position]` select, `[2,position]` move selected entry, `[3,position]` queue load, `[4,position]` save current song, `[5,position,ASCII name...]` rename (1–12 printable characters). Positions are 0–11. Reply: status, selected position, active song rank (127 unbound), pending-load slot+1, then 12 records: song rank, used, NUL-terminated name. INFO appends `4C 01 0C`. Status 1 invalid, 2 empty, 3 playing, 4 save failed. Deferred load reports pending, not completed.
+
+Backup retains IDs 0–9 and 32–34; appends IDs 10–18 for new songs and 19 for order. Retired sample ID34 lists empty. Third-sample restores are refused before writes. Legacy 11/12/13-object archives still read; new archives have 23 objects. Live-runtime archives retain active-song identity. Private backups are never published.
+
+The fork website packages the exact mod firmware with its SHA-256, controller preset, setlist editor and brief problem/solution guide. Operational persistence details and release metadata are in its support page. Upstream remains separately credited.
+
+Validation: full host suite passed, including new setlist persistence and web protocol tests, UI layout/alignment and 92 unchanged golden renders. Image 439252 bytes; static RAM 94384/98304; pool 330208/344064. Audio IRQ cost 38727 against baseline 37502 remains inside the existing 10% tolerance. A complete pre-install backup matched the saved recovery musical payload. Live INFO confirms midi11; command 74 returns 12 unique entries. The first empty entry received the recovery-only session automatically. All musical bytes matched before/after installation and the actual saved Song 1. The CRC-verified new archive has 23 objects and retains active-song identity. MiniLab was not connected by USB during this installation; its new previous/next pads require importing the updated preset. Existing direct DIN mappings remain unchanged.
