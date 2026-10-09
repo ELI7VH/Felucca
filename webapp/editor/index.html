@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments -->
 <!-- Sample input recording and waveform trimming adapted from Andrea (@andreahaku), PR #29.
-     Felucca web editor. One file, no libraries. Protocol: EDITOR_PROTOCOL.md.
+     Felucca web editor. Protocol: EDITOR_PROTOCOL.md.
      Add ?mock=1 to the URL to use a built-in simulated device. -->
 <html lang="ja" data-theme="dark">
 <head>
@@ -11,6 +11,7 @@
 <title>WaveLoop Kit Editor</title>
 <meta name="description" content="Shape sounds, sequence tracks and build your setlist with WaveLoop Kit.">
 <link rel="stylesheet" href="brand/tokens.css">
+<link rel="stylesheet" href="brand/cursor.css">
 <style>
   @font-face { font-family: "Micro 5"; src: url("brand/Micro5-Regular.woff2") format("woff2"); font-display: swap; }
   @font-face { font-family: "Finlandica"; src: url("brand/Finlandica.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
@@ -3274,16 +3275,19 @@ let dev = null;        /* {link, input, output, info, pdesc[], gdesc[], names[][
 let busy = 0;          /* multi-request operations in progress: no polling */
 /* A completion from an unplugged device must not release a new session's work. */
 let busyEpoch = 0;
+function syncCursorBusy() { $("status").dataset.wlCursorBusy = String(busy > 0); }
 function beginBusy() {
   const epoch = busyEpoch;
   let released = false;
   busy++;
+  syncCursorBusy();
   return () => {
     if (!released && epoch === busyEpoch) busy--;
     released = true;
+    syncCursorBusy();
   };
 }
-function resetBusy() { busyEpoch++; busy = 0; }
+function resetBusy() { busyEpoch++; busy = 0; syncCursorBusy(); }
 let dragging = null;   /* key of the slider being dragged */
 let wantConnected = false;
 const ctl = new Map(); /* key "s:id" -> {input, out, desc, scope, id, row} */
@@ -4345,7 +4349,7 @@ function drawTrim(cv, f) {
 }
 
 function trimCanvas(f) {
-  const cv = el("canvas", { class: "trim", width: 600, height: 60, title: t("trim") });
+  const cv = el("canvas", { class: "trim", width: 600, height: 60, title: t("trim"), "data-wl-cursor": "resize-ew" });
   let end = null;                                   /* "a" or "b": the end being dragged */
   const frac = (e) => { const r = cv.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
   const at = (e) => {
@@ -4381,10 +4385,12 @@ function trimCanvas(f) {
     if (!end && zoomed()) {
       pan = { x: e.clientX, v0: f.v0 ?? 0, span: (f.v1 ?? f.raw.length) - (f.v0 ?? 0) };
       cv.style.cursor = "grabbing";
+      cv.dataset.wlCursor = "move";
       cv.setPointerCapture(e.pointerId);
       return;
     }
     end = end || (Math.abs(p - f.a) <= Math.abs(p - f.b) ? "a" : "b");
+    cv.dataset.wlCursor = "resize-ew";
     cv.setPointerCapture(e.pointerId);
     cv.dispatchEvent(new PointerEvent("pointermove", e));
   });
@@ -4399,6 +4405,7 @@ function trimCanvas(f) {
     }
     if (!end) {                                     /* hovering: what a press would do */
       cv.style.cursor = near(e) || !zoomed() ? "ew-resize" : "grab";
+      cv.dataset.wlCursor = cv.style.cursor === "grab" ? "move" : "resize-ew";
       return;
     }
     const p = at(e), min = Math.round(SMP.RATE * 0.01);   /* at least 10 ms */
@@ -4410,6 +4417,7 @@ function trimCanvas(f) {
     if (pan) {                                      /* the view moved: nothing else changes */
       pan = null;
       cv.style.cursor = "grab";
+      cv.dataset.wlCursor = "move";
       return;
     }
     if (!end) return;
@@ -4675,7 +4683,7 @@ function renderMixer() {
 function buildStrip(i) {
   const lvDesc = dev.pdesc[P.LEVEL] || { fmt: F.INT, min: 0, max: 127, def: 100 };
   const pDesc = dev.pdesc[pPan()] || { fmt: F.BIPCT, min: -64, max: 63, def: 0 };
-  const fader = el("input", { type: "range", class: "fader", min: 0, max: 127, step: 1, "aria-label": `${t("level")} ${i + 1}` });
+  const fader = el("input", { type: "range", class: "fader", min: 0, max: 127, step: 1, "aria-label": `${t("level")} ${i + 1}`, "aria-orientation": "vertical" });
   fader.addEventListener("pointerdown", () => { mixDrag = "lv:" + i; });
   fader.addEventListener("input", () => setLevel(i, +fader.value));
   fader.addEventListener("change", () => setLevel(i, +fader.value));
@@ -5640,5 +5648,6 @@ libInit();
 if (!MOCK && !navigator.requestMIDIAccess) sayK("nomidi");
 })();
 </script>
+<script type="module" src="brand/cursor.js"></script>
 </body>
 </html>
