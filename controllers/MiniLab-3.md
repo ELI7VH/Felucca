@@ -2,7 +2,7 @@
 
 A one-pixel line along the FM-1 screen’s bottom fills left to right as you browse the current bank.
 
-Use the custom `felucca-1.0.5.2-midi21.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi22.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -19,7 +19,9 @@ Use the custom `felucca-1.0.5.2-midi21.fwsc` firmware and `Felucca.minilab3` pre
 | A-bank pad 1 | Alt button (hold); cyan |
 | A-bank pads 2–8 | Hold for repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
 | Alt + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time, on keyboard channel |
-| Alt + top knobs 1–4 | Unassigned |
+| Alt + top knob 1 | Cutoff LFO rate on keyboard channel; shared with vibrato |
+| Alt + top knob 2 | Cutoff LFO amount; FM6 brightness amount; centre = off |
+| Alt + top knobs 3–4 | Unassigned |
 | Alt + pads 2–7 | Unassigned |
 | Alt + pad 8 | Tap tempo |
 | Alt + faders 1–4 | Track 1–4 delay + reverb together |
@@ -107,6 +109,10 @@ For longer patterns, set **SEQ → PATTERN → LEN** to 32, 48 or 64 (any length
 ## Alt layer
 
 Hold the Alt button (cyan A-bank pad 1) for a second layer; it replaces repeat 1/8.
+Alt + top knob 1 sets cutoff LFO rate; top knob 2 sets its amount. Both follow the keyboard MIDI channel.
+The rate is shared with vibrato and other LFO destinations. Amount: centre = off; left reverses the motion.
+The destination varies by engine: FM6 changes brightness; WHEEL ignores this amount. DRUM knobs with Alt are unassigned.
+
 Alt + bottom knobs 5–8 follow the keyboard MIDI channel:
 
 | Knob | Synths | FM6 |
@@ -116,8 +122,8 @@ Alt + bottom knobs 5–8 follow the keyboard MIDI channel:
 | 7 | Sustain | Modulator ratio |
 | 8 | Release | Modulator envelope time |
 
-Higher FM6 envelope time values mean slower envelopes. DRUM knobs with Alt are unassigned.
-Alt + pad 8 taps tempo. Alt + pads 2–7 and top knobs 1–4 are reserved and do nothing.
+Higher FM6 envelope time values mean slower envelopes.
+Alt + pad 8 taps tempo. Alt + pads 2–7 and top knobs 3–4 are reserved and do nothing.
 Alt + faders 1–4 control the corresponding track’s delay + reverb together; normal faders stay track volumes.
 Alt is A-bank pad 1. The MiniLab’s Arturia Shift button keeps its normal controller functions. The controller preset is unchanged from midi16.
 The editor’s MiniLab tab shows the full layout, even without a connected device.

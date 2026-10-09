@@ -11,6 +11,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
 | Needed a second controller layer | Hold Alt (A-bank pad 1); Alt + pad 8 taps tempo; Alt + faders control track delay + reverb. |
 | Wanted more sound controls | Hold Alt; bottom knobs 5–8 shape synth ADSR or FM6 algorithm, feedback, ratio and envelope time. |
+| Wanted quick cutoff movement | Alt + top knob 1 sets LFO rate; top knob 2 sets amount. FM6 shapes brightness. |
 | Wanted a controller cheat sheet | Editor → MiniLab shows normal and Alt assignments. |
 | Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
@@ -51,7 +52,8 @@ Direct DIN MIDI control; no computer needed while playing.
 Hold effect pads to engage; release to stop. Works even with FX latch enabled.
 **Alt + pad 8:** tap tempo. **Alt + faders:** track delay + reverb.
 **Alt + bottom knobs 5–8:** synth ADSR or FM6 macros on the keyboard MIDI channel.
-Alt + top knobs 1–4 and Alt + pads 2–7 remain unassigned.
+**Alt + top knobs 1–2:** cutoff LFO rate / amount; FM6 brightness modulation.
+Alt + top knobs 3–4 and Alt + pads 2–7 remain unassigned.
 
 ## Drum kits
 
@@ -69,7 +71,13 @@ Choose them in the **DRUM** preset bank. Yama-bruh kits use the **YB** prefix.
 - **Bottom 5–7:** engine HOME controls 1–3.
 - **Bottom 8:** LFO/vibrato speed on synths.
 
-Hold **Alt (A-bank pad 1)** for the bottom row’s second layer:
+Hold **Alt (A-bank pad 1)** for the second layer:
+
+- **Top 1:** cutoff LFO rate, shared with vibrato and other LFO destinations.
+- **Top 2:** cutoff LFO amount; FM6 brightness. Centre = off; left reverses the motion.
+- **Top 3–4:** unassigned.
+
+Bottom row:
 
 | Knob | Synths | FM6 |
 | --- | --- | --- |
@@ -78,7 +86,7 @@ Hold **Alt (A-bank pad 1)** for the bottom row’s second layer:
 | 7 | Sustain | Modulator ratio |
 | 8 | Release | Modulator envelope time |
 
-Higher FM6 envelope time values mean slower envelopes. DRUM knobs with Alt are unassigned.
+LFO destination varies by engine; WHEEL ignores the amount. Higher FM6 envelope time values mean slower envelopes. DRUM knobs with Alt are unassigned.
 
 On **DRUM**, play the drum first:
 

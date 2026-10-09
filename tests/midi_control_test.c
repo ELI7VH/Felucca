@@ -91,8 +91,8 @@ static int pad_shift_test(void)
     int bad=0; midi_test_reset(); perf_midi_held=0;
     queued(0x9F,36,100,2);
     bad+=check("pad 1 holds Shift without triggering FX or a note",midi_pad_shift && !perf_midi_held && !midi_notes[15][36]);
-    const uint8_t knobs[4]={19,21,22,23};
-    for (uint32_t k=0;k<4;k++) {
+    const uint8_t knobs[2]={22,23};
+    for (uint32_t k=0;k<2;k++) {
         int16_t before[P_COUNT]; memcpy(before,trk[1].p,sizeof before);
         queued(0xB1,knobs[k],127,2);
         bad+=check("reserved shifted knobs leave sound unchanged",!memcmp(before,trk[1].p,sizeof before));
@@ -115,6 +115,74 @@ static int pad_shift_test(void)
     bad+=check("panic clears held modifier and pad layers",!midi_pad_shift && !midi_pad_down && !midi_pad_layer);
     queued(0x9F,36,100,2); midi_in_overflow=1; events_block(CTL);
     bad+=check("MIDI overflow cannot leave Shift held",!midi_pad_shift && !midi_pad_down);
+    midi_test_reset(); return bad;
+}
+static int alt_filter_lfo_test(void)
+{
+    const uint8_t cc[2]={19,21}, id[2]={P_LRATE,P_LD_FLT}, input[3]={0,64,127};
+    const int16_t value[2][3]={{0,64,127},{-64,0,63}};
+    int bad=0; midi_test_reset(); perf_k[0]=37;
+    queued(0x9F,36,100,2);
+    for (uint32_t e=0;e<NENGINES;e++) {
+        uint32_t ch=e%NPART;
+        host_preset(&trk[ch],e,0); events_block(CTL); song.sel=(ch+1u)%NPART;
+        trk[ch].mw=31; trk[ch].at=42; trk[ch].ex_off=53;
+        for (uint32_t k=0;k<2;k++) for (uint32_t point=0;point<3;point++) {
+            int16_t expected[NPART][P_COUNT];
+            for (uint32_t tr=0;tr<NPART;tr++) memcpy(expected[tr],trk[tr].p,sizeof expected[tr]);
+            if (!ENGINES[e]->oneshot) expected[ch][id[k]]=value[k][point];
+            midi_notice_pending=0;
+            queued(0xB0|ch,cc[k],input[point],(point&1u)+1u);
+            int same=1;
+            for (uint32_t tr=0;tr<NPART;tr++) same &= !memcmp(expected[tr],trk[tr].p,sizeof expected[tr]);
+            bad+=check("Alt filter LFO reaches only its MIDI track and parameter in every sustained engine",same);
+            bad+=check("Alt top knobs preserve master filter and MIDI expression",perf_k[0]==37 && trk[ch].mw==31 && trk[ch].at==42 && trk[ch].ex_off==53);
+            if (ENGINES[e]->oneshot) {
+                bad+=check("one-shot engines ignore Alt filter LFO with no false popup",!midi_notice_pending);
+            } else {
+                midi_ui_poll();
+                bad+=check("Alt filter LFO popup reports actual track, parameter and endpoint/neutral value",
+                           midi_popup.active && midi_popup.notice.track==ch && midi_popup.notice.kind==0 &&
+                           midi_popup.notice.desc==track_desc(&trk[ch],id[k]) && midi_popup.notice.value==value[k][point]);
+            }
+        }
+    }
+    host_preset(&trk[1],0,0); events_block(CTL);
+    queued(0xB1,19,83,2); queued(0xB1,21,0,2); queued(0x8F,36,0,2);
+    queued(0xB1,19,127,2); queued(0xB1,21,127,2);
+    const param_desc_t *edit2=track_desc(&trk[1],P_E1);
+    bad+=check("Alt release restores top 1 master filter and top 2 EDIT parameter without changing LFO",
+               perf_k[0]==100 && trk[1].p[P_E1]==param_fit(edit2,edit2->max) &&
+               trk[1].p[P_LRATE]==83 && trk[1].p[P_LD_FLT]==-64);
+    queued(0x9F,36,100,1); host_preset(&trk[2],ENGI_FM6,0);
+    song.g[G_ROUTE]=1; song.sel=2; events_block(CTL);
+    int16_t other_rate=trk[0].p[P_LRATE], other_depth=trk[0].p[P_LD_FLT];
+    queued(0xB8,19,45,1); queued(0xB8,21,64,2);
+    bad+=check("Alt filter LFO follows SEL routing, including FM6",
+               trk[2].p[P_LRATE]==45 && trk[2].p[P_LD_FLT]==0 &&
+               trk[0].p[P_LRATE]==other_rate && trk[0].p[P_LD_FLT]==other_depth);
+    song.g[G_ROUTE]=0; events_block(CTL); midi_notice_pending=0;
+    queued(0xB8,19,127,1); queued(0xB8,21,127,2);
+    bad+=check("CH1-4 ignores unsupported Alt filter LFO channels without popup",
+               trk[2].p[P_LRATE]==45 && trk[2].p[P_LD_FLT]==0 && !midi_notice_pending);
+    int16_t saved[NPART][2];
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<2;k++) saved[ch][k]=trk[ch].p[id[k]];
+    project_capture(&proj_scratch);
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<2;k++) trk[ch].p[id[k]]=0;
+    project_restore_runtime(&proj_scratch);
+    int restored=1;
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<2;k++) restored &= trk[ch].p[id[k]]==saved[ch][k];
+    bad+=check("project/autosave capture restores Alt filter LFO settings",restored);
+    midi_test_reset(); host_preset(&trk[0],0,0); events_block(CTL);
+    trk[0].p[P_LRATE]=23; trk[0].p[P_LD_FLT]=7; song.sel=0; song.rec=1;
+    seq_start(); seq_tick(&trk[0],CTL); queued(0x9F,36,100,2);
+    queued(0xB0,19,92,2); queued(0xB0,21,0,2);
+    bad+=check("Alt filter LFO records rate and signed depth while preserving motion bases",
+               motion.count==2u && motion.event[0].param==P_LRATE && motion.event[0].value==92 &&
+               motion.event[1].param==P_LD_FLT && motion.event[1].value==-64 &&
+               motion_base_value(&trk[0],P_LRATE)==23 && motion_base_value(&trk[0],P_LD_FLT)==7);
+    seq_stop();
+    bad+=check("stopping Alt filter LFO automation restores the saved patch values",trk[0].p[P_LRATE]==23 && trk[0].p[P_LD_FLT]==7);
     midi_test_reset(); return bad;
 }
 static int shifted_adsr_test(void)
@@ -759,7 +827,7 @@ static int transport_controls_test(void)
 
 int main(void)
 {
-    int bad = shifted_adsr_test() + shifted_fm6_test() + pad_shift_test() + drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+    int bad = alt_filter_lfo_test() + shifted_adsr_test() + shifted_fm6_test() + pad_shift_test() + drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
               arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

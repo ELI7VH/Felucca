@@ -30,7 +30,9 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 | A-bank pad 1 | Alt button (held) |
 | A-bank pads 2–8 | Momentary repeat 1/16, 1/32, reverse, tape stop, freeze, octave up/down |
 | Alt + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time; DRUM unassigned |
-| Alt + top knobs 1–4 / pads 2–7 | Reserved |
+| Alt + top knob 1 | Shared track LFO rate for cutoff, vibrato and other LFO destinations |
+| Alt + top knob 2 | Cutoff LFO depth; FM6 modulator level/brightness; MIDI 64 = off |
+| Alt + top knobs 3–4 / pads 2–7 | Reserved |
 | Alt + pad 8 | Tap tempo |
 | Alt + faders 1–4 | Combined track delay + reverb amount |
 
@@ -41,12 +43,17 @@ Use the correct DIN-to-TRS adapter for the FM-1 input and supply power to both d
 
 ## Firmware behavior
 
-- CC19 controls the existing smoothed master FILTER macro without holding FX. Values 0–62
+- Normal CC19 controls the existing smoothed master FILTER macro without holding FX. Values 0–62
   sweep low-pass, 63–64 bypass, and 65–127 sweep high-pass. This is a live performance
   control, not a saved patch parameter; normal FX-layer resets also reset it.
 - CC20–27 expose all eight engine EDIT parameters, scaled to their own signed or enum ranges.
 - CC28–31 follow the engine's four HOME knob assignments. The supplied MiniLab preset uses
   CC28–30 for its first three bottom knobs and CC76 for its fourth.
+- While Alt (A-bank pad 1) is held, CC19 sets P_LRATE and CC21 sets P_LD_FLT
+  on the MIDI-addressed synth track. The rate is shared with vibrato and other LFO
+  destinations. Depth spans -64..63 with MIDI 64 = 0; negative values invert the modulation.
+  FM6 applies its FLT destination to modulator level/brightness. WHEEL ignores FLT depth.
+  DRUM leaves both unassigned.
 - While A-bank pad 1 is held, those CC28/29/30/76 messages edit attack/decay/sustain/release
   on the MIDI-addressed synth track. FM6 instead maps them to algorithm/feedback/modulator
   ratio/modulator envelope time; higher envelope-time values make envelopes longer.
@@ -190,7 +197,7 @@ Validation: all C host checks passed, including drum controls, clipping/DC/retri
 ### midi15 pad modifier
 
 A-bank pad 1 is the Alt button: a held modifier on channel 16 note 36, colored cyan (MiniLab color 13).
-Alt + pad 8 (note 43) queues the existing tap-tempo command. midi15 initially reserved Alt + pads 2–7 and all eight mapped knobs; midi17 assigns the bottom four knobs below.
+Alt + pad 8 (note 43) queues the existing tap-tempo command. midi15 initially reserved Alt + pads 2–7 and all eight mapped knobs; midi17 assigns the bottom four knobs below; midi22 adds the first two top knobs.
 Alt + fixed-channel CC7 faders set that track’s delay and reverb sends together, without changing its volume.
 On DRUM these are track defaults; existing per-lane send overrides remain independent.
 A track popup labels the combined control DELAY + REVERB. No new effect DSP, project format or sample storage is required.
@@ -229,7 +236,8 @@ parameters through the normal MIDI routing and parameter-edit path:
 Higher FM6 envelope time values lengthen the modulator envelopes. These are existing
 FM6 macros; the mapping adds no new DSP or envelopes. DRUM knobs with Alt are unassigned.
 Releasing pad 1 restores HOME 1–3 and LFO speed (or selected-drum volume).
-Alt + top knobs 1–4 and pads 2–7 remain reserved. Alt + faders still set track delay +
+In midi17, Alt + top knobs 1–4 and pads 2–7 remained reserved; midi22 assigns top 1–2.
+Alt + faders still set track delay +
 reverb, and Alt + pad 8 still taps tempo.
 The MiniLab preset file and its stored controller assignments are unchanged. The editor’s
 MiniLab page separates normal knobs from the Alt layer.
@@ -293,3 +301,28 @@ Sequencer assessment: bounded generators compiled for the FM-1 could fill its
 existing 64-step patterns and reuse playback and persistence. Yama-bruh's full
 JavaScript sequencing and per-sample `noteAlgo` require a dedicated port. No new
 algorithmic sequencer ships in midi19.
+
+
+### midi22 Alt cutoff LFO controls
+
+Hold Alt (A-bank pad 1) while turning the MiniLab top row:
+
+| Knob / CC | Parameter | Range |
+| --- | --- | --- |
+| 1 / CC19 | P_LRATE: track LFO rate | 0..127, existing LFO rate scale |
+| 2 / CC21 | P_LD_FLT: cutoff/brightness LFO depth | -64..63; MIDI 64 = 0 |
+
+These controls follow the keyboard MIDI channel and existing ROUT rules. The existing
+track LFO supplies its rate, waveform and fade; changing rate also changes vibrato and
+other active LFO destinations. Positive and negative depth apply opposite modulation
+polarity. FM6's FLT destination changes modulator level/brightness rather than a literal
+filter cutoff. VOICE modulates vowel, PHASE modulates its depth, and PHYS modulates
+brightness. WHEEL ignores the FLT destination, so its amount has no audible effect.
+DRUM leaves all Alt knobs unassigned. Alt + top knobs 3–4 stay reserved.
+
+Releasing Alt restores top knob 1 to the master DJ filter and top knob 2 to EDIT parameter 2
+(or selected-drum pan). The parameter popup uses the existing RATE and FLT labels.
+Edits use the existing motion capture and saved sound paths. No new LFO, DSP buffers,
+controller preset assignments or storage formats are introduced.
+
+Validation: firmware build and all available host tests passed, including Alt routing, signed depth endpoints and neutral, popups, normal-control restoration, motion recording and project restore. All 369 sound regression renders are unchanged. Image size is 450676 bytes; main RAM remains 94384 / 98304 bytes and the audio/display pool 330208 / 344064 bytes. Optional DaisySP reference and browser-emulator checks were unavailable. These are host/build results; physical-device checks are recorded separately.
