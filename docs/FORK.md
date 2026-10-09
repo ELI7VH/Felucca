@@ -28,6 +28,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Needed quick vibrato-speed control | Bottom knob 8 controls LFO speed on synths; drum volume on DRUM. |
 | Wanted mod-wheel pitch modulation | Mod strip adds vibrato; LFO controls its speed and shape. |
 | Wanted fuller classic drum kits | Revoiced 808 with a deeper kick and fuller snare/clap; dry, woody CR-78-style percussion. |
+| Wanted Yama-bruh drums here too | Eight Yama-bruh FM kits in the DRUM bank, with per-drum editing and mixing. |
 | Thin sound banks | 32 mixed factory patches in each of ten synth engines; existing patch IDs retained. |
 | Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
 | Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
@@ -54,9 +55,10 @@ Top shifted knobs and shifted pads 2–7 remain unassigned.
 
 - **808:** longer deep kick, fuller snare and clap, smoother metallic hats.
 - **CR78:** short, dry kick and snare; softer maracas, woody conga, short claves and a rounded bell.
+- **Yama-bruh:** Standard, Electronic, Power, Brush, Orchestra, Synth, Latin and Lo-Fi.
 
-Both are synthesized eight-lane kits with separate edits and mixing for each drum.
-Choose them in the **DRUM** preset bank; existing sounds using these kits receive the new voicing too.
+These are synthesized eight-lane kits with separate edits and mixing for each drum.
+Choose them in the **DRUM** preset bank. Yama-bruh kits use the **YB** prefix.
 
 ## Final knob layout
 

@@ -90,8 +90,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi18
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi18.fwsc
+./build.sh --release 1.0.5.2-midi19
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi19.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -241,3 +241,55 @@ Validation: midi17 full host suite passed. USB/DIN tests cover channel isolation
 Web Settings now shows WaveLoop FM-1 with controls, mapping and support links, including while disconnected. Device settings retain their connection readiness gate. The device menu and About page show WaveLoop; the About QR opens https://eli7vh.github.io/Felucca/. Original Felucca and third-party credits remain available. USB/MIDI identity, mappings, DSP and storage formats are unchanged.
 
 Validation: UI tests and 120 rendered screens across ten palettes plus style/large-text sweeps passed with zero layout/color findings and no alignment errors at one pixel or more. The About QR decoded correctly from eight preview variants. Web tests passed; offline/connected/disconnected Settings and Japanese labels were inspected. Target cost checks passed; image 447752 bytes, main RAM 94384/98304 and pool 330208/344064.
+
+
+### midi19 Yama-bruh drum bank
+
+The eight Yama-bruh banks append DRUM presets 3–10 and KIT values 10–17 in this order:
+YB STANDARD, YB ELECTRO, YB POWER, YB BRUSH, YB ORCH, YB SYNTH, YB LATIN, YB LOFI.
+Prior preset and KIT IDs are retained. The editor mock exposes the same IDs and labels.
+
+`firmware/src/drum_yama.c` is a fixed-point adaptation of Lucian Labs’
+[`www/drum-worklet.js`](https://github.com/lucian-labs/yama-bruh/blob/3eca861383e63e6c507c30402a204499faf79887/www/drum-worklet.js),
+pinned to commit `3eca861383e63e6c507c30402a204499faf79887`. It uses the worklet’s core
+drum defaults and eight bank overrides. The original MIT license is retained in
+`LICENSES/MIT-YamaBruh.txt`; Lucian Labs is included in the device credits.
+
+Nine core voices occupy eight existing lanes: kick, snare, clap, closed/open hats, tom,
+rimshot, cowbell and cymbal. GM cymbal notes share the BELL lane with cowbell, including
+its per-drum settings. TUNE moves both oscillators and the pitch sweep; TONE controls FM
+index; DECY controls amplitude decay; SNAP controls pitch sweep, click and clap burst width.
+Per-drum mixing, sends, saved overrides and the MiniLab mapping retain their existing paths.
+The kits use synthesis and do not occupy user sample slots.
+
+Validation:
+
+- All 72 voices pass comparison against the pinned JavaScript worklet. Maximum
+  normalized energy-distribution differences (total variation) are 0.000567 over
+  time and 0.000065 across frequency; maximum gain difference is 0.00238 dB.
+  These measure agreement with Yama-bruh, not Yamaha hardware.
+- Signed-overflow/divide-by-zero UBSan checks pass the tested control corners.
+  All 353 existing golden renders remain unchanged; 16 new renders bring the
+  total to 369, with zero health, voice/routing, CPU-budget or crash failures.
+- Available host-suite sections passed. Emscripten browser-emulator and DaisySP
+  reference checks were skipped because their dependencies were unavailable;
+  the optional official-V15 restore check also lacked its firmware fixture.
+- The target scanner initially mistook a cold backward jump for a loop. It now
+  checks control-flow reachability, including predicated branches/returns, while
+  treating unresolved indirect branches conservatively. Existing budgets pass:
+  `drum_render` costs 77 against 86; new `dv_yama_run` measures 194. These are
+  weighted static instruction estimates, not cycle counts.
+- Image: 450288/581564 bytes (131276 free). Main RAM: 94384/98304 (3920 free);
+  pool: 330208/344064 (13856 free). Both RAM allocations are unchanged.
+- Actual FM-1 USB MIDI readback confirms midi19 and all 11 DRUM presets. Each
+  Yama kit passed 24 eight-note bursts at 125 ms intervals: maximum CPU 46%,
+  boot render peak 1667 µs, at most eight voices and zero new audio overruns.
+  Every sampled MIDI-overflow flag was zero; that flag is transient, so this
+  does not establish a lifetime zero-drop count. Original KIT 0, all track
+  engines/presets/parameters and displayed track were verified restored.
+  Drum focus ends on BELL. No DIN or recorded-audio verification was performed.
+
+Sequencer assessment: bounded generators compiled for the FM-1 could fill its
+existing 64-step patterns and reuse playback and persistence. Yama-bruh's full
+JavaScript sequencing and per-sample `noteAlgo` require a dedicated port. No new
+algorithmic sequencer ships in midi19.
