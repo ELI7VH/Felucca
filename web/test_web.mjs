@@ -1333,12 +1333,12 @@ function editorTabs() {
   const styles = [...html.matchAll(/<link\b[^>]*>/gi)].map(([tag]) =>
     /\bstylesheet\b/i.test(attr(tag, "rel") || "") ? attr(tag, "href") : null).filter(Boolean);
   const stylesLocal = styles.every((url) => local(url) && existsSync(join(HERE, url)));
-  ok(styles.includes("brand/tokens.css") && stylesLocal, "editor: WaveLoop tokens and stylesheets ship beside the page");
+  ok(styles.includes("brand/ultrakit.css") && stylesLocal, "editor: UltraKit tokens and stylesheets ship beside the page");
   const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
     + (stylesLocal ? styles.map((url) => readFileSync(join(HERE, url), "utf8")).join("\n") : "");
-  const defined = new Set([...css.matchAll(/(--wl-[\w-]+)\s*:/g)].map((m) => m[1]));
-  const missingTokens = [...new Set([...css.matchAll(/var\((--wl-[\w-]+)/g)].map((m) => m[1]))].filter((name) => !defined.has(name));
-  ok(!missingTokens.length, `editor: all WaveLoop token references resolve${missingTokens.length ? " (" + missingTokens.join(", ") + ")" : ""}`);
+  const defined = new Set([...css.matchAll(/(--uk-[\w-]+)\s*:/g)].map((m) => m[1]));
+  const missingTokens = [...new Set([...css.matchAll(/var\((--uk-[\w-]+)/g)].map((m) => m[1]))].filter((name) => !defined.has(name));
+  ok(!missingTokens.length, `editor: all UltraKit token references resolve${missingTokens.length ? " (" + missingTokens.join(", ") + ")" : ""}`);
   const fontURLs = [...css.matchAll(/@font-face\s*\{([^}]+)\}/gi)].flatMap((m) =>
     [...m[1].matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)/gi)].map((u) => u[1]));
   ok(fontURLs.length > 0 && fontURLs.every((url) => local(url) && existsSync(join(HERE, url))),
