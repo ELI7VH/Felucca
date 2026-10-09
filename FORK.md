@@ -1,4 +1,4 @@
-# WaveLoop FM-1 — MiniLab 3
+# WaveLoop Kit — MiniLab 3
 
 An unofficial Felucca firmware mod for the **M-VAVE FM-1 + Arturia MiniLab 3**.
 Direct DIN MIDI control; no computer needed while playing.

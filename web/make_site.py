@@ -92,9 +92,9 @@ def main(pkg, version, out):
     (out/"build.json").write_text(json.dumps({"version":version,"product":product,"sha256":hashlib.sha256(raw).hexdigest(),"source":"https://github.com/ELI7VH/Felucca","source_commit":subprocess.run(["git","rev-parse","HEAD"],cwd=HERE.parent,capture_output=True,text=True).stdout.strip() or None,"release":"https://github.com/ELI7VH/Felucca/releases/tag/"+version},indent=2)+"\n")
     (out/".nojekyll").touch()
     (out / "index.html").write_text(
-        '<!doctype html><meta charset="utf-8"><title>WaveLoop FM-1</title>'
+        '<!doctype html><meta charset="utf-8"><title>WaveLoop Kit</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-        '<a href="webapp/installer/">WaveLoop FM-1 installer</a>\n', encoding="utf-8")
+        '<a href="webapp/installer/">WaveLoop Kit installer</a>\n', encoding="utf-8")
     print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
 
 
