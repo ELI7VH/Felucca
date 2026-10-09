@@ -69,7 +69,7 @@ enum {
 };
 /* a lane of a model kit as a type: the kit (1..DV_NKIT) in the high 4 bits, the lane in the low 3 (Felucca's own
  * types: 0 above). Its run (the DVT_* it plays through) is the kit's (DV_KIT) */
-#define DV_NKIT 5
+#define DV_NKIT 6
 #define DV_KITOF(t) ((uint32_t)(t) >> 4)
 #define DV_KTYPE(kit, lane) ((uint8_t)(((kit) << 4) | (lane)))
 
@@ -180,7 +180,7 @@ typedef struct {
     int16_t v[13];
 } dv_kit_t;
 /* the accent per kit: + (x / 16384) per accent step (75: +4 dB at full, as Felucca's own) */
-static const uint8_t DV_KIT_ACC[DV_NKIT] = {120, 45, 100, 40, 40};
+static const uint8_t DV_KIT_ACC[DV_NKIT] = {120, 45, 100, 40, 40, 55};
 static const dv_kit_t DV_KIT[DV_NKIT][DV_NLANE] = {
     {   /* 80 */
         /* deep sine, a small drop, long decay */
@@ -271,6 +271,17 @@ static const dv_kit_t DV_KIT[DV_NKIT][DV_NLANE] = {
         {DVT_CLAVE, 32, 1568, 149, 2131, {84, 28000, 10000, 6348, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
         /* the cymbal: 34 ms + 0.3 s */
         {DVT_CYM, 53, 1690, 1100, 7582, {1969, 5120, 1748, 5120, 24000, 16000, 34, 24576, 6554, 5, 0, 0, 0}},
+    },
+    {   /* CR-78-inspired eight-lane adaptation, synthesized here (no samples).
+         * CLAP becomes maracas, TOM conga, RIM claves; open hat is a longer variant. */
+        {DVT_PUNCH, 60, 531, 210, 3400, {18, 350, 0, 600, 0, 0, 0, 4096, 25, 0, 0, 0, 0}},
+        {DVT_SNARE, 40, 919, 170, 4800, {0, 0, 100, 45, 0, 16000, 1715, 8192, 25, 0, 18000, 0, 1828}},
+        {DVT_HATC, 48, 1777, 155, 12700, {1777, 2048, 1715, 2042, 0, 0, 7000, 3, 6, 0, 0, 0, 0}},
+        {DVT_HATC, 45, 1907, 135, 5900, {1907, 1024, 1870, 2042, 0, 0, 7000, 3, 6, 0, 0, 0, 0}},
+        {DVT_HATO, 63, 1907, 350, 5200, {1907, 1024, 1870, 2042, 0, 0, 7000, 3, 6, 0, 0, 0, 0}},
+        {DVT_CONGA, 53, 819, 94, 5803, {0, 50, 1523, 0, 1500, 0, 0, 0, 0, 0, 0, 0, 0}},
+        {DVT_CLAVE, 32, 1568, 149, 2131, {84, 28000, 10000, 6348, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+        {DVT_BELL, 50, 1161, 180, 3200, {109, 129, 3413, 26000, 35, 0, 0, 0, 0, 0, 0, 0, 0}},
     },
 };
 

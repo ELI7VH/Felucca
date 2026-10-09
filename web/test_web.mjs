@@ -282,9 +282,9 @@ async function editorSamplePresets() {
   const kitD = E.parse[C.DESC](await rq(E.req.desc(0, info.pe0)));
   const kitSet = [];
   for (const v of [1, 2, 3]) kitSet.push(E.parse[C.SET](await rq(E.req.set(0, info.pe0, v))).value);
-  ok(eq(kitD.names, ["STD", "66", "10", "77", "80", "10", "66", "55", "77"]) &&
+  ok(eq(kitD.names, ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "CR78"]) &&
      eq([0, 1, 2, 3, 4, 5, 6, 7, 8].map((v) => E.aliasOf(kitD.names, v)), [0, 6, 5, 8, 4, 5, 6, 7, 8]) &&
-     eq(E.enumShown(kitD).filter((v) => E.aliasOf(kitD.names, v) === v).map((v) => kitD.names[v]), ["STD", "80", "10", "66", "55", "77"]) &&
+     eq(E.enumShown(kitD).filter((v) => E.aliasOf(kitD.names, v) === v).map((v) => kitD.names[v]), ["STD", "80", "10", "66", "55", "77", "CR78"]) &&
      eq(kitSet, [6, 5, 8]),
     "DRUM: KIT 1..3 (once HAND CYM H+CYM) named 66 10 77, aliases of 6 5 8: hidden, a SET lands there");
   const removed = E.parse[C.PRESET](await rq(E.req.preset(4, 4)));
@@ -320,8 +320,8 @@ function mockTables() {
        ph.presets.length === 32 && !ph.presets.some((p) => p.name === "RAIN" || p.name === "DRUM KIT"),
        "editor: PHYS models MODAL STRNG MEMB SYMP (no DUST, no DRUM), 32 presets");
     ok(dr.name === "DRUM" && dr.edit.map((d) => d.label).join() === "KIT,TUNE,TONE,DECY,SNAP,ACC,KICK,DRV" &&
-       dr.presets.length === 1 && dr.presets.every((p) => p.pat === 12),
-       "editor: DRUM engine 10 (KIT TUNE TONE DECY SNAP ACC KICK DRV), one kit suggesting BEAT");
+       dr.presets.map(p=>p.name).join() === "DRUM KIT,808,CR78" && dr.presets[1].e[0] === 4 && dr.presets[2].e[0] === 9 && dr.presets.every((p) => p.pat === 12),
+       "editor: DRUM engine 10 (KIT TUNE TONE DECY SNAP ACC KICK DRV), original kit plus 808 and CR78 suggesting BEAT");
   }
   const dj = DESC;
   if (!existsSync(dj)) { console.log("editor: mock tables == firmware (no build/host/desc.json)        skip"); return; }

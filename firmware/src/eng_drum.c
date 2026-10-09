@@ -34,14 +34,14 @@
  * source of each lane). */
 #include "drum_voice.c"
 
-enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_COUNT };   /* (stored values) */
+enum { DK_STD, DK_HAND, DK_CYM, DK_HCYM, DK_80, DK_10, DK_66, DK_55, DK_77, DK_CR78, DK_COUNT };   /* (stored values) */
 /* the kit a stored KIT value plays: HAND CYM H+CYM (retired after 1.0.4) -> 66 (a conga on TOM), 10 (a cymbal on
  * BELL), 77 (claves on RIM, a cymbal on BELL) */
-static const uint8_t DK_PLAYS[DK_COUNT] = {DK_STD, DK_66, DK_10, DK_77, DK_80, DK_10, DK_66, DK_55, DK_77};
+static const uint8_t DK_PLAYS[DK_COUNT] = {DK_STD, DK_66, DK_10, DK_77, DK_80, DK_10, DK_66, DK_55, DK_77, DK_CR78};
 static uint32_t drum_kit_plays(int32_t v) { return DK_PLAYS[clamp(v, 0, DK_COUNT - 1)]; }
 /* the model kits' pieces where a lane plays another than its own (the lane's name): 1 TOM -> CONGA, 2 RIM -> CLAVE,
  * 4 BELL -> CYM */
-static const uint8_t DK_SWAP[DV_NKIT] = {0, 4, 1, 0, 2 | 4};
+static const uint8_t DK_SWAP[DV_NKIT] = {0, 4, 1, 0, 2 | 4, 1 | 2 | 8};
 static const uint8_t DV_TYPE_LANE[DVT_COUNT] = {
     DV_KICK, DV_KICK, DV_SNARE, DV_CLAP, DV_HATC, DV_HATO, DV_TOM, DV_TOM, DV_RIM, DV_RIM, DV_BELL, DV_BELL,
 };
@@ -60,7 +60,7 @@ typedef struct {
 static drum_lane_t drum_kit[NPART][DV_NLANE] __attribute__((section(".pool")));
 
 /* 1..3 named as the kit they play: aliases, never shown or offered (EDITOR_PROTOCOL.md: retired values) */
-static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77"};
+static const char *const N_DRUM_KIT[] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77", "CR78"};
 static const char *const N_DRUM_KICK[] = {"PUNCH", "ROUND"};
 
 /* General MIDI notes 35..81 -> the drum (DVT_*; DVT_PUNCH: the kick KICK picks) and semitones from its
@@ -127,6 +127,8 @@ static const char *drum_lane_name(const track_t *t, uint32_t l)
     static const char *const N[NLANE] = {"KICK", "SNARE", "CLAP", "HATCL", "HATOP", "TOM", "RIM", "BELL"};
     uint32_t kit = drum_swaps(t);
     l &= NLANE - 1u;
+    if (l == DV_CLAP && (kit & 8u))
+        return "MARAC";
     if (l == DV_TOM && (kit & 1u))
         return "CONGA";
     if (l == DV_RIM && (kit & 2u))
@@ -139,6 +141,8 @@ static const char *drum_lane_abbr(const track_t *t, uint32_t l)
     static const char *const N[NLANE] = {"BD", "SD", "CP", "CH", "OH", "TM", "RS", "CB"};
     uint32_t kit = drum_swaps(t);
     l &= NLANE - 1u;
+    if (l == DV_CLAP && (kit & 8u))
+        return "MA";
     if (l == DV_TOM && (kit & 1u))
         return "CG";
     if (l == DV_RIM && (kit & 2u))
@@ -315,6 +319,8 @@ static int32_t drum_keys(const track_t *t, uint32_t k)
 /* {KIT, TUNE, TONE, DECY, SNAP, ACC, KICK, DRV}; every kit suggests the BEAT pattern (GM notes) */
 static const preset_t DRUM_PRESETS[] = {
     {"DRUM KIT", DRUM_KIT_E, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 20), PAT(12)},   /* (core.h: SAMPLE PERC's too) */
+    {"808", {DK_80, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 0), PAT(12)},
+    {"CR78", {DK_CR78, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 0), PAT(12)},
 };
 
 static const engine_t ENG_DRUM = {

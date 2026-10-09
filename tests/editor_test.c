@@ -887,9 +887,9 @@ static int drum_kit_retired(void)
     request(ED_DESC, a, 2);
     {   /* scope, id, fmt, min, max, def (v14 each), "KIT", "", then the 9 names */
         const char *n = (const char *)host_wire + 5 + 3 + 6;
-        static const char *const WANT[9] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77"};
+        static const char *const WANT[10] = {"STD", "66", "10", "77", "80", "10", "66", "55", "77", "CR78"};
         n += strlen(n) + 1; n += strlen(n) + 1;
-        for (i = 0; i < 9u; i++, n += strlen(n) + 1)
+        for (i = 0; i < 10u; i++, n += strlen(n) + 1)
             ok &= !strcmp(n, WANT[i]);
     }
     bad += check("DESC of DRUM KIT: STD 66 10 77 80 10 66 55 77 (1..3 as the kits they play)", ok);
