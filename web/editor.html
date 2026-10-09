@@ -366,7 +366,7 @@
 
   <section class="panel" id="p-minilab" data-tab="minilab" hidden>
     <h2>MiniLab 3 mappings</h2>
-    <p>WaveLoop FM-1 · midi18. Select the Felucca User preset.</p>
+    <p>WaveLoop FM-1 · midi19. Select the Felucca User preset.</p>
     <p><strong>Hold cyan A-bank pad 1 for Shift.</strong> Release it for the normal layer.</p>
     <div class="groups">
       <div class="group"><h2>Normal knobs</h2><table>
@@ -2054,10 +2054,18 @@ function makeMockDevice(opt = {}) {
         P("SHORT PLUCK", [1, 28, 35, 55, 20, 85, 0, 0], [0, 68, 0, 52], 0, 3),
         P("GLASS PLUCK", [0, 48, 52, 63, 37, 85, 0, 26], [0, 68, 0, 52], 0, 3),
         P("WOOD PLUCK", [3, 68, 69, 71, 54, 85, 0, 0], [0, 68, 0, 52], 0, 3)] },
-    { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "CR78"], 0), D("TUNE", F.PCT, 0, 127, 64),
+    { name: "DRUM", titles: ["KIT", "HIT"], edit: [E("KIT", ["STD", "66", "10", "77", "80", "10", "66", "55", "77", "CR78", "YB STD", "YB ELEC", "YB PWR", "YB BRSH", "YB ORCH", "YB SYN", "YB LAT", "YB LOFI"], 0), D("TUNE", F.PCT, 0, 127, 64),
         D("TONE", F.PCT, 0, 127, 64), D("DECY", F.PCT, 0, 127, 64), D("SNAP", F.PCT, 0, 127, 64), D("ACC", F.PCT, 0, 127, 100),
         E("KICK", ["PUNCH", "ROUND"], 0), D("DRV", F.PCT, 0, 127, 0)],
-      presets: [P("DRUM KIT", [0, 64, 70, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("808", [4, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("CR78", [9, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12)] },
+      presets: [P("DRUM KIT", [0, 64, 70, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("808", [4, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("CR78", [9, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB STANDARD", [10, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB ELECTRO", [11, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB POWER", [12, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB BRUSH", [13, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB ORCH", [14, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB SYNTH", [15, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB LATIN", [16, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),
+        P("YB LOFI", [17, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12)] },
     { name: "NOISE", titles: ["SRC", "MOVE"], edit: [E("MODE", ["ANLG", "DUST", "LFSR", "META"], 0), D("COLR", F.PCT, 0, 127, 64),
         D("FREQ", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("TRK", F.PCT, 0, 127, 64), D("DENS", F.PCT, 0, 127, 0),
         D("DRFT", F.PCT, 0, 127, 0), D("CRSH", F.PCT, 0, 127, 0)],

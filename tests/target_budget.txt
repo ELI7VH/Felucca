@@ -33,6 +33,8 @@ dv_tom_run 75
 dv_rim_run 61
 dv_bell_run 52
 dv_cym_run 67
+dv_yama_run 194
+dv_run 5
 dv_out 35
 dv_metal_mix 16
 slicer_track 632

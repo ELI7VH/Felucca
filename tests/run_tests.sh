@@ -231,6 +231,12 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drum_test" tests/drum_test.c -lm
     mkdir -p build/drum_demo
     run "DRUM: voice targets, controls, no clipping, retrigger, hat choke, the kick on a small speaker, keys, 8 lanes, cost, demos" "$OUT/drum_test" build/drum_demo
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/yama_test" tests/yama_test.c -lm
+    mkdir -p build/yama_demo
+    run "Yama-bruh: FM drum voices, controls, lanes, choke and reference exports" "$OUT/yama_test" build/yama_demo
+    if command -v node >/dev/null 2>&1; then
+        run "Yama-bruh: original JavaScript drum reference" node tests/yama_reference.mjs build/yama_reference build/yama_demo
+    fi
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/noise_test" tests/noise_test.c -lm
     mkdir -p build/noise_demo
     run "NOISE: colour slopes, key-tracked filter and clock, META period, DC, clipping, retrigger, cost, demos" "$OUT/noise_test" build/noise_demo
@@ -253,6 +259,7 @@ else
     echo "== skip hostsim (run ./build.sh once)"
 fi
 
+run "target cost scanner: control flow and loop accounting" python3 tests/target_budget_test.py
 run "regression: target cost of the render loops (pi32v2 disassembly)" python3 tests/target_budget.py \
     build/felucca.dis tests/target_budget.txt
 

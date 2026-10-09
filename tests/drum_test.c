@@ -1314,7 +1314,8 @@ static uint64_t seq_hash(const uint8_t (*ev)[3], uint32_t nev, uint32_t frames, 
 static void retired(void)
 {
     static const uint8_t MAP[4] = {DK_STD, DK_66, DK_10, DK_77};
-    static const uint8_t ORDER[7] = {DK_STD, DK_80, DK_10, DK_66, DK_55, DK_77, DK_CR78};
+    static const uint8_t ORDER[] = {DK_STD, DK_80, DK_10, DK_66, DK_55, DK_77, DK_CR78,
+        10, 11, 12, 13, 14, 15, 16, 17}; /* appended Yama-bruh kits; stored legacy IDs stay fixed */
     const param_desc_t *d = &ENG_DRUM.edit[0];
     uint32_t r, n, k, bad = 0, same = 0;
     int16_t kick;
@@ -1355,16 +1356,16 @@ static void retired(void)
     }
     {
         int32_t v = DK_STD, i;
-        for (i = 0; i < 7; i++) {                       /* STD 80 10 66 55 77, then held at the end */
+        for (i = 0; i < (int32_t)NELEM(ORDER); i++) {     /* every public kit, then held at the end */
             bad += v != ORDER[i];
             v = param_turn(d, v, 1);
         }
-        bad += v != DK_CR78 || param_turn(d, DK_80, -1) != DK_STD || param_turn(d, DK_STD, -1) != DK_STD;
+        bad += v != DK_COUNT - 1 || param_turn(d, DK_80, -1) != DK_STD || param_turn(d, DK_STD, -1) != DK_STD;
     }
     for (r = 1; r < 4u; r++)
         bad += strcmp(d->names[r], d->names[MAP[r]]) != 0 || enum_orig(d, (int32_t)r) != MAP[r] ||
                param_fit(d, (int32_t)r) != MAP[r];
-    bad += param_fit(d, 99) != DK_CR78 || param_fit(d, -5) != DK_STD || enum_orig(d, DK_55) != DK_55;
+    bad += param_fit(d, 99) != DK_COUNT - 1 || param_fit(d, -5) != DK_STD || enum_orig(d, DK_55) != DK_55;
     bad += param_fit(&TP[P_LEVEL], 77) != 77;
     {   /* a motion event of KIT 2 (CYM): stored and played as 10 */
         host_tracks_init();
@@ -1390,7 +1391,7 @@ static void retired(void)
     }
     printf("drum_test: KIT 1..3 (HAND CYM H+CYM until 1.0.4) play 66 10 77 (the same samples), the knob skips them, "
            "a stored value and motion land on the kit: %s\n", bad ? "FAIL" : "ok");
-    bad += ENG_DRUM.npresets != 3 || strcmp(DRUM_PRESETS[0].name,"DRUM KIT") || strcmp(DRUM_PRESETS[1].name,"808") || strcmp(DRUM_PRESETS[2].name,"CR78");
+    bad += ENG_DRUM.npresets != 11 || strcmp(DRUM_PRESETS[0].name,"DRUM KIT") || strcmp(DRUM_PRESETS[1].name,"808") || strcmp(DRUM_PRESETS[2].name,"CR78");
     host_tracks_init();host_preset(&trk[0],ENGI_DRUM,1);
     bad += trk[0].p[P_E0] != DK_80;
     host_preset(&trk[0],ENGI_DRUM,2);

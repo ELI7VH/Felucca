@@ -602,9 +602,13 @@ static void dv_setup_kit(dv_coef_t *c, const dv_param_t *p)
 }
 
 /* Coefficients change only with parameters. Keep this large cold switch outside the per-block render path. */
+#include "drum_yama.c"
+
 static __attribute__((noinline)) void dv_setup(dv_coef_t *c, const dv_param_t *p)
 {
-    if (DV_KITOF(p->type) - 1u < DV_NKIT)
+    if (DV_IS_YAMA(p->type))
+        dv_yama_setup(c, p);
+    else if (DV_KITOF(p->type) - 1u < DV_NKIT)
         dv_setup_kit(c, p);
     else
         dv_setup_own(c, p);
@@ -905,9 +909,14 @@ static __attribute__((noinline)) void dv_out(const dv_coef_t *c, int32_t *y, uin
 }
 
 /* one block of the voice into y (Q15 at its level); metal: the metal source's block, or 0 */
-static void dv_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *metal, int32_t *y, uint32_t n)
+/* Keep block dispatch/strike setup out of the per-sample mixer function. */
+static __attribute__((noinline)) void dv_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *metal, int32_t *y, uint32_t n)
 {
     uint32_t i;
+    if (c->type == DVT_YAMA) {
+        dv_yama_run(c, v, y, n);
+        return;
+    }
     if (v->trig)
         dv_strike(c, v);
     if (!v->live || v->type != c->type || (dv_uses_metal(c->type) && !metal)) {
@@ -956,6 +965,7 @@ static void dv_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *metal, int3
 /* the run a type plays through (DVT_*): itself, or its model kit's lane's */
 static uint32_t dv_run_type(uint32_t type)
 {
+    if (DV_IS_YAMA(type)) return DVT_YAMA;
     return DV_KITOF(type) - 1u < DV_NKIT ? DV_KIT[DV_KITOF(type) - 1u][type & 7u].run : type < DVT_COUNT ? type : 0u;
 }
 

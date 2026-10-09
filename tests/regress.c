@@ -1037,8 +1037,9 @@ int main(int argc, char **argv)
             j->pi = (uint8_t)pi;
         }
     add(J_DRUMS, "drums/drum_gm_kit");
-    for (i = 0; i < DV_NKIT; i++) {                 /* the model kits (KIT 80 10 66 55 77) */
-        snprintf(name, sizeof name, "drums/kit_%s", N_DRUM_KIT[DK_80 + i]);
+    for (i = 0; i < DK_COUNT - DK_80; i++) {        /* every model kit, including appended Yama-bruh banks */
+        slug(s, N_DRUM_KIT[DK_80 + i], sizeof s);
+        snprintf(name, sizeof name, "drums/kit_%s", s);
         add(J_DRUMS, name)->arg = (uint8_t)(DK_80 + i);
     }
     for (i = 0; i < 3u; i++)
@@ -1108,9 +1109,10 @@ int main(int argc, char **argv)
             j->e = (uint8_t)e;
             j->pi = (uint8_t)pi;
         }
-    for (i = 0; i < DV_NKIT; i++) {                 /* DRUM's model kits: the 8 lanes, as its preset above */
+    for (i = 0; i < DK_COUNT - DK_80; i++) {        /* every model kit: eight simultaneous lanes */
         job_t *j;
-        snprintf(name, sizeof name, "cpu/DRUM/kit_%s", N_DRUM_KIT[DK_80 + i]);
+        slug(s, N_DRUM_KIT[DK_80 + i], sizeof s);
+        snprintf(name, sizeof name, "cpu/DRUM/kit_%s", s);
         j = add(J_CPU, name);
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
         cpu_parts[ncpu][0][0] = ENGI_DRUM, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;

@@ -38,6 +38,10 @@ static const menu_credit_t MENU_CREDITS[] = {
     {"Felucca mod by ELI7VH", MC_TEXT},
     {"https://github.com/ELI7VH/Felucca", MC_URL},
     {"", MC_TEXT},
+    {"YAMA-BRUH DRUMS", MC_TITLE},
+    {"Lucian Labs / MIT", MC_TEXT},
+    {"https://github.com/lucian-labs/yama-bruh", MC_URL},
+    {"", MC_TEXT},
     {"FELUCCA", MC_TITLE},
     {"H\xFCgelton Instruments", MC_TITLE},  /* Felucca's own: above; these are ours too */
     {"Leo Kuroshita", MC_TEXT},
