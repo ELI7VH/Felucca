@@ -5939,12 +5939,71 @@ static int test_head_centres(void)
     return bad;
 }
 
+static int test_voice_retired(void)
+{
+    static const uint8_t retired[] = {2, 4, 5, 6, 7, 28};
+    static const uint8_t kept[] = {0, 1, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31};
+    static const int8_t old_e[][8] = {
+        {95, 0, 68, 0, 100, 0, 80, 0}, {0, 127, 35, -2, 90, 12, 50, 0},
+        {24, 107, 35, 0, 90, 15, 58, 0}, {48, 87, 35, 2, 90, 18, 66, 0},
+        {72, 67, 35, 4, 90, 21, 74, 0}, {96, 47, 35, -4, 90, 24, 82, 0}
+    };
+    int bad = 0, ok = 1;
+    uint32_t total, i, k, shown = 0;
+    int16_t choir[P_COUNT];
+    track_t before;
+    ui_power_on();
+    set_engine_of(TSEL, 5);
+    memcpy(choir, TSEL->p, sizeof choir);
+    for (i = 0; i < sizeof retired; i++) {
+        apply_preset_to(TSEL, retired[i]);
+        ok &= TSEL->preset == 0 && !memcmp(choir, TSEL->p, sizeof choir);
+    }
+    bad += check("VOICE: all six retired factory IDs resolve to CHOIR AAH", ok);
+    preset_all_pos(&total);
+    ok = preset_shown(5) == sizeof kept;
+    for (i = 0; i < total; i++) {
+        if (preset_all_at(i, &k) != 5) continue;
+        ok &= shown < sizeof kept && k == kept[shown];
+        shown++;
+    }
+    bad += check("VOICE: global preset browser has exactly the 26 retained IDs in order", ok && shown == sizeof kept);
+    ok = 1;
+    for (i = 0; i < sizeof kept; i++) {
+        ok &= TSEL->preset == kept[i];
+        eng_list_step(1);
+    }
+    ok &= TSEL->preset == 0;
+    for (i = sizeof kept; i > 0; i--) { eng_list_step(-1); ok &= TSEL->preset == kept[i - 1]; }
+    bad += check("VOICE: EDIT knob skips all retired IDs in both directions and wraps", ok && TSEL->preset == 0);
+    ok = 1;
+    for (i = 0; i < sizeof retired; i++) {
+        apply_preset_to(TSEL, 0);
+        TSEL->preset = retired[i];
+        for (k = 0; k < 8; k++) TSEL->p[P_E0 + k] = old_e[i][k];
+        TSEL->p[P_ATK] = 0; TSEL->p[P_DEC] = i ? 58 : 70;
+        TSEL->p[P_SUS] = i ? 88 : 70; TSEL->p[P_REL] = i ? 25 : 30;
+        TSEL->p[P_VOICE] = V_LEGATO; TSEL->p[P_LEVEL] = 79;
+        TSEL->p[P_REV] = 23; TSEL->p[P_PAN] = -11;
+        my_steps(TSEL);
+        before = *TSEL;
+        project_save(1);
+        apply_preset_to(TSEL, 0);
+        project_load(1);
+        ok &= TSEL->eng_req == 5 && TSEL->preset == retired[i] &&
+              !memcmp(TSEL->p, before.p, sizeof before.p) && !memcmp(TSEL->step, before.step, sizeof before.step);
+    }
+    bad += check("VOICE: saved legacy bass parameters, mix and sequence survive project reload", ok);
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     int bad = 0;
     bad += test_large_face();
     bad += test_sound_loads();
+    bad += test_voice_retired();
     bad += test_patterns();
     bad += test_rec();
     bad += test_rec_hold_clear();

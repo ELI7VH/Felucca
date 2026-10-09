@@ -650,6 +650,23 @@ static int browse_test(void)
     bad += check("engine browsing reaches saved user sound on addressed track", trk[1].user == 32u && trk[1].p[P_E0] == saved && song.sel == 0);
     queued(0xB1, 114, 65, 1); midi_browse_poll();
     bad += check("preset list wraps from user sound to first factory sound", !trk[1].user && trk[1].preset == 0);
+    {
+        static const uint8_t kept[] = {0, 1, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31};
+        int ok = 1;
+        midi_test_reset(); set_engine_of(&trk[1], 5);
+        uint32_t other_engine = trk[0].eng_req, other_preset = trk[0].preset;
+        for (uint32_t n = 0; n < sizeof kept; n++) {
+            ok &= trk[1].preset == kept[n];
+            queued(0xB1, 114, 65, n & 1u ? 1u : 2u); midi_browse_poll();
+        }
+        ok &= trk[1].preset == 0;
+        for (uint32_t n = sizeof kept; n > 0; n--) {
+            queued(0xB1, 114, 63, n & 1u ? 1u : 2u); midi_browse_poll();
+            ok &= trk[1].preset == kept[n - 1];
+        }
+        bad += check("MiniLab USB/DIN encoder browses 26 VOICE sounds, skipping bass aliases both ways",
+                     ok && trk[1].preset == 0 && song.sel == 0 && trk[0].eng_req == other_engine && trk[0].preset == other_preset);
+    }
     return bad;
 }
 

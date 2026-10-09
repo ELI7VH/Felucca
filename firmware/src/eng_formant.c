@@ -202,17 +202,25 @@ static void formant_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
     v->s[6] = lp;
 }
 
+/* Retired bass presets retain their slots as CHOIR AAH aliases. Browsing skips them;
+ * saved projects restore their own full parameter values without loading a factory sound. */
+#define FORMANT_NALIAS 6u
+static uint32_t formant_preset_orig(uint32_t k)
+{
+    return k == 2u || (k >= 4u && k <= 7u) || k == 28u ? 0u : k;
+}
+#define FORMANT_CHOIR {"CHOIR AAH", {0, 0, 0, 0, 40, 22, 60, 0}, {85, 90, 115, 95}, 0, 0, FX(0, 70, 15, 90), PAT(5)}
 static const preset_t FORMANT_PRESETS[] = {
     /* VOWEL VOWL2 TALK SHIFT | BUZZ BREATH Q RAND */
-    {"CHOIR AAH", {0, 0, 0, 0, 40, 22, 60, 0}, {85, 90, 115, 95}, 0, 0, FX(0, 70, 15, 90), PAT(5)},
+    FORMANT_CHOIR,
     {"VOX LEAD", {32, 0, 0, 2, 90, 8, 72, 0}, {6, 70, 105, 55}, 0, 1, FX(0, 20, 45, 40), PAT(4)},
-    {"WOW BASS", {95, 0, 68, 0, 100, 0, 80, 0}, {0, 70, 70, 30}, 0, 1, FX(10, 0, 10, 10), PAT(8)},
+    FORMANT_CHOIR, /* retired bass preset 2: stable stored ID */
     {"WHISPER", {0, 95, 88, 3, 50, 120, 50, 0}, {50, 90, 110, 90}, 0, 0, FX(0, 40, 30, 70), PAT(5)},
     /* WaveLoop mixed bank: appended so existing preset IDs keep their sounds. */
-    {"ROUND BASS", {0, 127, 35, -2, 90, 12, 50, 0}, {0, 58, 88, 25}, 0, 1, FX(2, 0, 8, 10), PAT(2)},
-    {"RUBBER BASS", {24, 107, 35, 0, 90, 15, 58, 0}, {0, 58, 88, 25}, 0, 1, FX(2, 0, 8, 10), PAT(2)},
-    {"DEEP BASS", {48, 87, 35, 2, 90, 18, 66, 0}, {0, 58, 88, 25}, 0, 1, FX(2, 0, 8, 10), PAT(2)},
-    {"REED BASS", {72, 67, 35, 4, 90, 21, 74, 0}, {0, 58, 88, 25}, 0, 1, FX(2, 0, 8, 10), PAT(2)},
+    FORMANT_CHOIR, /* retired bass preset 4: stable stored ID */
+    FORMANT_CHOIR, /* retired bass preset 5: stable stored ID */
+    FORMANT_CHOIR, /* retired bass preset 6: stable stored ID */
+    FORMANT_CHOIR, /* retired bass preset 7: stable stored ID */
     {"WARM PAD", {0, 127, 72, -2, 60, 12, 50, 0}, {66, 90, 112, 85}, 0, 0, FX(0, 38, 20, 55), PAT(5)},
     {"AIR PAD", {24, 107, 72, 0, 60, 15, 58, 0}, {66, 90, 112, 85}, 0, 0, FX(0, 38, 20, 55), PAT(5)},
     {"GLASS PAD", {48, 87, 72, 2, 60, 18, 66, 0}, {66, 90, 112, 85}, 0, 0, FX(0, 38, 20, 55), PAT(5)},
@@ -233,11 +241,12 @@ static const preset_t FORMANT_PRESETS[] = {
     {"GLASS PLUCK", {24, 107, 15, 0, 60, 15, 58, 0}, {0, 68, 0, 52}, 0, 0, FX(0, 12, 30, 38), PAT(3)},
     {"WOOD PLUCK", {48, 87, 15, 2, 60, 18, 66, 0}, {0, 68, 0, 52}, 0, 0, FX(0, 12, 30, 38), PAT(3)},
     {"ECHO PLUCK", {72, 67, 15, 4, 60, 21, 74, 0}, {0, 68, 0, 52}, 0, 0, FX(0, 12, 30, 38), PAT(3)},
-    {"LOW PULSE", {96, 47, 35, -4, 90, 24, 82, 0}, {0, 58, 88, 25}, 0, 1, FX(2, 0, 8, 10), PAT(2)},
+    FORMANT_CHOIR, /* retired bass preset 28: stable stored ID */
     {"VELVET PAD", {96, 47, 72, -4, 60, 24, 82, 0}, {66, 90, 112, 85}, 0, 0, FX(0, 38, 20, 55), PAT(5)},
     {"BELL KEYS", {96, 47, 15, -4, 60, 24, 82, 0}, {1, 78, 36, 62}, 0, 0, FX(0, 14, 18, 35), PAT(6)},
     {"SOLO LEAD", {96, 47, 35, -4, 60, 24, 82, 0}, {4, 65, 98, 38}, 0, 1, FX(6, 10, 28, 25), PAT(4)},
 };
+#undef FORMANT_CHOIR
 
 static const engine_t ENG_FORMANT = {
     .name = "VOICE",

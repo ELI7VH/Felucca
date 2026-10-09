@@ -742,9 +742,11 @@ static int param_kept(uint32_t i)
 
 /* a retired preset kept as an alias, so stored preset numbers stay valid: SAMPLE 1, once TRANH, is PIANO
  * (tools/gen_samples.py SMP_SET_ORIG). It loads as the original; browsing skips it. -> the preset k stands for.
- * (SAMPLE 4, once PERC, is past SMP_NPRESETS: apply_preset_to loads it as DRUM) */
+ * (SAMPLE 4, once PERC, is past SMP_NPRESETS: apply_preset_to loads it as DRUM).
+ * VOICE bass slots are CHOIR AAH aliases; its other preset IDs remain unchanged. */
 static uint32_t preset_orig(const engine_t *e, uint32_t k)
 {
+    if (e->presets == FORMANT_PRESETS) return formant_preset_orig(k);
     return e->presets == SMP_PRESET_TABLE && k < SMP_NSETS ? SMP_SET_ORIG[k] : k;
 }
 
@@ -752,14 +754,15 @@ static uint32_t preset_orig(const engine_t *e, uint32_t k)
 static uint32_t preset_rank(const engine_t *e, uint32_t k)
 {
     uint32_t i, n = 0;
-    if (e->presets != SMP_PRESET_TABLE)
+    if (e->presets != SMP_PRESET_TABLE && e->presets != FORMANT_PRESETS)
         return k;
     for (i = 0; i < k; i++)
         n += preset_orig(e, i) == i;
     return n;
 }
 
-#define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))
+#define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : \
+                                              ENGINES[e]->presets == FORMANT_PRESETS ? FORMANT_NALIAS : 0u))
 
 #if !FELUCCA_FM4
 /* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own

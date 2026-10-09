@@ -307,6 +307,14 @@ async function editorSamplePresets() {
     && eq(loaded.p.slice(0, info.pe0), sound.slice(0, info.pe0)) && eq(loaded.p.slice(info.pe0), E.DRUM_KIT_E)
     && JSON.stringify(m.state.step) === steps,
     "SAMPLE: old PERC project loads as DRUM's kit, the rest of the sound and the steps kept");
+  const voiceNames = E.parse[C.NAMES](await rq(E.req.names(5))).names;
+  const voiceShown = voiceNames.filter((name, i) => E.aliasOf(voiceNames, i) === i);
+  ok(voiceNames.length === 32 && voiceShown.length === 26 &&
+     !voiceShown.some(name => /BASS|LOW PULSE/.test(name)) && voiceNames[8] === "WARM PAD" && voiceNames[31] === "SOLO LEAD",
+     "VOICE: 26 choices, no bass sounds, surviving factory IDs unchanged");
+  const voiceAliases = [];
+  for (const id of [2, 4, 5, 6, 7, 28]) voiceAliases.push(E.parse[C.PRESET](await rq(E.req.preset(5, id))).preset);
+  ok(voiceAliases.every(id => id === 0), "VOICE: six retired bass IDs resolve to CHOIR AAH");
   done();
 }
 
