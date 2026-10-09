@@ -14,6 +14,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted a controller cheat sheet | Editor → MiniLab shows normal and shifted assignments. |
 | Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
+| Wanted the mod clearly identified | WaveLoop branding in web Settings and the FM-1 menu/About page. |
 | Wanted separate kick/snare edits and mixing | Each drum lane keeps its own sound, volume, pan and effect sends. |
 | Wanted playing a drum to select its sequencer lane | Hit a drum, then edit that lane with the step buttons. |
 | Needed patterns longer than 16 steps | Up to 64 steps: PATTERN → LEN, then page keys. |

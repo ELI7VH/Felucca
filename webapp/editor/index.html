@@ -121,6 +121,11 @@
   .seg button + button { border-left: 0; }
   .seg button[aria-pressed="true"], button.tog[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
   .panel { margin: 12px 0; }
+  .settings-brand { margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .settings-brand h2 { border: 0; font-size: 18px; letter-spacing: -.02em; margin-bottom: 4px; }
+  .settings-brand h2 span { color: var(--dim); font-weight: 400; }
+  .settings-brand p { margin: 0 0 10px; }
+  .settings-brand .bar { margin: 0; }
   .hint { margin: 16px 0; color: var(--dim); }
   /* sequencer: a step grid over the selected track (16 per row, 8 on a phone) */
   .grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; margin: 6px 0 12px; }
@@ -339,19 +344,29 @@
     </div>
   </section>
 
-  <section class="panel" id="p-settings" data-tab="settings" data-dev hidden>
-    <div class="groups" id="setgroups"></div>
-    <div class="group" id="device-display" hidden style="margin-top:12px">
-      <h2 data-t="deviceDisplay"></h2>
-      <p class="dim" data-t="deviceDisplayHelp"></p>
-      <div id="device-display-controls"></div>
+  <section class="panel" id="p-settings" data-tab="settings" hidden>
+    <div class="settings-brand">
+      <h2>WaveLoop <span>FM-1</span></h2>
+      <p class="dim" data-t="settingsBrand"></p>
+      <nav class="bar" aria-label="WaveLoop FM-1">
+        <a href="../../mod/" data-t="settingsGuide"></a>
+        <a href="#minilab" data-t="settingsMappings"></a>
+        <a href="../../admin/" data-t="settingsSupport"></a>
+      </nav>
     </div>
-
+    <div id="settings-device" hidden>
+      <div class="groups" id="setgroups"></div>
+      <div class="group" id="device-display" hidden style="margin-top:12px">
+        <h2 data-t="deviceDisplay"></h2>
+        <p class="dim" data-t="deviceDisplayHelp"></p>
+        <div id="device-display-controls"></div>
+      </div>
+    </div>
   </section>
 
   <section class="panel" id="p-minilab" data-tab="minilab" hidden>
     <h2>MiniLab 3 mappings</h2>
-    <p>WaveLoop FM-1 · midi17. Select the Felucca User preset.</p>
+    <p>WaveLoop FM-1 · midi18. Select the Felucca User preset.</p>
     <p><strong>Hold cyan A-bank pad 1 for Shift.</strong> Release it for the normal layer.</p>
     <div class="groups">
       <div class="group"><h2>Normal knobs</h2><table>
@@ -2945,6 +2960,8 @@ const TEXT = {
     installer: "Felucca インストーラー",
     tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
+    settingsBrand: "FM-1 用の Felucca カスタム版。", settingsGuide: "操作とセットアップ",
+    settingsMappings: "MiniLab の割り当て", settingsSupport: "ビルドとサポート",
     needDevice: "FM-1 を接続すると編集できます。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
     bankConnect: "FM-1 を接続すると本体のユーザープリセットも扱えます。", bankNone: "このファームウェアにはユーザープリセットがありません。",
     mixer: "ミキサー", mixHelp: "本体の MIXER ページと同じ 4 トラック。フェーダーはレベル。パンはどのトラックも選択を変えずに書き込みます（0.8 のファームウェアでは一瞬そのトラックを選びます）。REC は本体での録音待機の表示です。",
@@ -3049,6 +3066,8 @@ const TEXT = {
     installer: "WaveLoop FM-1 installer",
     tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
+    settingsBrand: "A Felucca instrument mod for FM-1.", settingsGuide: "Controls and setup",
+    settingsMappings: "MiniLab mappings", settingsSupport: "Build and support",
     needDevice: "Connect the FM-1 to edit.", smpNone: "This firmware has no user sample slots.",
     bankConnect: "Connect the FM-1 to see its user presets too.", bankNone: "This firmware has no user presets.",
     mixer: "Mixer", mixHelp: "The four tracks of the device's MIXER page. The fader is the level. Pan is written to any track without changing the selection (firmware 0.8: by selecting it for a moment). REC shows a track armed for live recording on the device.",
@@ -3125,6 +3144,9 @@ function renderPanels() {
     if (show && want === "samples" && !dev.smp) { show = false; hint = "smpNone"; }
     p.hidden = !show;
   }
+  /* Branding and help remain available offline; device settings keep the same readiness gate. */
+  $("settings-device").hidden = !ready;
+  if (want === "settings" && !dev) hint = "needDevice";
   $("hint").hidden = !hint;
   if (hint) $("hint").textContent = t(hint);
   $("trackbar").hidden = !(ready && hasTracks() && TRACK_TABS.has(want));

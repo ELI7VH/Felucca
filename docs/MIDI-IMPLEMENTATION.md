@@ -90,8 +90,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi17
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi17.fwsc
+./build.sh --release 1.0.5.2-midi18
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi18.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -235,3 +235,9 @@ The MiniLab preset file and its stored controller assignments are unchanged. The
 MiniLab page separates normal knobs from the Pad Shift layer.
 
 Validation: midi17 full host suite passed. USB/DIN tests cover channel isolation, SEL routing, ADSR endpoints, FM6 signed/enum ranges and neutral values, exact popup targets, normal-layer restoration, DRUM no-ops, motion capture and project roundtrip. All 353 golden sound renders are unchanged. Target image 447596 bytes; main RAM 94384/98304 and pool 330208/344064 remain unchanged. No controller preset update is needed.
+
+### midi18 settings branding
+
+Web Settings now shows WaveLoop FM-1 with controls, mapping and support links, including while disconnected. Device settings retain their connection readiness gate. The device menu and About page show WaveLoop; the About QR opens https://eli7vh.github.io/Felucca/. Original Felucca and third-party credits remain available. USB/MIDI identity, mappings, DSP and storage formats are unchanged.
+
+Validation: UI tests and 120 rendered screens across ten palettes plus style/large-text sweeps passed with zero layout/color findings and no alignment errors at one pixel or more. The About QR decoded correctly from eight preview variants. Web tests passed; offline/connected/disconnected Settings and Japanese labels were inspected. Target cost checks passed; image 447752 bytes, main RAM 94384/98304 and pool 330208/344064.
