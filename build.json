@@ -3,6 +3,6 @@
   "product": "FM-1_910",
   "sha256": "58b99aa594a43a8043bf14f74617274fe1db0d9b7708d1187debcaef91c8cf10",
   "source": "https://github.com/ELI7VH/Felucca",
-  "source_commit": "8ae300eff7e12caffb1feef9864e72112fd218d6",
+  "source_commit": "966c07abcc20fe3f5b8be278b25b0a6096e1751f",
   "release": "https://github.com/ELI7VH/Felucca/releases/tag/1.0.5.2-midi21"
 }
