@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi17.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi18.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
