@@ -32,7 +32,8 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 | Alt + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time; DRUM unassigned |
 | Alt + top knob 1 | Shared track LFO rate for cutoff, vibrato and other LFO destinations |
 | Alt + top knob 2 | Cutoff LFO depth; FM6 modulator level/brightness; MIDI 64 = off |
-| Alt + top knobs 3–4 / pads 2–7 | Reserved |
+| Alt + top knob 3 | Shared track LFO shape: SIN, TRI, SAW, SQR, S&H |
+| Alt + top knob 4 / pads 2–7 | Reserved |
 | Alt + pad 8 | Tap tempo |
 | Alt + faders 1–4 | Combined track delay + reverb amount |
 
@@ -49,11 +50,11 @@ Use the correct DIN-to-TRS adapter for the FM-1 input and supply power to both d
 - CC20–27 expose all eight engine EDIT parameters, scaled to their own signed or enum ranges.
 - CC28–31 follow the engine's four HOME knob assignments. The supplied MiniLab preset uses
   CC28–30 for its first three bottom knobs and CC76 for its fourth.
-- While Alt (A-bank pad 1) is held, CC19 sets P_LRATE and CC21 sets P_LD_FLT
-  on the MIDI-addressed synth track. The rate is shared with vibrato and other LFO
-  destinations. Depth spans -64..63 with MIDI 64 = 0; negative values invert the modulation.
+- While Alt (A-bank pad 1) is held, CC19 sets P_LRATE, CC21 sets P_LD_FLT and
+  CC22 sets P_LWAVE on the MIDI-addressed synth track. Rate and shape are shared
+  with vibrato and other LFO destinations. Depth spans -64..63 with MIDI 64 = 0; negative values invert the modulation.
   FM6 applies its FLT destination to modulator level/brightness. WHEEL ignores FLT depth.
-  DRUM leaves both unassigned.
+  DRUM leaves all three unassigned.
 - While A-bank pad 1 is held, those CC28/29/30/76 messages edit attack/decay/sustain/release
   on the MIDI-addressed synth track. FM6 instead maps them to algorithm/feedback/modulator
   ratio/modulator envelope time; higher envelope-time values make envelopes longer.
@@ -326,3 +327,22 @@ Edits use the existing motion capture and saved sound paths. No new LFO, DSP buf
 controller preset assignments or storage formats are introduced.
 
 Validation: firmware build and all available host tests passed, including Alt routing, signed depth endpoints and neutral, popups, normal-control restoration, motion recording and project restore. All 369 sound regression renders are unchanged. Image size is 450676 bytes; main RAM remains 94384 / 98304 bytes and the audio/display pool 330208 / 344064 bytes. Optional DaisySP reference and browser-emulator checks were unavailable. These are host/build results; physical-device checks are recorded separately.
+
+
+### midi23 Alt LFO shape
+
+Alt + top knob 3 (CC22) sets the addressed synth track's existing P_LWAVE parameter.
+Its five waveform values are SIN, TRI, SAW, SQR and S&H: sine, triangle, saw, square
+and sample-and-hold. The existing MIDI enum scaling maps CC values 0..127 to 0..4.
+The popup uses the existing WAVE label.
+
+Rate and shape belong to the same track LFO, so they also change vibrato and other
+active LFO destinations. Alt + top knobs 1 and 2 retain midi22's rate and cutoff/brightness
+depth mappings, including engine-specific destinations and WHEEL's ignored FLT depth.
+DRUM ignores all Alt knobs; only Alt + top knob 4 remains reserved on synth tracks.
+
+Releasing Alt restores top knob 3 to EDIT parameter 3 (selected-drum reverb on DRUM).
+The shape edit follows existing MIDI routing, motion capture and saved-sound paths.
+No DSP, controller preset assignments or storage formats change.
+
+Validation: firmware build, MIDI integration, editor web checks and target instruction budgets pass. MIDI checks cover all five shapes, channel routing, WAVE popups, normal-knob restoration, project persistence and motion recording. All 369 sound regression renders remain unchanged. Image size is 450684 bytes; main RAM remains 94384 / 98304 bytes and the audio/display pool 330208 / 344064 bytes. These are host/build results; installation on the physical FM-1 is pending.

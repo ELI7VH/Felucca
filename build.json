@@ -1,8 +1,8 @@
 {
-  "version": "1.0.5.2-midi22",
+  "version": "1.0.5.2-midi23",
   "product": "FM-1_910",
-  "sha256": "7594c0bea20641a753a5a6a3ee80be38c2e70222b0dc669eba617aa728e96ddb",
+  "sha256": "e9529deb7ff626ee64b08fe06a550e39cd2a99c3cc1697bfcb65828f030cf22d",
   "source": "https://github.com/ELI7VH/Felucca",
-  "source_commit": "9518e52d5011f95f0ff09e1e3a6752ab72769ae6",
-  "release": "https://github.com/ELI7VH/Felucca/releases/tag/1.0.5.2-midi22"
+  "source_commit": "7bce76090a076cf488ac03b53c83960b7c14e81e",
+  "release": "https://github.com/ELI7VH/Felucca/releases/tag/1.0.5.2-midi23"
 }

@@ -11,7 +11,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
 | Needed a second controller layer | Hold Alt (A-bank pad 1); Alt + pad 8 taps tempo; Alt + faders control track delay + reverb. |
 | Wanted more sound controls | Hold Alt; bottom knobs 5–8 shape synth ADSR or FM6 algorithm, feedback, ratio and envelope time. |
-| Wanted quick cutoff movement | Alt + top knob 1 sets LFO rate; top knob 2 sets amount. FM6 shapes brightness. |
+| Wanted quick cutoff movement | Alt + top knobs 1–3 set LFO rate, amount and shape. FM6 shapes brightness. |
 | Wanted a controller cheat sheet | Editor → MiniLab shows normal and Alt assignments. |
 | Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
@@ -52,8 +52,8 @@ Direct DIN MIDI control; no computer needed while playing.
 Hold effect pads to engage; release to stop. Works even with FX latch enabled.
 **Alt + pad 8:** tap tempo. **Alt + faders:** track delay + reverb.
 **Alt + bottom knobs 5–8:** synth ADSR or FM6 macros on the keyboard MIDI channel.
-**Alt + top knobs 1–2:** cutoff LFO rate / amount; FM6 brightness modulation.
-Alt + top knobs 3–4 and Alt + pads 2–7 remain unassigned.
+**Alt + top knobs 1–3:** cutoff LFO rate / amount / shape; FM6 brightness modulation.
+Alt + top knob 4 and Alt + pads 2–7 remain unassigned.
 
 ## Drum kits
 
@@ -73,9 +73,12 @@ Choose them in the **DRUM** preset bank. Yama-bruh kits use the **YB** prefix.
 
 Hold **Alt (A-bank pad 1)** for the second layer:
 
-- **Top 1:** cutoff LFO rate, shared with vibrato and other LFO destinations.
+- **Top 1:** cutoff LFO rate.
 - **Top 2:** cutoff LFO amount; FM6 brightness. Centre = off; left reverses the motion.
-- **Top 3–4:** unassigned.
+- **Top 3:** LFO shape: sine, triangle, saw, square, sample-and-hold.
+- **Top 4:** unassigned.
+
+Rate and shape are shared with vibrato and other LFO destinations.
 
 Bottom row:
 
