@@ -25,7 +25,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted the bottom row to match FM-1’s main knobs | Bottom knobs 5–7 follow HOME controls 1–3. |
 | Needed quick vibrato-speed control | Bottom knob 8 controls LFO speed on synths; drum volume on DRUM. |
 | Wanted mod-wheel pitch modulation | Mod strip adds vibrato; LFO controls its speed and shape. |
-| Wanted classic drum kits | DRUM bank presets: 808 and an eight-lane CR-78-style kit. |
+| Wanted fuller classic drum kits | Revoiced 808 with a deeper kick and fuller snare/clap; dry, woody CR-78-style percussion. |
 | Thin sound banks | 32 mixed factory patches in each of ten synth engines; existing patch IDs retained. |
 | Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
 | Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
@@ -34,15 +34,25 @@ Direct DIN MIDI control; no computer needed while playing.
 | Couldn’t see what a MIDI knob was changing | Brief popup shows track, parameter name and value. |
 | Needed quick screen-track switching | Encoder click cycles the displayed track 1 → 2 → 3 → 4 → 1. |
 
-## Eight effect pads
+## A-bank pads
 
-- **1–3:** repeat 1/8, 1/16, 1/32.
+- **1:** hold for Shift.
+- **2–3:** repeat 1/16, 1/32.
 - **4:** reverse.
 - **5:** tape stop.
 - **6:** freeze.
 - **7–8:** octave up/down.
 
-Hold to engage; release to stop. Works even with FX latch enabled.
+Hold effect pads to engage; release to stop. Works even with FX latch enabled.
+**Shift + pad 8:** tap tempo. **Shift + faders:** track delay + reverb.
+
+## Drum kits
+
+- **808:** longer deep kick, fuller snare and clap, smoother metallic hats.
+- **CR78:** short, dry kick and snare; softer maracas, woody conga, short claves and a rounded bell.
+
+Both are synthesized eight-lane kits with separate edits and mixing for each drum.
+Choose them in the **DRUM** preset bank; existing sounds using these kits receive the new voicing too.
 
 ## Final knob layout
 

@@ -192,3 +192,18 @@ Each pad remembers its press layer until release, including zero-velocity note-o
 The editor MiniLab tab documents the layout offline; it does not program the controller.
 
 Validation: midi15 full host suite passed, including modifier ownership, reserved controls, combined sends, drum lane preservation, popup rendering, panic/overflow and web navigation. All 353 sound renders remained unchanged. Static RAM and audio pool allocations remain unchanged. MiniLab User 5 was read back across all 319 parameters; only A-bank pad 1 color changed to cyan.
+
+
+### midi16 drum voicing
+
+KIT 80 keeps its 49.5 Hz bass fundamental but extends the default kick t-30 from 0.30 to 0.51 seconds, with a fast pitch transient and mild upper harmonics. The snare has more shell body and a brief wire strike; the clap has three 8 ms-spaced bursts and a fuller tail. Hats retain the six-square metal source with reduced raw sizzle, and the tom gets a longer rounded body. Rim and cowbell are retained.
+
+CR78 has a 60 Hz / 0.19 second kick, a short 235 Hz snare shell, broader maracas with a 2.5 ms rise, shorter noise hats, a bent 190 Hz conga, short wooden claves and a two-sine 750/1050 Hz bell. These are original synthesized voicings, not measured circuit replicas. Defaults are balanced to the existing lane loudness targets. Per-drum controls still shape the voices.
+
+Preset IDs, KIT IDs, lane assignments, project formats, sample slots and the MiniLab preset are unchanged. Saved songs using KIT 80 or CR78 play the updated synthesis with their existing per-lane overrides.
+
+Rim-drive and cowbell-strike envelope products now widen before shifting, preventing signed overflow at maximum SNAP/accent without altering default renders.
+
+New independent sound checks require the 808 kick to be lower and longer than CR78, CR78 maracas to be darker than its closed hat, and the bell spectra to differ after gain normalization. Dry single-lane demos and complete beat renders are generated in `build/drum_demo/`. Only the two preset and two model-kit golden hashes change; all 349 other renders stay bit-identical.
+
+Validation: full host suite passed, followed by final drum, 353-render regression and target-cost checks after the arithmetic fixes. The 808/CR78 signed-overflow sanitizer passes all tested control corners. Target drum loop cost is 83 against budget 86; image 447464 bytes, static RAM 94384/98304 and pool 330208/344064. Emscripten and DaisySP reference checks were unavailable. Separate legacy validation debt: the unchanged KIT66 snare can overflow its noise-gain product at extreme settings; the release-scoped sanitizer does not claim all other kits are overflow-free.
