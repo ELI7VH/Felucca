@@ -177,6 +177,7 @@
       <button role="tab" data-tab="samples" data-t="samples" data-ic="symbol_waves"></button>
       <button role="tab" data-tab="projects" data-t="projects" data-ic="symbol_folder"></button>
       <button role="tab" data-tab="settings" data-t="tabSettings" data-ic="symbol_cog"></button>
+      <button role="tab" data-tab="minilab">MiniLab</button>
       <button role="tab" data-tab="dev" data-t="tabDev" data-ic="symbol_cog"></button>
     </nav>
     <div class="trackbar" id="trackbar" hidden><span class="dim" data-t="track"></span><span class="seg" id="trackbtns" role="group"></span></div>
@@ -346,6 +347,49 @@
       <div id="device-display-controls"></div>
     </div>
 
+  </section>
+
+  <section class="panel" id="p-minilab" data-tab="minilab" hidden>
+    <h2>MiniLab 3 mappings</h2>
+    <p>WaveLoop FM-1 · midi15. Select the Felucca User preset.</p>
+    <p><strong>Hold cyan A-bank pad 1 for Shift.</strong> Release it for the normal layer.</p>
+    <div class="groups">
+      <div class="group"><h2>Knobs</h2><table>
+        <thead><tr><th>Control</th><th>Synth</th><th>Drums</th></tr></thead>
+        <tbody><tr><td>Top 1</td><td>Master DJ filter</td><td>Master DJ filter</td></tr>
+        <tr><td>Top 2–4</td><td>EDIT 2–4</td><td>Pan / reverb / delay</td></tr>
+        <tr><td>Bottom 5–7</td><td>HOME 1–3</td><td>Pitch / tone / decay</td></tr>
+        <tr><td>Bottom 8</td><td>LFO speed</td><td>Drum volume</td></tr>
+        <tr><td>Shift + knobs</td><td colspan="2">Unassigned</td></tr></tbody>
+      </table><p class="dim">Knobs follow the keyboard MIDI channel. Drum controls follow the last drum played.</p></div>
+      <div class="group"><h2>Faders</h2><table><tbody>
+        <tr><td>1–4</td><td>Track 1–4 volume</td></tr>
+        <tr><td>Shift + 1–4</td><td>Track 1–4 delay + reverb</td></tr>
+      </tbody></table></div>
+      <div class="group"><h2>A-bank pads</h2><table><thead><tr><th>Pad</th><th>Normal</th><th>Shift</th></tr></thead><tbody>
+        <tr><td>1</td><td>Hold Shift</td><td>—</td></tr>
+        <tr><td>2</td><td>Repeat 1/16</td><td>Unassigned</td></tr>
+        <tr><td>3</td><td>Repeat 1/32</td><td>Unassigned</td></tr>
+        <tr><td>4</td><td>Reverse</td><td>Unassigned</td></tr>
+        <tr><td>5</td><td>Tape stop</td><td>Unassigned</td></tr>
+        <tr><td>6</td><td>Freeze</td><td>Unassigned</td></tr>
+        <tr><td>7</td><td>Octave up</td><td>Unassigned</td></tr>
+        <tr><td>8</td><td>Octave down</td><td>Tap tempo</td></tr>
+      </tbody></table><p class="dim">Effects engage while held.</p></div>
+      <div class="group"><h2>Encoder and keyboard</h2><table><tbody>
+        <tr><td>Turn</td><td>Previous / next patch</td></tr>
+        <tr><td>Arturia Shift + turn</td><td>Previous / next engine</td></tr>
+        <tr><td>Click</td><td>Next displayed track</td></tr>
+        <tr><td>Mod strip</td><td>Pitch vibrato</td></tr>
+        <tr><td>Arturia Shift + MIDI CH key</td><td>Select keyboard channel / track</td></tr>
+      </tbody></table></div>
+      <div class="group"><h2>B-bank pads</h2><table><tbody>
+        <tr><td>1 / 2</td><td>Previous / next song</td></tr>
+        <tr><td>3 / 4</td><td>Notes</td></tr>
+        <tr><td>5 / 6 / 7 / 8</td><td>Stop / play / record / tap tempo</td></tr>
+      </tbody></table><p class="dim">Arturia Shift + pad 2 switches pad banks. Record uses the displayed track.</p></div>
+    </div>
+    <p><a href="../../mod/">Firmware and controller setup</a></p>
   </section>
 
   <section class="panel" id="p-dev" data-tab="dev" hidden>
@@ -3030,7 +3074,7 @@ $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; 
 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
-const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings", "dev"];
+const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings", "minilab", "dev"];
 const TAB_KEY = "felucca-editor-tab";
 const TRACK_TABS = new Set(["sound", "sequencer", "tracks"]);
 let tab = (() => {

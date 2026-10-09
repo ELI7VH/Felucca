@@ -1018,6 +1018,9 @@ static void draw_midi_popup(void)
         str_cpy(label, n->value < 0 ? "LOW PASS" : n->value > 0 ? "HIGH PASS" : "FILTER", sizeof label);
         if (!n->value) str_cpy(value, "BYPASS", sizeof value);
         else { fmt_int(value, n->value < 0 ? -n->value : n->value); unit = "%"; }
+    } else if (n->kind == 4u) {
+        str_cpy(label, "DELAY + REVERB", sizeof label);
+        fmt_int(value,n->value); unit="%";
     } else if (n->kind == 2u) {
         str_cpy(label, "SELECTED", sizeof label);
         fmt_int(value, n->value);

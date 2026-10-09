@@ -20,6 +20,7 @@ static void midi_test_reset(void)
     midi_transport_r = midi_transport_w = 0;
     memset(midi_transport_held, 0, sizeof midi_transport_held);
     midi_notice_pending = midi_track_steps = midi_click_held = 0;
+    midi_pad_shift=midi_pad_down=midi_pad_layer=0;
     memset(&midi_popup, 0, sizeof midi_popup);
     memset(midi_ch, 0, sizeof midi_ch); memset(midi_notes, 0, sizeof midi_notes);
     memset(midi_owners, 0, sizeof midi_owners); memset(midi_bend_q8, 0, sizeof midi_bend_q8);
@@ -85,12 +86,43 @@ static int controller_feedback_test(void)
     bad += check("master filter popup identifies the master and LPF", midi_popup.notice.kind==1 && midi_popup.notice.value==-100);
     midi_test_reset(); return bad;
 }
+static int pad_shift_test(void)
+{
+    int bad=0; midi_test_reset(); perf_midi_held=0;
+    queued(0x9F,36,100,2);
+    bad+=check("pad 1 holds Shift without triggering FX or a note",midi_pad_shift && !perf_midi_held && !midi_notes[15][36]);
+    const uint8_t knobs[8]={19,21,22,23,28,29,30,76};
+    for (uint32_t k=0;k<8;k++) {
+        int16_t before[P_COUNT]; memcpy(before,trk[1].p,sizeof before);
+        queued(0xB1,knobs[k],127,2);
+        bad+=check("reserved shifted knobs leave sound unchanged",!memcmp(before,trk[1].p,sizeof before));
+    }
+    int16_t level=trk[2].p[P_LEVEL]; queued(0xB2,7,127,2);
+    bad+=check("shifted fader changes track send and preserves volume",trk[2].p[P_REV]==127 && trk[2].p[P_DLY]==127 && trk[2].p[P_LEVEL]==level);
+    for (uint32_t n=37;n<43;n++) {
+        queued(0x9F,n,100,2); queued(0x8F,n,0,2);
+        bad+=check("unassigned shifted pads do not trigger FX or commands",!perf_midi_held && !midi_transport_held[15]);
+    }
+    trk[3].eng_req=10; engine_block(&trk[3]);
+    uint16_t lane_mask=drum_control[3].mask[drum_focus[3]];
+    queued(0xB3,7,127,2); midi_ui_poll();
+    bad+=check("drum shifted fader changes track sends without creating lane overrides",trk[3].p[P_REV]==127 && trk[3].p[P_DLY]==127 && drum_control[3].mask[drum_focus[3]]==lane_mask && midi_popup.notice.kind==4);
+    queued(0x9F,43,100,2); queued(0x8F,36,0,2); queued(0x8F,43,0,2); midi_transport_poll();
+    bad+=check("shift release before tap release clears ownership",!midi_pad_down && !midi_transport_held[15] && !perf_midi_held);
+    queued(0x9F,39,100,2); queued(0x9F,36,100,2); queued(0x8F,39,0,2);
+    bad+=check("FX pressed before Shift releases in its original layer",!perf_midi_held);
+    queued(0xBF,123,0,2);
+    bad+=check("panic clears held modifier and pad layers",!midi_pad_shift && !midi_pad_down && !midi_pad_layer);
+    queued(0x9F,36,100,2); midi_in_overflow=1; events_block(CTL);
+    bad+=check("MIDI overflow cannot leave Shift held",!midi_pad_shift && !midi_pad_down);
+    midi_test_reset(); return bad;
+}
 static int pads_test(void)
 {
     int bad = 0; midi_test_reset(); perf_midi_held = perf_held = perf_latched = 0;
     perf_latch_on = 1; perf_kill = 0; song.playing = 0;
     const uint8_t effects[8] = {PF_R8, PF_R16, PF_R32, PF_REV, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN};
-    for (uint32_t k = 0; k < 8; k++) {
+    for (uint32_t k = 1; k < 8; k++) {
         queued(0x9F, 36+k, 100, k&1);
         bad += check("A pad engages its master effect with latch on and CH1-4 routing", perf_midi_held == PF_BIT(effects[k]) && !perf_latched && !midi_notes[15][36+k]);
         perf_begin(CTL);
@@ -100,12 +132,12 @@ static int pads_test(void)
         bad += check("pad release removes the DSP activation", !(perf_act & PF_BIT(effects[k])));
         bad += check("pad lift clears its effect despite FX latch", !perf_midi_held);
     }
-    queued(0x9F,36,100,1); queued(0x9F,39,100,0);
+    queued(0x9F,37,100,1); queued(0x9F,39,100,0);
     bad += check("last pressed pad wins overlapping buffer holds", perf_pick(perf_midi_held) == PF_REV);
     queued(0x9F,39,0,0);
-    bad += check("zero-velocity note-on releases and resumes older held pad", perf_pick(perf_midi_held) == PF_R8);
-    perf_held = PF_BIT(PF_R8); queued(0x8F,36,0,1);
-    bad += check("pad release preserves a matching local FX key", perf_held == PF_BIT(PF_R8) && !perf_midi_held);
+    bad += check("zero-velocity note-on releases and resumes older held pad", perf_pick(perf_midi_held) == PF_R16);
+    perf_held = PF_BIT(PF_R16); queued(0x8F,37,0,1);
+    bad += check("pad release preserves a matching local FX key", perf_held == PF_BIT(PF_R16) && !perf_midi_held);
     perf_held = 0;
     for (uint32_t cc = 120; cc <= 123; cc++) if (cc != 122) {
         queued(0x9F,43,100,1); queued(0xBF,cc,0,1);
@@ -613,7 +645,7 @@ static int transport_controls_test(void)
 
 int main(void)
 {
-    int bad = drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+    int bad = pad_shift_test() + drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
               arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }

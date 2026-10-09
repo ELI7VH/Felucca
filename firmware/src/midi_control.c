@@ -62,13 +62,16 @@ static void midi_transport_cc(uint32_t ch, uint32_t cc, uint32_t value)
 typedef struct {
     const param_desc_t *desc;
     int16_t value;
-    uint8_t track, kind, lane; /* 0 parameter, 1 master filter, 2 track, 3 drum parameter */
+    uint8_t track, kind, lane; /* 0 parameter, 1 master filter, 2 track, 3 drum parameter, 4 track FX */
 } midi_notice_t;
 static volatile midi_notice_t midi_notice;
 static volatile uint8_t midi_notice_pending, midi_track_steps;
 static volatile int8_t midi_setlist_step;
 static uint8_t midi_setlist_held[2];
 static uint8_t midi_click_held;
+/* A-bank pad 1 is a global held modifier across keyboard channels. Each
+ * other pad remembers its press layer so release order cannot stick an FX. */
+static uint8_t midi_pad_shift, midi_pad_down, midi_pad_layer;
 static void midi_notify(track_t *t, const param_desc_t *d, int32_t value, uint32_t kind)
 {
     midi_notice.desc = d;
@@ -297,6 +300,23 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
 {
     track_t *t = midi_track(ch);
     uint32_t id;
+    if (midi_pad_shift) {
+        static const uint8_t knobs[8]={19,21,22,23,28,29,30,76};
+        /* Shifted knobs are reserved until their assignments are chosen. */
+        for (uint32_t k=0;k<8;k++) if (cc==knobs[k]) return 1;
+        if (cc==7u && ch<NPART) {
+            t=&trk[ch];
+            /* One track-wide macro, including on drums. */
+            const uint8_t sends[2]={P_DLY,P_REV};
+            for (uint32_t k=0;k<2;k++) {
+                id=sends[k]; const param_desc_t *d=track_desc(t,id);
+                t->p[id]=(int16_t)param_fit(d,d->min+((int32_t)value*(d->max-d->min)+63)/127);
+                (void)motion_capture(t,id,t->p[id]);
+            }
+            midi_notify(t,0,(int32_t)(value*100u/127u),4);
+            return 1;
+        }
+    }
     if (cc >= 20u && cc <= 27u)
         id = P_E0 + cc - 20u;
     else if (cc >= 28u && cc <= 31u)
@@ -447,16 +467,36 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
      * before track routing: pads always affect the master, never play notes. */
     if (ch == 15u) {
         if ((st == 0x90u || st == 0x80u) && d1 >= 36u && d1 <= 43u) {
-            static const uint8_t effects[8] = {PF_R8, PF_R16, PF_R32, PF_REV, PF_TAPE, PF_FRZ, PF_OUP, PF_ODN};
-            uint32_t e = effects[d1 - 36u], bit = PF_BIT(e);
-            if (st == 0x90u && d2) {
-                if (!(perf_midi_held & bit)) perf_ord[e] = ++perf_seq;
-                perf_midi_held |= bit;
-            } else perf_midi_held &= ~bit;
+            uint32_t k=d1-36u, down=st==0x90u && d2;
+            if (!k) { midi_pad_shift=(uint8_t)down; return; }
+            static const uint8_t effects[8]={PF_R8,PF_R16,PF_R32,PF_REV,PF_TAPE,PF_FRZ,PF_OUP,PF_ODN};
+            static const uint8_t commands[8]={0,0,0,0,0,0,0,109};
+            uint8_t pad=(uint8_t)(1u<<k);
+            if (down) {
+                if (midi_pad_down & pad) return;
+                midi_pad_down |= pad;
+                if (midi_pad_shift) midi_pad_layer |= pad;
+                else midi_pad_layer &= (uint8_t)~pad;
+            } else if (!(midi_pad_down & pad)) return;
+            if (midi_pad_layer & pad) {
+                uint32_t cc=commands[k];
+                if (cc>=106u && cc<=109u) midi_transport_cc(ch,cc,down?127u:0u);
+                else if (cc) midi_control(ch,cc,down?127u:0u);
+            } else {
+                uint32_t e=effects[k], bit=PF_BIT(e);
+                if (down) {
+                    if (!(perf_midi_held & bit)) perf_ord[e]=++perf_seq;
+                    perf_midi_held |= bit;
+                } else perf_midi_held &= ~bit;
+            }
+            if (!down) { midi_pad_down &= (uint8_t)~pad; midi_pad_layer &= (uint8_t)~pad; }
             return;
         }
         if (st == 0xB0u && (d1 == 120u || d1 == 121u || d1 == 123u)) {
             perf_midi_held = 0;
+            midi_pad_shift=midi_pad_down=midi_pad_layer=0;
+            midi_click_held=0;
+            midi_setlist_held[0]=midi_setlist_held[1]=0;
             return;
         }
     }
@@ -468,7 +508,8 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
         midi_channel(ch)->bend = (int16_t)((int32_t)(d1 | (d2 << 7)) - 8192);
         midi_expression_channel(ch);
     } else if (st == 0xB0u) {
-        mod_midi(midi_track(ch), st, d1, d2);
+        if (!(midi_pad_shift && (d1==7u || d1==19u || (d1>=21u && d1<=23u) || (d1>=28u && d1<=30u) || d1==76u)))
+            mod_midi(midi_track(ch), st, d1, d2);
         midi_control(ch, d1, d2);
     } else if (st == 0xD0u)
         mod_midi(midi_track(ch), st, d1, d2);

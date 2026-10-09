@@ -1,6 +1,6 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi14.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi15.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -95,3 +95,11 @@ For longer patterns, set **SEQ → PATTERN → LEN** to 32, 48 or 64 (any length
 - Two user sample slots remain. Full USB backup includes all songs and their order.
 
 [Mod website](https://eli7vh.github.io/Felucca/mod/) · [Setlist editor](https://eli7vh.github.io/Felucca/webapp/editor/).
+
+## Pad Shift layer
+
+Hold cyan A-bank pad 1 for a second layer; it replaces repeat 1/8.
+Shift + pad 8 taps tempo. Shift + pads 2–7 and knobs are reserved and do nothing.
+Shift + faders 1–4 control the corresponding track’s delay + reverb together; normal faders stay track volumes.
+The editor’s MiniLab tab shows the full layout, even without a connected device.
+Release ownership follows each pad’s press layer, so releasing Shift first cannot stick an effect.

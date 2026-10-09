@@ -732,6 +732,11 @@ static void events_block(uint32_t n)
         mi_r = mi_w;
         memset(midi_sel_on, 0, sizeof midi_sel_on);
         memset(midi_ch, 0, sizeof midi_ch);
+        midi_pad_shift=midi_pad_down=midi_pad_layer=0;
+        perf_midi_held=0;
+        memset(midi_transport_held,0,sizeof midi_transport_held);
+        midi_click_held=0;
+        midi_setlist_held[0]=midi_setlist_held[1]=0;
         memset(midi_owners, 0, sizeof midi_owners);
         memset(mchord, 0, sizeof mchord);
         midi_hint = 0;
