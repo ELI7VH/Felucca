@@ -751,3 +751,11 @@ device gone at ~0.3 s, the MIDI port gone at ~0.57 s and back at ~1.15 s; ON -> 
 at ~0.6 s while the MIDI port was not seen to disappear at all (so do not wait for a disconnect event: after
 a real change, wait ~1.5 s and open again). What the editor sends in that window is lost, `WATCH` ends with the
 bus reset (send `INFO` and `WATCH` again after reconnecting), and a backup in progress answers rc 5 (stale).
+
+## Developer diagnostics (midi13)
+
+INFO advertises `44 01 01` before the final setlist capability. Command **75**, with no arguments, is read-only. Reply: `schema=1, rc=0, count`, then `count` records of `id` plus five little-endian 7-bit bytes encoding an unsigned 32-bit value. Missing fields mean unavailable; unknown IDs may be retained. Duplicate IDs, wrong lengths and a fifth byte above 15 are invalid.
+
+IDs: 1 uptime ms; 2 CPU percent; 3 battery ADC; 4 playing; 5 active voices; 6 voices shed; 7 voices given up; 8 displayed track; 9 BPM; 10 flash support; 11 pending MIDI overflow; 12 USB resets; 13/14 USB packets RX/TX; 15 USB stalls; 16/17 used/total sample slots; 18/19 encoded sample bytes used/capacity; 20/21 used/total song slots; 22/23 used/total user patches; 24 active storage slot plus one (zero unset); 25 pending song load; 26 autosave error; 27 rendered quiet seconds; 28 USB retries; 29 USB suspends; 30/31 allocated/capacity main RAM; 32/33 allocated/capacity audio/display pool; 34/35 firmware image bytes/capacity; 36/37 RAM code bytes/capacity; 38 mapped flash span; 39 persistent region reservation; 40 peak audio render microseconds; 41 audio overruns; 42 boots; 43 DIN drops.
+
+RAM values describe linker allocations, not dynamic heap or stack high-water measurements. Flash span is the mapped address window, not a physical-chip-size measurement. Persistent reservations are fixed; empty songs do not enlarge sample slots. The Dev tab polls every two seconds only while visible and idle. Polls neither write flash nor capture backups. Saved JSON preserves raw field IDs and marks demo data explicitly.

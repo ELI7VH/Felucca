@@ -51,6 +51,15 @@ async function editorMock() {
   const ask=(op,...args)=>link.request([E.CMD.SETLIST,[op,...args]]).then(a=>E.parse[E.CMD.SETLIST](a));
   const si=E.parse[E.CMD.INFO](await link.request(E.req.info()));
   ok(si.setlistCount===12,"setlist: tagged capability and 12 complete song rows");
+  ok(si.diagVersion===1,"diagnostics: capability alongside setlist");
+  const dg=E.parse[E.CMD.DIAG](await link.request([E.CMD.DIAG,[]]));
+  ok(dg.fields[31]===98304 && dg.fields[33]===344064 && dg.fields[21]===12,"diagnostics: RAM and song capacities");
+  ok(dg.fields[19]===162816 && dg.fields[18]===0,"diagnostics: encoded sample payload capacity");
+  ok(E.parse[E.CMD.DIAG]([1,0,1,99,127,127,127,127,15]).fields[99]===4294967295,"diagnostics: unsigned 32-bit values");
+  for(const bad of [[1,0,1],[2,0,0],[1,0,1,1,0,0,0,0,16],[1,0,2,1,0,0,0,0,0,1,0,0,0,0,0]]) {
+    let rejected=false;try{E.parse[E.CMD.DIAG](bad);}catch{rejected=true;}ok(rejected,"diagnostics: malformed payload rejected");
+  }
+
   let x=await ask(4,11); ok(x.rows[11].used && x.active===11,"setlist: save binds current song");
   await ask(1,11);x=await ask(2,0);ok(x.rows[0].id===11,"setlist: move follows song identity");
   x=await ask(5,0,...Array.from("FINALE",c=>c.charCodeAt(0)));ok(x.rows[0].name==="FINALE","setlist: song names parse correctly");
@@ -1216,7 +1225,7 @@ async function editorSessions() {
   const S = vm.runInNewContext(`let dev = null, lastDump = 0, libBusy = false; ${state} ${requests} ${loading} ${library}
     ;({ beginBusy, resetBusy, sessionRequest, load, libOp,
        setDevice: d => { dev = d; }, count: () => busy })`, {
-    Date, Error,
+    Date, Error, tab: "sound", refreshDiagnostics: async()=>{},
     $: id => { if (!nodes.has(id)) nodes.set(id, {}); return nodes.get(id); },
     CMD: { INFO: 1, PROJECT: 2, SMP_INFO: 3, DUMP: 4 },
     parse: { 1: r => r, 2: () => ({ used: false }), 3: () => ({}), 4: r => r },
@@ -1284,7 +1293,7 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 8 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 9 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");

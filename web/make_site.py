@@ -86,7 +86,7 @@ def main(pkg, version, out):
     (out/"controllers").mkdir(exist_ok=True)
     shutil.copy(HERE.parent/"controllers/Felucca.minilab3",out/"controllers/Felucca.minilab3")
     (out/"docs").mkdir(exist_ok=True)
-    for doc in ("FORK.md","docs/MIDI-IMPLEMENTATION.md"):
+    for doc in ("FORK.md","docs/MIDI-IMPLEMENTATION.md","web/EDITOR_PROTOCOL.md"):
         shutil.copy(HERE.parent/doc,out/"docs"/Path(doc).name)
     (out/"build.json").write_text(json.dumps({"version":version,"product":product,"sha256":hashlib.sha256(raw).hexdigest(),"source":"https://github.com/ELI7VH/Felucca","source_commit":subprocess.run(["git","rev-parse","HEAD"],cwd=HERE.parent,capture_output=True,text=True).stdout.strip() or None,"release":"https://github.com/ELI7VH/Felucca/releases/tag/"+version},indent=2)+"\n")
     (out/".nojekyll").touch()

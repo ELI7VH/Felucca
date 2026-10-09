@@ -114,17 +114,17 @@ static int preferences(void)
     uint32_t n = request(ED_INFO, a, 0);
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
-        host_wire[n - 31] == CHAIN_ROWS && host_wire[n - 30] == 0x55 &&
-        host_wire[n - 29] == 1 && host_wire[n - 28] == 9 &&
-        host_wire[n - 27] == 0x4d && host_wire[n - 26] == 1 &&
-        host_wire[n - 25] == MOTION_MAX && host_wire[n - 24] == 1 &&
-        host_wire[n - 23] == 0x42 && host_wire[n - 22] == 1 && host_wire[n - 21] == 3 &&
-        host_wire[n - 20] == 0x46 && host_wire[n - 19] == 1 && host_wire[n - 18] == FM6_NFACTORY &&
-        host_wire[n - 17] == 0 &&                        /* (no bank since 1.0.3) */
-        host_wire[n - 16] == 0x53 && host_wire[n - 15] == 1 && host_wire[n - 14] == 3 &&
-        host_wire[n - 13] == 0x50 && host_wire[n - 12] == 1 && host_wire[n - 11] == 3 &&   /* FM6 v2: no bank, preset patches */
-        host_wire[n - 10] == 0x4E && host_wire[n - 9] == 1 && host_wire[n - 8] == 12 &&   /* MENU settings: 12 items */
-        host_wire[n - 7] == 0x52 && host_wire[n - 6] == 1 && host_wire[n - 5] == 4);   /* RATCH */
+        host_wire[n - 34] == CHAIN_ROWS && host_wire[n - 33] == 0x55 &&
+        host_wire[n - 32] == 1 && host_wire[n - 31] == 9 &&
+        host_wire[n - 30] == 0x4d && host_wire[n - 29] == 1 &&
+        host_wire[n - 28] == MOTION_MAX && host_wire[n - 27] == 1 &&
+        host_wire[n - 26] == 0x42 && host_wire[n - 25] == 1 && host_wire[n - 24] == 3 &&
+        host_wire[n - 23] == 0x46 && host_wire[n - 22] == 1 && host_wire[n - 21] == FM6_NFACTORY &&
+        host_wire[n - 20] == 0 &&                        /* (no bank since 1.0.3) */
+        host_wire[n - 19] == 0x53 && host_wire[n - 18] == 1 && host_wire[n - 17] == 3 &&
+        host_wire[n - 16] == 0x50 && host_wire[n - 15] == 1 && host_wire[n - 14] == 3 &&   /* FM6 v2: no bank, preset patches */
+        host_wire[n - 13] == 0x4E && host_wire[n - 12] == 1 && host_wire[n - 11] == 12 &&   /* MENU settings: 12 items */
+        host_wire[n - 10] == 0x52 && host_wire[n - 9] == 1 && host_wire[n - 8] == 4);   /* RATCH */
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -929,9 +929,34 @@ static int drum_kit_retired(void)
     return bad;
 }
 
+static uint32_t diag_value(uint32_t id, uint32_t n)
+{
+    for (uint32_t p = 8; p + 6u < n; p += 6u) if (host_wire[p] == id) {
+        uint32_t v = 0;
+        for (uint32_t j = 0; j < 5u; j++) v |= (uint32_t)host_wire[p + 1u + j] << (j * 7u);
+        return v;
+    }
+    return 0xFFFFFFFFu;
+}
+static int diagnostics(void)
+{
+    int bad = 0;
+    uint8_t a[1] = {0};
+    reset(); fm1_ms = 1234567; song.cpu_q8 = 128;
+    track_t before = trk[0];
+    uint32_t n = request(ED_DIAG, a, 0);
+    bad += check("DIAG schema and bounded five-byte unsigned fields", n == 9u + 6u * host_wire[7] && host_wire[5] == 1 && host_wire[6] == 0);
+    bad += check("DIAG reports uptime, CPU and sample payload capacity", diag_value(1,n) == 1234567 && diag_value(2,n) == 50 && diag_value(19,n) == SMP_USER_SLOTS*(SMP_USER_SIZE-SMP_USER_DATA));
+    bad += check("DIAG host has no invented hardware memory values", diag_value(30,n) == 0xFFFFFFFFu);
+    bad += check("DIAG leaves current music untouched", !memcmp(&before,&trk[0],sizeof before));
+    bad += check("DIAG rejects unexpected arguments", request(ED_DIAG,a,1) == 0);
+    fm1_ms = 0;
+    return bad;
+}
+
 int main(void)
 {
-    int bad = preferences() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
+    int bad = diagnostics() + preferences() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
               fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
     return bad != 0;

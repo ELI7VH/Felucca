@@ -177,6 +177,7 @@
       <button role="tab" data-tab="samples" data-t="samples" data-ic="symbol_waves"></button>
       <button role="tab" data-tab="projects" data-t="projects" data-ic="symbol_folder"></button>
       <button role="tab" data-tab="settings" data-t="tabSettings" data-ic="symbol_cog"></button>
+      <button role="tab" data-tab="dev" data-t="tabDev" data-ic="symbol_cog"></button>
     </nav>
     <div class="trackbar" id="trackbar" hidden><span class="dim" data-t="track"></span><span class="seg" id="trackbtns" role="group"></span></div>
   </header>
@@ -344,10 +345,17 @@
       <p class="dim" data-t="deviceDisplayHelp"></p>
       <div id="device-display-controls"></div>
     </div>
-    <div class="group" style="margin-top:12px">
-      <h2 data-t="system" data-ic="symbol_cog"></h2>
-      <table id="sysinfo"></table>
-    </div>
+
+  </section>
+
+  <section class="panel" id="p-dev" data-tab="dev" hidden>
+    <h2 data-t="devTitle"></h2>
+    <p class="bar"><button id="dev-refresh" data-t="devRefresh"></button><button id="dev-export" data-t="devExport"></button></p>
+    <p id="dev-status" class="dim" role="status" aria-live="polite"></p>
+    <div id="dev-meters" class="groups"></div>
+    <div class="group" style="margin-top:12px"><h2 data-t="system"></h2><table id="sysinfo"></table></div>
+    <div class="group" style="margin-top:12px"><h2 data-t="devCounters"></h2><table id="dev-counters"></table></div>
+    <p class="dim" data-t="devHelp"></p>
   </section>
 
   <footer>Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
@@ -366,7 +374,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK: 27, TRACK_MIX: 28, TRACK_DUMP: 29, TRACK_STEP: 30,
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
-  SETLIST: 74, MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
+  SETLIST: 74, DIAG: 75, MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
   FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANGED]);
@@ -461,8 +469,18 @@ const parse = {
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
+    o.diagVersion = [trailer.slice(-3), trailer.slice(-6,-3)].some(a => a.join(",") === "68,1,1") ? 1 : 0;
     o.setlistCount = trailer.slice(-3).join(",") === "76,1,12" ? 12 : 0;
     return o;
+  },
+  [CMD.DIAG](a) {
+    if (a.length < 3 || a[0] !== 1 || a[1] !== 0 || a.length !== 3 + a[2] * 6) throw Error("Invalid diagnostic reply");
+    const fields = {};
+    for (let n = 3; n < a.length; n += 6) {
+      if (a[n+5] > 15 || Object.hasOwn(fields, a[n])) throw Error("Invalid diagnostic field");
+      fields[a[n]] = a.slice(n+1,n+6).reduce((v,b,k) => v + b * 2 ** (7*k), 0);
+    }
+    return { schema: a[0], fields };
   },
   [CMD.SETLIST](a) {
     const r=new Reader(a),o={rc:r.b(),pick:r.b(),active:r.b(),pending:r.b(),rows:[]};
@@ -2337,8 +2355,16 @@ function makeMockDevice(opt = {}) {
           if (st.uiCaps) { b(0x55); b(1); b(st.uiCaps); b(0x4d); b(1); b(64); b(1); if (!opt.noFm6) { b(0x46); b(1); b(FM6.FACTORY_PK.length); b(0); }
             if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
         }
+        if(!opt.legacy && opt.diagnostics !== false) {b(0x44);b(1);b(1);}
         if(opt.setlist) {b(0x4C);b(1);b(12);}
         break;
+      case CMD.DIAG: {
+        if (opt.legacy || opt.diagnostics === false || a.length) return null;
+        const fields = {1:1234567,2:22,3:622,4:st.playing?1:0,5:0,6:0,7:0,8:st.sel+1,9:120,10:1,11:0,12:1,13:1442,14:2501,15:0,16:0,17:2,18:0,19:162816,20:3,21:12,22:0,23:32,24:1,25:0,26:0,27:5,28:0,29:0,30:94500,31:98304,32:330208,33:344064,34:450000,35:581564,36:1400,37:24576,38:1048576,39:311296,40:1250,41:0,42:1,43:0};
+        b(1);b(0);b(Object.keys(fields).length);
+        for (const [id,v] of Object.entries(fields)) {b(+id);for(let j=0;j<5;j++)b(Math.floor(v/2**(7*j))&127);}
+        break;
+      }
       case CMD.SETLIST: {
         if(!opt.setlist) return null;
         let rc=0; const op=a[0],pos=a[1];
@@ -2543,8 +2569,8 @@ function makeMockDevice(opt = {}) {
         break;
       }
       case CMD.SMP_INFO:
-        b(3); b(SMP.SLOT_SIZE / 1024);
-        st.smp.forEach((u) => { b(u.zones); s(u.zones ? u.name : ""); b(u.zones ? Math.ceil(u.len / 1024) : 0); });
+        b(opt.setlist ? 2 : 3); b(SMP.SLOT_SIZE / 1024);
+        st.smp.slice(0,opt.setlist ? 2 : 3).forEach((u) => { b(u.zones); s(u.zones ? u.name : ""); b(u.zones ? Math.ceil(u.len / 1024) : 0); });
         break;
       default:
         return null;
@@ -2866,6 +2892,7 @@ const TEXT = {
     loadedUser: "音色を読み込みました（シーケンスはそのまま。パターンは本体の SEQ > PHRASES から。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
     installer: "Felucca インストーラー",
+    tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
     needDevice: "FM-1 を接続すると編集できます。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
     bankConnect: "FM-1 を接続すると本体のユーザープリセットも扱えます。", bankNone: "このファームウェアにはユーザープリセットがありません。",
@@ -2969,6 +2996,7 @@ const TEXT = {
     loadedUser: "Sound loaded (the sequence stays; its pattern is on the device under SEQ > PHRASES; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
     installer: "WaveLoop FM-1 installer",
+    tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
     needDevice: "Connect the FM-1 to edit.", smpNone: "This firmware has no user sample slots.",
     bankConnect: "Connect the FM-1 to see its user presets too.", bankNone: "This firmware has no user presets.",
@@ -3002,7 +3030,7 @@ $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; 
 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
-const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings"];
+const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings", "dev"];
 const TAB_KEY = "felucca-editor-tab";
 const TRACK_TABS = new Set(["sound", "sequencer", "tracks"]);
 let tab = (() => {
@@ -3020,6 +3048,8 @@ function showTab(name) {
   if (location.hash !== "#" + name) history.replaceState(null, "", location.pathname + location.search + "#" + name);
   if (prev === "samples" && name !== "samples") samplesLeave();   /* no hidden recording or preview */
   renderPanels();
+  renderDiagnostics();
+  if (name === "dev") op(refreshDiagnostics);
   if (name === "tracks" && prev !== "tracks" && hasTracks() && dev.dump) op(readMixer);
   if (name === "fm6" && prev !== "fm6" && dev && dev.dump && dev.info.fm6 && !fm6Listing) op(fm6Refresh);
 }
@@ -3193,6 +3223,7 @@ function disconnect(reasonKey = "disconnected") {
     dev.input.onmidimessage = null;
   }
   dev = null;
+  renderDiagnostics();
   resetBusy();
   needReload = false;
   renderPanels();
@@ -3261,6 +3292,7 @@ async function load(d) {
     if (d.info.chainRows) d.song = parse[CMD.SONG](await sessionRequest(d, req.song()));
     buildUI();
     renderPanels();
+    if (tab === "dev") await refreshDiagnostics(d);
     await loadSteps(d);
     if (d.info.ntrk) await readMixer(d);
     /* protocol v2: live pushes and the user bank; older firmware: DUMP polling, no bank */
@@ -3338,7 +3370,72 @@ function selectTrack(i) {
   });
 }
 
-/* settings > system: what the device reported */
+/* Developer telemetry stays in the Dev tab, never in the playing controls. */
+function renderDiagnostics() {
+  const status = $("dev-status"), box = $("dev-meters"), counters = $("dev-counters");
+  $("dev-refresh").disabled = !dev || !dev.info?.diagVersion;
+  $("dev-export").disabled = !dev?.diagnostics;
+  renderSysinfo();
+  if (!dev?.info?.diagVersion) {
+    status.textContent = dev ? "Live diagnostics need midi13 or later firmware." : "Connect the FM-1 for live readouts.";
+    box.replaceChildren(); counters.replaceChildren(); return;
+  }
+  const data = dev.diagnostics;
+  if (!data) {status.textContent = dev.diagError || "Reading device…";box.replaceChildren();counters.replaceChildren();return;}
+  const f=data.fields, bytes=v=>`${(v/1024).toFixed(1)} KiB`, number=v=>v==null?"—":String(v);
+  status.textContent = `${MOCK ? "Demo data • " : ""}${dev.diagError ? "Read failed; showing last snapshot • " : ""}Updated ${new Date(data.at).toLocaleTimeString()}`;
+  if (dev.diagError) status.textContent += ` • ${dev.diagError}`;
+  const meters=[];
+  function meter(title,used,cap,help) {
+    const node=el("div",{class:"group"},el("h2",{text:title}));
+    if(used==null||cap==null) node.append(el("p",{text:"Unavailable from this device"}));
+    else {
+      node.append(el("p",{text:`${bytes(used)} / ${bytes(cap)} • ${bytes(Math.max(0,cap-used))} headroom`}),el("progress",{max:cap,value:Math.min(used,cap),"aria-label":title,style:"width:100%"}));
+    }
+    node.append(el("p",{class:"dim",text:help}));meters.push(node);
+  }
+  meter("Main RAM",f[30],f[31],"Static data and working state allocated by the firmware.");
+  meter("Audio / display memory",f[32],f[33],"Fixed buffers for effects, audio and drawing.");
+  meter("RAM code",f[36],f[37],"Code that must run while flash is busy. Stacks are separate.");
+  meter("Firmware flash",f[34],f[35],"Application image and room for firmware growth.");
+  meter("User sample payload",f[18],f[19],"Encoded sample data; empty song slots cannot become sample space.");
+  box.replaceChildren(...meters);
+  const duration=ms=>ms==null?"—":`${Math.floor(ms/3600000)}h ${Math.floor(ms/60000)%60}m ${Math.floor(ms/1000)%60}s`;
+  const rows=[
+    ["CPU load",f[2]==null?"—":`${f[2]}%`],["Uptime",duration(f[1])],["Active voices",number(f[5])],
+    ["Audio peak render",f[40]==null?"—":`${f[40]} µs`],["Audio overruns",number(f[41])],
+    ["Voices shed",number(f[6])],["Voices given up",number(f[7])],["Tempo",number(f[9])],
+    ["Transport",f[4]==null?"—":f[4]?"Playing":"Stopped"],["Displayed track",number(f[8])],
+    ["Songs used",`${number(f[20])} / ${number(f[21])}`],["User patches used",`${number(f[22])} / ${number(f[23])}`],
+    ["Sample slots used",`${number(f[16])} / ${number(f[17])}`],
+    ["Mapped flash span",f[38]==null?"—":bytes(f[38])],["Persistent region reserved",f[39]==null?"—":bytes(f[39])],
+    ["Flash writes supported",f[10]==null?"—":f[10]?"Yes":"No"],
+    ["Autosave error",f[26]==null?"—":f[26]?"Save failed — keep power on":"None"],
+    ["Rendered silence",f[27]==null?"—":`${f[27]}s / 5s required`],["Song load pending",f[25]==null?"—":f[25]?"Yes":"No"],
+    ["Battery ADC (raw)",number(f[3])],["Boot count",number(f[42])],
+    ["USB MIDI packets received",number(f[13])],["USB MIDI packets sent",number(f[14])],
+    ["MIDI overflow pending",f[11]==null?"—":f[11]?"Yes":"No"],["DIN MIDI drops",number(f[43])],
+    ["USB resets",number(f[12])],["USB retries",number(f[28])],["USB suspends",number(f[29])],["USB frame stalls",number(f[15])],
+  ];
+  counters.replaceChildren(...rows.map(([k,v])=>el("tr",{},el("th",{text:k}),el("td",{text:v}))));
+}
+async function refreshDiagnostics(d=dev) {
+  if(!d?.info?.diagVersion || d!==dev)return;
+  try {
+    const snapshot=parse[CMD.DIAG](await sessionRequest(d,[CMD.DIAG,[]],{timeout:2000,retries:0}));
+    if(d!==dev)return;
+    d.diagnostics={...snapshot,at:Date.now()};d.diagError="";
+  } catch(e) {if(d!==dev)return;d.diagError=e.message;}
+  renderDiagnostics();
+}
+$("dev-refresh").addEventListener("click",()=>{if(!busy)op(refreshDiagnostics);});
+$("dev-export").addEventListener("click",()=>{
+  if(!dev?.diagnostics)return;
+  download(`WaveLoop-FM1-diagnostics-${new Date().toISOString().slice(0,10)}.json`,{format:"waveloop-fm1-diagnostics",version:1,firmware:dev.info.version,demo:MOCK,...dev.diagnostics});
+});
+setInterval(()=>{if(tab==="dev"&&dev&&!busy&&!document.hidden)op(refreshDiagnostics);},2000);
+
+/* Dev > system: what the device reported */
 function renderSysinfo() {
   const box = $("sysinfo");
   if (!dev || !dev.info) { box.replaceChildren(); return; }
