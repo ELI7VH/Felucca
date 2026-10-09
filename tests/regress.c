@@ -991,11 +991,12 @@ static void slug(char *d, const char *s, size_t n)
 }
 
 /* ------------------------------------------------------------- main --- */
-#define MAXJ 512
+#define MAXJ 1024
 static job_t J[MAXJ];
 static uint32_t nj;
 static job_t *add(uint32_t kind, const char *name)
 {
+    if (nj >= MAXJ) { fputs("regression job capacity exceeded\n", stderr); exit(2); }
     job_t *j = &J[nj++];
     memset(j, 0, sizeof *j);
     j->kind = (uint8_t)kind;

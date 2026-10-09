@@ -1,4 +1,4 @@
-> **MiniLab 3 mod:** [Features and controls](https://eli7vh.github.io/Felucca/mod/) · [Install](https://eli7vh.github.io/Felucca/) · [Editor](https://eli7vh.github.io/Felucca/webapp/editor/). 12 evolving songs, silent autosave, per-drum control.
+> **MiniLab 3 mod:** [Features and controls](https://eli7vh.github.io/Felucca/mod/) · [Install](https://eli7vh.github.io/Felucca/) · [Editor](https://eli7vh.github.io/Felucca/webapp/editor/). 32 patches per synth bank, 12 evolving songs, silent autosave, per-drum control.
 
 # WaveLoop FM-1
 
