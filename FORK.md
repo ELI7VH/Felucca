@@ -9,9 +9,9 @@ Direct DIN MIDI control; no computer needed while playing.
 | --- | --- |
 | Needed more songs for a performance | 12 complete songs, in a reorderable setlist; two user sample slots remain. |
 | Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
-| Needed a second controller layer | Hold A-bank pad 1 for Shift; shifted pad 8 taps tempo; shifted faders control track delay + reverb. |
-| Wanted more sound controls | Hold A-bank pad 1; bottom knobs 5–8 shape synth ADSR or FM6 algorithm, feedback, ratio and envelope time. |
-| Wanted a controller cheat sheet | Editor → MiniLab shows normal and shifted assignments. |
+| Needed a second controller layer | Hold Alt (A-bank pad 1); Alt + pad 8 taps tempo; Alt + faders control track delay + reverb. |
+| Wanted more sound controls | Hold Alt; bottom knobs 5–8 shape synth ADSR or FM6 algorithm, feedback, ratio and envelope time. |
+| Wanted a controller cheat sheet | Editor → MiniLab shows normal and Alt assignments. |
 | Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
 | Wanted the mod clearly identified | WaveLoop branding in web Settings and the FM-1 menu/About page. |
@@ -32,7 +32,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Thin sound banks | Up to 32 mixed factory patches per synth engine; existing patch IDs retained. |
 | Voice had unwanted bass sounds | 26 Voice patches, with all six bass presets removed from browsing. |
 | Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
-| Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
+| Wanted Arturia Shift to change sound engines | Arturia Shift + encoder browses engines and loads their first preset. |
 | Wanted a DJ filter for the whole mix | Top knob 1: left low-pass, centre clean, right high-pass. |
 | Wanted effects that only engage while held | A-bank pads engage on press and disengage on release. |
 | Wanted to remember where patches sit in a bank | A one-pixel theme-colored line at the screen’s bottom shows patch position. |
@@ -41,7 +41,7 @@ Direct DIN MIDI control; no computer needed while playing.
 
 ## A-bank pads
 
-- **1:** hold for Shift.
+- **1:** Alt button (hold).
 - **2–3:** repeat 1/16, 1/32.
 - **4:** reverse.
 - **5:** tape stop.
@@ -49,9 +49,9 @@ Direct DIN MIDI control; no computer needed while playing.
 - **7–8:** octave up/down.
 
 Hold effect pads to engage; release to stop. Works even with FX latch enabled.
-**Shift + pad 8:** tap tempo. **Shift + faders:** track delay + reverb.
-**Shift + bottom knobs 5–8:** synth ADSR or FM6 macros on the keyboard MIDI channel.
-Top shifted knobs and shifted pads 2–7 remain unassigned.
+**Alt + pad 8:** tap tempo. **Alt + faders:** track delay + reverb.
+**Alt + bottom knobs 5–8:** synth ADSR or FM6 macros on the keyboard MIDI channel.
+Alt + top knobs 1–4 and Alt + pads 2–7 remain unassigned.
 
 ## Drum kits
 
@@ -69,7 +69,7 @@ Choose them in the **DRUM** preset bank. Yama-bruh kits use the **YB** prefix.
 - **Bottom 5–7:** engine HOME controls 1–3.
 - **Bottom 8:** LFO/vibrato speed on synths.
 
-Hold **A-bank pad 1** for the bottom row’s second layer:
+Hold **Alt (A-bank pad 1)** for the bottom row’s second layer:
 
 | Knob | Synths | FM6 |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ Hold **A-bank pad 1** for the bottom row’s second layer:
 | 7 | Sustain | Modulator ratio |
 | 8 | Release | Modulator envelope time |
 
-Higher FM6 envelope time values mean slower envelopes. DRUM shifted knobs are unassigned.
+Higher FM6 envelope time values mean slower envelopes. DRUM knobs with Alt are unassigned.
 
 On **DRUM**, play the drum first:
 

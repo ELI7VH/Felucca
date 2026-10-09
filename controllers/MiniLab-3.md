@@ -16,13 +16,13 @@ Use the custom `felucca-1.0.5.2-midi21.fwsc` firmware and `Felucca.minilab3` pre
 | Faders 1–4 | CC7; fixed MIDI channels 1–4; track volumes with finer upper-range travel |
 | Mod strip | CC1 on keyboard channel; vibrato |
 | Pitch strip | Pitch bend on keyboard channel |
-| A-bank pad 1 | Hold for Pad Shift; cyan |
+| A-bank pad 1 | Alt button (hold); cyan |
 | A-bank pads 2–8 | Hold for repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
-| Pad Shift + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time, on keyboard channel |
-| Pad Shift + top knobs 1–4 | Unassigned |
-| Pad Shift + pads 2–7 | Unassigned |
-| Pad Shift + pad 8 | Tap tempo |
-| Pad Shift + faders 1–4 | Track 1–4 delay + reverb together |
+| Alt + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time, on keyboard channel |
+| Alt + top knobs 1–4 | Unassigned |
+| Alt + pads 2–7 | Unassigned |
+| Alt + pad 8 | Tap tempo |
+| Alt + faders 1–4 | Track 1–4 delay + reverb together |
 | B-bank pads 1–2 | CC110/111 Gate on channel 16; previous/next setlist song |
 | B-bank pads 3–4 | Factory notes on keyboard channel |
 | B-bank pad 5 / Stop | CC106 Gate; stop transport |
@@ -31,15 +31,15 @@ Use the custom `felucca-1.0.5.2-midi21.fwsc` firmware and `Felucca.minilab3` pre
 | B-bank pad 8 / Tap | CC109 Gate; set internal tempo from three or more taps |
 
 In Arturia MIDI Control Center, Import `Felucca.minilab3`, then Store To an unused User slot.
-On MiniLab, hold Shift and tap Pad 3 (Prog) to select Felucca.
-Hold Shift and press the keyboard key labelled MIDI CH 1, 2, 3 or 4 to choose the track.
+On MiniLab, hold Arturia Shift and tap Pad 3 (Prog) to select Felucca.
+Hold Arturia Shift and press the keyboard key labelled MIDI CH 1, 2, 3 or 4 to choose the track.
 On FM-1, set GLO > SYSTEM > ROUT to CH1-4. Connect MiniLab DIN MIDI OUT to FM-1 TRS MIDI IN with the correct adapter. The Mac is needed only for initial setup.
 
-The bottom row's first three knobs follow the current engine's HOME knob assignments. Its fourth knob controls LFO speed on synth engines, including mod-wheel vibrato speed; DRUM uses it for selected-drum volume. Top knob 1 controls the master filter; top knobs 2–4 control EDIT parameters 2–4. The master filter uses the existing FX macro smoothing and affects all four tracks. MIDI values 63 and 64 bypass it. It works without holding FX, and follows the existing performance-effect reset behavior when the FX layer closes or effects are cleared. Values span the full range, including signed/enum parameters. The main encoder wraps through the current engine's factory sounds followed by saved user sounds for that engine. Shift + turn wraps through the visible engines and loads their first factory sound. Both follow ROUT, preserve the mixer and sequencer, and replace unsaved sound edits. Controls are absolute; switching channels or sounds can cause a value jump when a knob moves.
+The bottom row's first three knobs follow the current engine's HOME knob assignments. Its fourth knob controls LFO speed on synth engines, including mod-wheel vibrato speed; DRUM uses it for selected-drum volume. Top knob 1 controls the master filter; top knobs 2–4 control EDIT parameters 2–4. The master filter uses the existing FX macro smoothing and affects all four tracks. MIDI values 63 and 64 bypass it. It works without holding FX, and follows the existing performance-effect reset behavior when the FX layer closes or effects are cleared. Values span the full range, including signed/enum parameters. The main encoder wraps through the current engine's factory sounds followed by saved user sounds for that engine. Arturia Shift + turn wraps through the visible engines and loads their first factory sound. Both follow ROUT, preserve the mixer and sequencer, and replace unsaved sound edits. Controls are absolute; switching channels or sounds can cause a value jump when a knob moves.
 
 CC1 adds up to ±0.5 semitone of vibrato using the track's LFO rate, waveform and fade. An explicit active MODW matrix assignment overrides this default. DRUM ignores vibrato. The wheel does not overwrite saved LFO pitch depth.
 
-A-bank pads use Gate notes 36–43 on fixed MIDI channel 16. Pad 1 is Shift; normal pads 2–8 affect the whole mix, bypass track routing, and always release on lift regardless of FX LATCH. Buffer effects share memory: the last held pad takes priority; releasing it returns to the previous held effect. Repeats/reverse start on the next 1/16 while running, immediately while stopped. Channel 16 CC120/121/123 clears held pads. Other notes on channel 16 remain subject to normal ROUT.
+A-bank pads use Gate notes 36–43 on fixed MIDI channel 16. Pad 1 is the Alt button; normal pads 2–8 affect the whole mix, bypass track routing, and always release on lift regardless of FX LATCH. Buffer effects share memory: the last held pad takes priority; releasing it returns to the previous held effect. Repeats/reverse start on the next 1/16 while running, immediately while stopped. Channel 16 CC120/121/123 clears held pads. Other notes on channel 16 remain subject to normal ROUT.
 
 Additional direct CCs: pan 10; sustain level 70; release 72; attack 73; decay 75; LFO rate 76; distortion 90; reverb 91; chorus 93; delay 94. All follow ROUT, except CC7 on channels 1–4 always controls the corresponding track volume. CH1-4 ignores channels 5–16 except the dedicated channel 16 pad notes and pad panic/reset.
 
@@ -65,9 +65,9 @@ USB archive backup/restore temporarily reserves the save buffer; autosave resume
 
 ## Transport and tap tempo
 
-The updated User preset puts Stop, Play, Record and Tap on **B-bank pads 5–8**, matching their printed labels. Switch banks with Shift + Pad 2, then press these pads without Shift. A-bank effects remain unchanged; B-bank pads 1–2 switch songs; 3–4 still play notes. Import and Store To the updated preset once before using these controls.
+The updated User preset puts Stop, Play, Record and Tap on **B-bank pads 5–8**, matching their printed labels. Switch banks with Arturia Shift + Pad 2, then press these pads without Arturia Shift. A-bank effects remain unchanged; B-bank pads 1–2 switch songs; 3–4 still play notes. Import and Store To the updated preset once before using these controls.
 
-Firmware also accepts Arturia's CC106–109 transport messages on any MIDI channel, independently of ROUT. If Shift + the labeled pads sends these through DIN on your MiniLab firmware, those shortcuts work too. That shortcut's direct-DIN output has not been verified; the B-bank mapping is the supported standalone path. Arturia documents a separate USB MCU/HUI port for DAW transport; changing FM-1 firmware cannot create DIN messages the controller does not send. See [Arturia's MIDI ports and CC chart](https://support.arturia.com/hc/en-us/articles/6189475866396-MiniLab-3-General-Questions).
+Firmware also accepts Arturia's CC106–109 transport messages on any MIDI channel, independently of ROUT. If Arturia Shift + the labeled pads sends these through DIN on your MiniLab firmware, those shortcuts work too. That shortcut's direct-DIN output has not been verified; the B-bank mapping is the supported standalone path. Arturia documents a separate USB MCU/HUI port for DAW transport; changing FM-1 firmware cannot create DIN messages the controller does not send. See [Arturia's MIDI ports and CC chart](https://support.arturia.com/hc/en-us/articles/6189475866396-MiniLab-3-General-Questions).
 
 Record toggles only the FM-1 track selected when the press arrives, regardless of the keyboard's MIDI channel. It starts playback when arming from stopped. Play starts playback without toggling it off; on the SONG page it starts the configured song chain. Stop stops playback and the chain. Record respects menu/dialog protections and refuses recording during a song chain.
 
@@ -104,10 +104,10 @@ For longer patterns, set **SEQ → PATTERN → LEN** to 32, 48 or 64 (any length
 
 [Mod website](https://eli7vh.github.io/Felucca/mod/) · [Setlist editor](https://eli7vh.github.io/Felucca/webapp/editor/).
 
-## Pad Shift layer
+## Alt layer
 
-Hold cyan A-bank pad 1 for a second layer; it replaces repeat 1/8.
-Shift + bottom knobs 5–8 follow the keyboard MIDI channel:
+Hold the Alt button (cyan A-bank pad 1) for a second layer; it replaces repeat 1/8.
+Alt + bottom knobs 5–8 follow the keyboard MIDI channel:
 
 | Knob | Synths | FM6 |
 | --- | --- | --- |
@@ -116,9 +116,9 @@ Shift + bottom knobs 5–8 follow the keyboard MIDI channel:
 | 7 | Sustain | Modulator ratio |
 | 8 | Release | Modulator envelope time |
 
-Higher FM6 envelope time values mean slower envelopes. DRUM shifted knobs are unassigned.
-Shift + pad 8 taps tempo. Shift + pads 2–7 and top knobs 1–4 are reserved and do nothing.
-Shift + faders 1–4 control the corresponding track’s delay + reverb together; normal faders stay track volumes.
-This layer uses A-bank pad 1, not the MiniLab’s Arturia Shift button. The controller preset is unchanged from midi16.
+Higher FM6 envelope time values mean slower envelopes. DRUM knobs with Alt are unassigned.
+Alt + pad 8 taps tempo. Alt + pads 2–7 and top knobs 1–4 are reserved and do nothing.
+Alt + faders 1–4 control the corresponding track’s delay + reverb together; normal faders stay track volumes.
+Alt is A-bank pad 1. The MiniLab’s Arturia Shift button keeps its normal controller functions. The controller preset is unchanged from midi16.
 The editor’s MiniLab tab shows the full layout, even without a connected device.
-Release ownership follows each pad’s press layer, so releasing Shift first cannot stick an effect.
+Release ownership follows each pad’s press layer, so releasing Alt first cannot stick an effect.
