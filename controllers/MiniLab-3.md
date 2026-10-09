@@ -1,6 +1,8 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi20.fwsc` firmware and `Felucca.minilab3` preset together.
+A one-pixel line along the FM-1 screen’s bottom fills left to right as you browse the current bank.
+
+Use the custom `felucca-1.0.5.2-midi21.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |

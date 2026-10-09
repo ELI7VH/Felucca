@@ -35,6 +35,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
 | Wanted a DJ filter for the whole mix | Top knob 1: left low-pass, centre clean, right high-pass. |
 | Wanted effects that only engage while held | A-bank pads engage on press and disengage on release. |
+| Wanted to remember where patches sit in a bank | A one-pixel theme-colored line at the screen’s bottom shows patch position. |
 | Couldn’t see what a MIDI knob was changing | Brief popup shows track, parameter name and value. |
 | Needed quick screen-track switching | Encoder click cycles the displayed track 1 → 2 → 3 → 4 → 1. |
 

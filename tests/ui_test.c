@@ -1499,24 +1499,24 @@ static int test_menu_tabs(void)
     menu_close();
     bad += check("MENU: HOME closes ABOUT too; reopened at the tabs; a value row breathes OCT- / OCT+ where they can go", ok);
 
-    /* the slide: ANIM ON, a few frames from DISPLAY to CONTROL drawing only the tab strip; ANIM OFF, at once */
+    /* The slide redraws only the tab strip plus the always-painted bottom patch row; ANIM OFF, at once. */
     ui_power_on();
     hold(B_HOME);
     frame();
     turn(EN_ALGO, 1);
     ok = mt.pos > 0 && mt.pos < MT_ONE;                 /* (a step on the way) */
     host_blit_rows = 0; frame();
-    ok &= host_blit_rows == (uint32_t)(MP_Y - H_HEAD);  /* (only the strip) */
+    ok &= host_blit_rows == (uint32_t)(MP_Y - H_HEAD) + 1u; /* tab strip and patch row */
     for (i = 0; i < 8u && mt.pos != MT_ONE; i++) frame();
     ok &= mt.pos == MT_ONE && i <= 6u;
     host_blit_rows = 0; frame();
-    ok &= host_blit_rows == 0u;                         /* (settled: nothing drawn) */
+    ok &= host_blit_rows == 1u;                         /* settled: only the patch row */
     ui_prefs |= PREF_ANIM_OFF;
     turn(EN_ALGO, 1);
     ok &= mt.pos == 2 * MT_ONE;
     ui_prefs &= ~PREF_ANIM_OFF;
     menu_close();
-    bad += check("MENU tabs slide with ANIM ON (their strip only, settled within 6 frames), snap with ANIM OFF", ok);
+    bad += check("MENU tabs slide with ANIM ON (strip plus patch row, settled within 6 frames), snap with ANIM OFF", ok);
     return bad;
 }
 
@@ -5997,6 +5997,81 @@ static int test_voice_retired(void)
     return bad;
 }
 
+static int patch_row_is(uint32_t width)
+{
+    const uint16_t fg = (uint16_t)((T_THEME >> 8) | (T_THEME << 8));
+    const uint16_t bg = (uint16_t)((T_BG >> 8) | (T_BG << 8));
+    for (uint32_t x = 0; x < 240u; x++)
+        if (host_screen[239u * 240u + x] != (x < width ? fg : bg)) return 0;
+    return 1;
+}
+
+static int test_patch_position(void)
+{
+    int bad = 0, ok = 1;
+    static const uint8_t preset[] = {0, 15, 31, 0};
+    static const uint16_t width[] = {8, 120, 240, 8};
+    ui_power_on(); set_engine_of(TSEL, 0);
+    for (uint32_t i = 0; i < 240u * 240u; i++) host_screen[i] = 0x1234u;
+    draw_patch_position();
+    for (uint32_t i = 0; i < 239u * 240u; i++) ok &= host_screen[i] == 0x1234u;
+    bad += check("patch position: exactly row 239 changes, 240 pixels wide with theme/background only", ok && patch_row_is(8));
+    ok = 1;
+    for (uint32_t i = 0; i < sizeof preset; i++) {
+        apply_preset_to(TSEL, preset[i]); draw_patch_position(); ok &= patch_row_is(width[i]);
+    }
+    bad += check("patch position: first, middle, last and reset widths clear the old longer line", ok);
+    ok = 1;
+    for (uint32_t p = 0; p < NPALETTES; p++) {
+        palette_set(p); draw_patch_position(); ok &= patch_row_is(8);
+    }
+    bad += check("patch position: every theme recolors the same position without changing patches", ok);
+    ui_power_on(); set_engine_of(TSEL, 5); apply_preset_to(TSEL, 8);
+    draw_patch_position(); ok = patch_row_is(37); /* fourth of 26 visible VOICE sounds */
+    TSEL->preset = 2; draw_patch_position(); ok &= patch_row_is(10); /* retired ID resolves to first */
+    set_engine_of(TSEL, ENGI_SAMPLE); TSEL->preset = 1;
+    draw_patch_position(); ok &= patch_row_is(80); /* PIANO alias, three visible sounds */
+    apply_preset_to(TSEL, 3); draw_patch_position(); ok &= patch_row_is(240);
+    bad += check("patch position: VOICE and SAMPLE aliases do not add gaps or extra bank positions", ok);
+    ui_power_on(); set_engine_of(&trk[0], 0); apply_preset_to(&trk[0], 15);
+    set_engine_of(&trk[1], 5); apply_preset_to(&trk[1], 0);
+    song.sel = 0; draw_patch_position(); ok = patch_row_is(120);
+    song.sel = 1; draw_patch_position(); ok &= patch_row_is(10);
+    song.sel = 0; draw_patch_position(); ok &= patch_row_is(120);
+    bad += check("patch position: track switches immediately show that track's engine-bank position", ok);
+    up_store(7, "LAST USER"); up_store(2, "FIRST USER");
+    up_load(2); draw_patch_position(); ok = patch_row_is(233); /* 33 of 34 */
+    up_load(7); draw_patch_position(); ok &= patch_row_is(240);
+    bad += check("patch position: saved user sounds append in the encoder's slot order", ok);
+#if !FELUCCA_FM4
+    TSEL->eng_req = ENGI_DIGITAL; TSEL->user = 0;
+    draw_patch_position();
+    bad += check("patch position: an empty engine clears all 240 bottom pixels", patch_row_is(0));
+#endif
+    ok = 1;
+    for (uint32_t view = 0; view < 8u; view++) {
+        ui_power_on(); memset(&midi_popup, 0, sizeof midi_popup);
+        set_engine_of(TSEL, 0); apply_preset_to(TSEL, 15);
+        if (view == 1u) ui.menu = 1;
+        if (view == 2u) ui.menu = 2;
+        if (view == 3u) ui.confirm = CF_OVR_PROJ;
+        if (view == 4u) name_open(NK_USER_SAVE, 0);
+        if (view == 5u) ui.layer = LAYER_EDIT;
+        if (view == 6u) {
+            midi_popup.active = midi_popup.dirty = 1; midi_popup.stamp = fm1_ms;
+            midi_popup.notice.kind = 1; midi_popup.notice.value = 20;
+        }
+        if (view == 7u) ui.uboot = 2;
+        for (uint32_t pass = 0; pass < 2u; pass++) {
+            memset(host_screen + 239u * 240u, 0xAA, 240u * sizeof(uint16_t));
+            ui.force = !pass; ui_draw(); ok &= patch_row_is(120);
+        }
+    }
+    bad += check("patch position: footer, menu, About, dialog, naming, layer, popup and update redraws preserve it", ok);
+    ui_power_on(); memset(&midi_popup, 0, sizeof midi_popup);
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -6004,6 +6079,7 @@ int main(void)
     bad += test_large_face();
     bad += test_sound_loads();
     bad += test_voice_retired();
+    bad += test_patch_position();
     bad += test_patterns();
     bad += test_rec();
     bad += test_rec_hold_clear();

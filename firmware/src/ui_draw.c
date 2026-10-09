@@ -1038,7 +1038,19 @@ static void draw_midi_popup(void)
     cv_blit(12, 84);
 }
 
-static void ui_draw(void)
+/* The last physical row shows the selected track's position in its engine's
+ * browsable bank (factory aliases skipped, matching user sounds appended).
+ * This overlay reserves no layout space and is repainted after every view. */
+static void draw_patch_position(void)
+{
+    uint32_t total, pos = eng_list_pos(&total);
+    uint32_t width = total && pos < total ? ((pos + 1u) * 240u + total - 1u) / total : 0u;
+    cv_begin(240, 1, T_BG);
+    if (width) cv_rect(0, 0, width, 1, T_THEME);
+    cv_blit(0, 239);
+}
+
+static void ui_draw_body(void)
 {
     style_apply();
     ui.frame++;
@@ -1129,4 +1141,10 @@ static void ui_draw(void)
     felucca_dbg.stage = 6;
     draw_foot();
     ui.force = 0;
+}
+
+static void ui_draw(void)
+{
+    ui_draw_body();
+    draw_patch_position();
 }
