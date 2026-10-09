@@ -30,7 +30,7 @@
 <main>
   <button class="lang" id="lang"></button>
   <h1>WaveLoop FM-1</h1>
-  <p>FM-1 + MiniLab 3. 12-song setlist, silent autosave and per-drum controls.</p>
+  <p>FM-1 + MiniLab 3. 32-patch synth banks, 12-song setlist and silent autosave.</p>
   <p><a href="../../mod/">Controls and setup</a> · <a href="../../controllers/Felucca.minilab3" download>MiniLab preset</a></p>
   <p data-t="intro"></p>
   <p data-t="warn"></p>
@@ -810,7 +810,7 @@ const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textCont
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
 let image = null;
-const meta = {"version": "1.0.5.2-midi11", "product": "FM-1_910", "pkg": "../../firmware/felucca-1.0.5.2-midi11.fwsc"};
+const meta = {"version": "1.0.5.2-midi12", "product": "FM-1_910", "pkg": "../../firmware/felucca-1.0.5.2-midi12.fwsc"};
 
 let writing = false, stock = null, stockFileEpoch = 0;
 const lockInstaller = (on) => { writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on; $("stock-recovery").disabled = on; };
