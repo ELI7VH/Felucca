@@ -4,7 +4,8 @@
  *
  * Every tuned part is a damped sine (a phase accumulator, the SINE table, a decaying envelope): exact
  * pitch, always stable, no high-Q resonator. Noise is xorshift through dsp.c's trapezoidal SVF or a
- * one-pole. Only 32-bit products in the sample loops. Envelopes:
+ * one-pole. Products in the sample loops are 32-bit except the rim's drive and bell's strike envelope, whose
+ * extreme settings need widened intermediates. Envelopes:
  *   fast (tau under ~40 ms)  Q16 per sample, e = (e * k) >> 15 with k Q15 (the floor form: always reaches 0)
  *   slow (tau above)         Q30 per CTL block times a Q16 factor, ramped linearly inside the block
  *
@@ -182,19 +183,19 @@ typedef struct {
 /* the accent per kit: + (x / 16384) per accent step (75: +4 dB at full, as Felucca's own) */
 static const uint8_t DV_KIT_ACC[DV_NKIT] = {120, 45, 100, 40, 40, 55};
 static const dv_kit_t DV_KIT[DV_NKIT][DV_NLANE] = {
-    {   /* 80 */
-        /* deep sine, a small drop, long decay */
-        {DVT_PUNCH, 64, 499, 198, 3124, {26, 150, 0, 300, 0, 0, 0, 4096, 12, 0, 0, 0, 0}},
-        /* shells 173 / 336 Hz, noise 2.7 .. 7 kHz, tau 30 ms */
-        {DVT_SNARE, 40, 845, 125, 5690, {241, 0, 100, 53, 32767, 11000, 1678, 6827, 30, 0, 28000, 0, 1828}},
-        /* band 1 kHz, 3 teeth 10 ms, tail 90 ms */
-        {DVT_CLAP, 48, 1331, 316, 13485, {0, 4096, 1678, 0, 2000, 30000, 35, 441, 3, 0, 0, 0, 0}},
-        /* six squares, band 7.1 kHz, tau 16 ms */
-        {DVT_HATC, 45, 893, 60, 9017, {1874, 5120, 2020, 2042, 7209, 32767, 0, 3, 0, 0, 0, 0, 0}},
+    {   /* 80: original synthesized voicing, retuned for WaveLoop midi16. */
+        /* 49.5 Hz sine tail (tau 138 ms), fast pitch knock, gentle upper harmonics */
+        {DVT_PUNCH, 64, 499, 340, 2550, {70, 120, 140, 1500, 500, 0, 0, 4096, 8, 0, 0, 0, 0}},
+        /* shells 173 / 336 Hz, short wire strike over a fuller 42 ms noise body */
+        {DVT_SNARE, 40, 845, 175, 4700, {241, 12, 40, 40, 27000, 14000, 1678, 6827, 20, 6000, 28000, 2500, 1828}},
+        /* band 1.15 kHz, 3 teeth 8 ms apart, audible diffuse tail */
+        {DVT_CLAP, 48, 1370, 280, 12000, {0, 4096, 1678, 1000, 5000, 30000, 28, 353, 3, 0, 0, 0, 0}},
+        /* six squares, band 7.1 kHz, less raw top-end sizzle */
+        {DVT_HATC, 45, 893, 60, 12750, {1874, 5120, 1968, 2010, 4200, 32767, 0, 3, 0, 0, 0, 0, 0}},
         /* tau 75 ms */
-        {DVT_HATO, 63, 893, 253, 13955, {1874, 5120, 1934, 2042, 1147, 32767, 0, 3, 0, 0, 0, 0, 0}},
-        /* mid tom 139 Hz, tau 58 ms, a little bend */
-        {DVT_TOM, 53, 785, 182, 4055, {8, 100, 1302, 1200, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+        {DVT_HATO, 63, 893, 253, 13955, {1874, 5120, 1900, 2010, 900, 32767, 0, 3, 0, 0, 0, 0, 0}},
+        /* mid tom 139 Hz, tau 75 ms, rounded stick and a little bend */
+        {DVT_TOM, 53, 785, 235, 3600, {22, 60, 1302, 1800, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
         /* 455 + 1667 Hz into a hard clip */
         {DVT_RIM, 32, 1113, 12, 4599, {360, 12000, 30000, 32000, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
         /* squares 540 / 800 Hz, band 860 Hz */
@@ -274,14 +275,21 @@ static const dv_kit_t DV_KIT[DV_NKIT][DV_NLANE] = {
     },
     {   /* CR-78-inspired eight-lane adaptation, synthesized here (no samples).
          * CLAP becomes maracas, TOM conga, RIM claves; open hat is a longer variant. */
-        {DVT_PUNCH, 60, 531, 210, 3400, {18, 350, 0, 600, 0, 0, 0, 4096, 25, 0, 0, 0, 0}},
-        {DVT_SNARE, 40, 919, 170, 4800, {0, 0, 100, 45, 0, 16000, 1715, 8192, 25, 0, 18000, 0, 1828}},
-        {DVT_HATC, 48, 1777, 155, 12700, {1777, 2048, 1715, 2042, 0, 0, 7000, 3, 6, 0, 0, 0, 0}},
-        {DVT_HATC, 45, 1907, 135, 5900, {1907, 1024, 1870, 2042, 0, 0, 7000, 3, 6, 0, 0, 0, 0}},
-        {DVT_HATO, 63, 1907, 350, 5200, {1907, 1024, 1870, 2042, 0, 0, 7000, 3, 6, 0, 0, 0, 0}},
-        {DVT_CONGA, 53, 819, 94, 5803, {0, 50, 1523, 0, 1500, 0, 0, 0, 0, 0, 0, 0, 0}},
-        {DVT_CLAVE, 32, 1568, 149, 2131, {84, 28000, 10000, 6348, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-        {DVT_BELL, 50, 1161, 180, 3200, {109, 129, 3413, 26000, 35, 0, 0, 0, 0, 0, 0, 0, 0}},
+        /* dry 60 Hz bass drum, a soft-edged transient and a short sine tail */
+        {DVT_PUNCH, 60, 552, 140, 4100, {32, 80, 40, 1000, 0, 0, 0, 4096, 18, 0, 0, 0, 0}},
+        /* woody 235 Hz shell with a brief, broad noise strike */
+        {DVT_SNARE, 40, 930, 105, 5200, {0, 8, 30, 64, 0, 17000, 1715, 8192, 15, 7000, 20000, 1500, 1828}},
+        /* maraca: broad 3.1 kHz noise, 2.5 ms rise; separate from the narrow hats */
+        {DVT_HATC, 48, 1650, 125, 21000, {1650, 3000, 1480, 2042, 0, 0, 7000, 25, 6, 0, 0, 0, 0}},
+        /* thin, silky noise hats; no shared 808 metal oscillators */
+        {DVT_HATC, 45, 1886, 105, 8300, {1886, 1400, 1840, 2042, 0, 0, 7000, 6, 6, 0, 0, 0, 0}},
+        {DVT_HATO, 63, 1886, 250, 5900, {1886, 1400, 1840, 2042, 0, 0, 7000, 8, 6, 0, 0, 0, 0}},
+        /* conga: 190 Hz skin, small bend and a short palm/slap transient */
+        {DVT_CONGA, 53, 872, 125, 5000, {24, 25, 1478, 900, 2300, 0, 0, 0, 0, 0, 0, 0, 0}},
+        /* short wooden clave: 2.1 / 2.85 kHz, much less drive than KIT 77 */
+        {DVT_CLAVE, 32, 1537, 85, 3100, {85, 28000, 7500, 4600, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+        /* two damped sine resonances, 750 / 1050 Hz; distinct from 808 square cowbell */
+        {DVT_RIM, 40, 1252, 145, 2360, {93, 27000, 16000, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
     },
 };
 
@@ -593,7 +601,8 @@ static void dv_setup_kit(dv_coef_t *c, const dv_param_t *p)
     }
 }
 
-static void dv_setup(dv_coef_t *c, const dv_param_t *p)
+/* Coefficients change only with parameters. Keep this large cold switch outside the per-block render path. */
+static __attribute__((noinline)) void dv_setup(dv_coef_t *c, const dv_param_t *p)
 {
     if (DV_KITOF(p->type) - 1u < DV_NKIT)
         dv_setup_kit(c, p);
@@ -789,7 +798,7 @@ static __attribute__((noinline)) void dv_rim_run(const dv_coef_t *c, dv_voice_t 
         x = ((sine_i(p0) * c->g[0]) >> 15) + ((sine_i(p1) * c->g[1]) >> 15);
         x = (x * (int32_t)(e >> 1)) >> 15;
         e = (e * c->k[0]) >> 15;
-        y[i] = (softclip((x * c->g[2]) >> 12) * c->g[3]) >> 15;
+        y[i] = (softclip((int32_t)(((int64_t)x * c->g[2]) >> 12)) * c->g[3]) >> 15;
     }
     v->ph[0] = p0, v->ph[1] = p1, v->e[0] = e;
     v->live = e > 4u;
@@ -807,7 +816,7 @@ static __attribute__((noinline)) void dv_bell_run(const dv_coef_t *c, dv_voice_t
         x = (int32_t)((p0 >> 31) + (p1 >> 31)) * 16384 - 16384;   /* two squares, +-16384 each */
         x = dv_bp(&c->f[0], x, v->s) + ((x * c->g[1]) >> 15);
         a += d;
-        y[i] = (x * (((a >> 5) + (((int32_t)(e >> 1) * c->g[0]) >> 15)) >> 2)) >> 13;
+        y[i] = (x * (((a >> 5) + (int32_t)(((int64_t)(e >> 1) * c->g[0]) >> 15)) >> 2)) >> 13;
         e = (e * c->k[0]) >> 15;
     }
     v->ph[0] = p0, v->ph[1] = p1, v->e[0] = e;

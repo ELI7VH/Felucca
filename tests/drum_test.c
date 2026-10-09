@@ -3,6 +3,10 @@
 /* Drum voice test (src/drum_voice.c, and the DRUM engine around it: src/eng_drum.c) on the Mac, through
  * hostsim.c as regress.c.
  *   build/host/drum_test [DEMODIR]          (run_tests.sh: build/drum_demo)
+ * Signed-overflow regression (output clipping checks cannot detect intermediate integer wrap):
+ *   cc -O1 -w -fsanitize=signed-integer-overflow -fno-sanitize-recover=signed-integer-overflow \
+ *      -Ibuild/gen -Ifirmware/src -o build/host/drum_overflow_test tests/drum_test.c -lm
+ *   DRUM_808_CR78_ONLY=1 build/host/drum_overflow_test
  * 1. targets: every voice (the 12 types: the 8 lanes and their variants) at its designed parameters, one hit:
  *    pitch (the dominant frequency of 20..300 ms, the kicks' of 150..400 ms: the end of the sweep) within
  *    +-10 cents of the design, t-30 (10 ms RMS frames, from the loudest to the first 30 dB below) within
@@ -27,11 +31,13 @@
  * 8. cost: host instructions per sample per voice while it sounds (retriggered), the metal source on its own,
  *    and a device estimate (1.7 % per 100 instructions per sample, the PHYS measurements' ratio).
  * 9. demos into DEMODIR: every voice and variant (designed, then DECAY / TONE / extra swept), the kit through
- *    the DRUM engine (the 8 keys), a beat (and on each model kit).
+ *    the DRUM engine (the 8 keys), a beat (and on each model kit), and isolated dry hits of every model kit lane.
  * 10. the model kits (KIT 80 10 66 55 77): every lane of each at its design against its targets (t-30, centroid
  *    as 1., the level of its lane on STD), DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners under
  *    full scale; a retrigger the same; every GM note on its lane's piece, the lanes through the engine; the cost of
- *    a kit's 8 lanes at once. */
+ *    a kit's 8 lanes at once.
+ * 11. 808 / CR78 identity: the 808 kick is lower and longer, CR78 maracas is darker than its closed hat, and the
+ *    bells have materially different power spectra. These are voicing goals, not hardware-emulation claims. */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -854,8 +860,8 @@ static const char *const LANEN[DV_NLANE] = {"KICK", "SNARE", "CLAP", "HATCL", "H
  * the STD kit's terms (KICK -14.5, SNARE -18.2, CLAP -24.2, HAT CL -27.4, HAT OP -23.8, TOM -13.6, RIM -22.5,
  * BELL -21 dBFS) */
 static const float KTGT[DV_NKIT][DV_NLANE][2] = {
-    {{0.300, 1304}, {0.100, 5785}, {0.150, 4339}, {0.060, 10712},   /* 80 */
-     {0.350, 9524}, {0.200, 402}, {0.020, 4241}, {0.220, 1590}},
+    {{0.510, 1652}, {0.120, 5864}, {0.200, 4941}, {0.060, 10200},   /* 80: midi16 voicing */
+     {0.360, 9208}, {0.270, 1079}, {0.020, 4241}, {0.220, 1590}},
     {{0.620, 1863}, {0.350, 7962}, {2.120, 9100}, {0.280, 7787},   /* 10 */
      {2.000, 7902}, {0.420, 392}, {0.020, 1823}, {2.830, 5233}},
     {{0.180, 505}, {0.050, 10507}, {0.160, 8175}, {0.210, 9473},   /* 66 */
@@ -864,8 +870,8 @@ static const float KTGT[DV_NKIT][DV_NLANE][2] = {
      {0.500, 13024}, {0.200, 3480}, {0.010, 3868}, {0.110, 5821}},
     {{0.450, 1253}, {0.120, 4518}, {0.230, 5906}, {0.290, 8723},   /* 77 */
      {1.630, 8771}, {0.420, 1151}, {0.110, 3517}, {1.090, 9998}},
-    {{0.30, 1400}, {0.11, 5860}, {0.15, 7771}, {0.13, 9473},
-     {0.48, 9422}, {0.11, 1379}, {0.11, 3517}, {0.16, 1590}},
+    {{0.190, 803}, {0.090, 5605}, {0.130, 6549}, {0.100, 9243},   /* CR78: midi16 voicing */
+     {0.350, 9152}, {0.140, 1597}, {0.060, 2984}, {0.120, 1478}},
 };
 static const float KLVL[DV_NLANE] = {-14.5f, -18.2f, -24.2f, -27.4f, -23.8f, -13.6f, -22.5f, -21.0f};
 
@@ -877,6 +883,8 @@ static void kits(void)
     static const int16_t TU[2] = {-400, 400};
     uint32_t k, l, bad_all = 0;
     for (k = 0; k < DV_NKIT; k++) {
+        if (getenv("DRUM_808_CR78_ONLY") && k != 0u && k != DK_CR78 - DK_80)
+            continue;
         uint32_t bad = 0, knee = 0;
         int32_t worst = 0;
         char line[600] = "";
@@ -971,6 +979,76 @@ static void kits(void)
         bad_all += bad;
     }
     fails += bad_all != 0;
+}
+
+/* Total variation between normalized power spectra: 0 is the same spectrum at any gain, 1 disjoint bands.
+ * The first 186 ms covers the attack and body of both bells; a Hann window limits onset leakage. */
+static double spectral_distance(const buf_t *a, const buf_t *b)
+{
+    enum { N = 8192 };
+    static double re[N], im[N], power[2][N / 2];
+    const buf_t *in[2] = {a, b};
+    double sum[2] = {0, 0}, distance = 0;
+    uint32_t k, i;
+    for (k = 0; k < 2; k++) {
+        for (i = 0; i < N; i++) {
+            double w = 0.5 - 0.5 * cos(2 * M_PI * i / (N - 1));
+            re[i] = i < in[k]->n ? in[k]->y[i] * w : 0;
+            im[i] = 0;
+        }
+        fft(re, im, N);
+        for (i = 1; i < N / 2; i++) {
+            power[k][i] = re[i] * re[i] + im[i] * im[i];
+            sum[k] += power[k][i];
+        }
+    }
+    if (sum[0] < 1e-12 || sum[1] < 1e-12)
+        return 0;                                       /* silence cannot pass an audible-difference check */
+    for (i = 1; i < N / 2; i++)
+        distance += fabs(power[0][i] / sum[0] - power[1][i] / sum[1]);
+    return distance * 0.5;
+}
+
+/* Independent relative goals, so re-baselining measured KTGT values cannot silently erase kit identity. */
+static void kit_identity(void)
+{
+    dv_param_t p;
+    double kick80_hz, kick78_hz, kick80_tail, kick78_tail, maraca, hat, bell;
+    const uint32_t kit80 = 1u, kit78 = DK_CR78 - DK_80 + 1u;
+    int bad = 0;
+    dv_default(&p, DV_KTYPE(kit80, DV_KICK));
+    render(&p, FS * 2u, 0, &B);
+    kick80_hz = pitch(&B, FS * 6u / 100u, FS * 15u / 100u, 30, 100);
+    kick80_tail = t30(&B);
+    dv_default(&p, DV_KTYPE(kit78, DV_KICK));
+    render(&p, FS * 2u, 0, &B2);
+    kick78_hz = pitch(&B2, FS * 6u / 100u, FS * 15u / 100u, 30, 100);
+    kick78_tail = t30(&B2);
+    bad += kick78_hz < kick80_hz + 7 || kick80_tail < kick78_tail * 1.7 || kick80_tail < kick78_tail + 0.12;
+    printf("drum_test: kit identity kicks: 808 %.1f Hz / %.2f s, CR78 %.1f Hz / %.2f s "
+           "(808 >=7 Hz lower, >=1.7x and >=120 ms longer): %s\n", kick80_hz, kick80_tail, kick78_hz, kick78_tail,
+           bad ? "FAIL" : "ok");
+
+    dv_default(&p, DV_KTYPE(kit78, DV_CLAP));
+    render(&p, FS / 2u, 0, &B);
+    maraca = centroid100(&B);
+    dv_default(&p, DV_KTYPE(kit78, DV_HATC));
+    render(&p, FS / 2u, 0, &B2);
+    hat = centroid100(&B2);
+    bad += maraca <= 1000 || hat <= maraca * 1.25;
+    printf("drum_test: kit identity CR78 maracas %.0f Hz, closed hat %.0f Hz "
+           "(maracas centroid >1 kHz, hat >=25 %% brighter): %s\n", maraca, hat,
+           maraca > 1000 && hat > maraca * 1.25 ? "ok" : "FAIL");
+
+    dv_default(&p, DV_KTYPE(kit80, DV_BELL));
+    render(&p, FS / 2u, 0, &B);
+    dv_default(&p, DV_KTYPE(kit78, DV_BELL));
+    render(&p, FS / 2u, 0, &B2);
+    bell = spectral_distance(&B, &B2);
+    bad += bell < 0.35;
+    printf("drum_test: kit identity bell spectral distance %.3f (at least 0.35, independent of gain): %s\n",
+           bell, bell >= 0.35 ? "ok" : "FAIL");
+    fails += bad != 0;
 }
 
 /* KIT 80..77: every note plays its lane's piece of the kit (KICK ignored); the 8 lanes through the engine all sound
@@ -1109,6 +1187,37 @@ static void demo_voice(const char *dir, uint32_t t)
         }
     }
     fclose(w);
+}
+
+/* One file per model lane, at its designed settings, dry and unnormalized. Preserve relative mix levels and
+ * the whole tail, then leave 200 ms of silence. CR78 uses its actual MARAC / CONGA / CLAVE lane names. */
+static void demo_kit_lanes(const char *dir, uint32_t kit)
+{
+    uint32_t lane, i;
+    host_tracks_init();
+    host_preset(&trk[0], ENGI_DRUM, 0);
+    trk[0].p[P_E0] = (int16_t)(DK_80 + kit);
+    for (lane = 0; lane < DV_NLANE; lane++) {
+        dv_param_t p;
+        char name[64];
+        uint32_t frames;
+        FILE *w;
+        dv_default(&p, DV_KTYPE(kit + 1u, lane));
+        render(&p, NMAX, 0, &B);
+        frames = B.stop && B.stop < NMAX - FS / 5u ? B.stop + FS / 5u : NMAX;
+        snprintf(name, sizeof name, "kit_%s_%s", KITN[kit], drum_lane_name(&trk[0], lane));
+        for (i = 0; name[i]; i++)
+            if (name[i] == ' ')
+                name[i] = '_';
+        w = wav_open(dir, name, frames);
+        if (!w)
+            continue;
+        for (i = 0; i < frames; i++) {
+            int32_t s = (int32_t)(B.y[i] * 32768.0f);
+            wav_put(w, s, s);
+        }
+        fclose(w);
+    }
 }
 
 /* a beat of GM notes: the lanes, toms, a crash, a clave, congas */
@@ -1311,15 +1420,21 @@ static void demos(const char *dir)
     demo_seq(dir, "beat_round", BEAT, sizeof BEAT / sizeof BEAT[0], 64, 1, DK_STD);
     for (k = 0; k < DV_NKIT; k++) {
         char name[32];
+        demo_kit_lanes(dir, k);
         snprintf(name, sizeof name, "beat_kit_%s", KITN[k]);
         demo_seq(dir, name, BEAT, sizeof BEAT / sizeof BEAT[0], 64, 0, (int16_t)(DK_80 + k));
     }
     printf("drum_test: demos in %s: %u voices (designed, DECAY / TONE / extra low and high, TUNE -5 / +5 st), the kit's "
-           "keys, a beat (PUNCH, ROUND, the kits 80 10 66 55 77)\n", dir, (uint32_t)DVT_COUNT);
+           "keys, isolated model kit lanes, a beat (PUNCH, ROUND, the kits 80 10 66 55 77 CR78)\n", dir,
+           (uint32_t)DVT_COUNT);
 }
 
 int main(int argc, char **argv)
 {
+    if (getenv("DRUM_808_CR78_ONLY")) {
+        kits();                                        /* changed kits: all lanes, controls and maximum-level corners */
+        return fails != 0;
+    }
     if (!getenv("NOCOST")) {
         cost();
         kit_costs();
@@ -1332,6 +1447,7 @@ int main(int argc, char **argv)
     kick_speaker();
     keys();
     kits();
+    kit_identity();
     kit_keys();
     retired();
     lane_budget();
