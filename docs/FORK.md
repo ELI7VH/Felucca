@@ -29,7 +29,8 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted mod-wheel pitch modulation | Mod strip adds vibrato; LFO controls its speed and shape. |
 | Wanted fuller classic drum kits | Revoiced 808 with a deeper kick and fuller snare/clap; dry, woody CR-78-style percussion. |
 | Wanted Yama-bruh drums here too | Eight Yama-bruh FM kits in the DRUM bank, with per-drum editing and mixing. |
-| Thin sound banks | 32 mixed factory patches in each of ten synth engines; existing patch IDs retained. |
+| Thin sound banks | Up to 32 mixed factory patches per synth engine; existing patch IDs retained. |
+| Voice had unwanted bass sounds | 26 Voice patches, with all six bass presets removed from browsing. |
 | Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
 | Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
 | Wanted a DJ filter for the whole mix | Top knob 1: left low-pass, centre clean, right high-pass. |

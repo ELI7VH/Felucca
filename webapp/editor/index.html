@@ -441,7 +441,7 @@
 
   <section class="panel" id="p-minilab" data-tab="minilab" hidden>
     <h2>MiniLab 3 mappings</h2>
-    <p>WaveLoop Kit · midi19. Select the Felucca User preset.</p>
+    <p>WaveLoop Kit · midi20. Select the Felucca User preset.</p>
     <p><strong>Hold cyan A-bank pad 1 for Shift.</strong> Release it for the normal layer.</p>
     <div class="groups">
       <div class="group"><h2>Normal knobs</h2><table>
@@ -1971,12 +1971,13 @@ function makeMockDevice(opt = {}) {
         P("FLUTE", [2, 0, 0, 1, 127, 0, 0, 0], [12, 80, 120, 60]), P("SAX", [3, 0, 0, 1, 127, 0, 0, 0], [12, 80, 120, 60])] },
     { name: "VOICE", titles: ["VOWL", "TONE"], edit: [D("VOWL", F.INT, 0, 127, 0), D("VOWL2", F.INT, 0, 127, 64), D("TALK", F.TIME, 0, 127, 0),
         D("SHIFT", F.SEMI, -12, 12, 0), D("BUZZ", F.PCT, 0, 127, 64), D("BRTH", F.PCT, 0, 127, 10), D("Q", F.PCT, 0, 127, 64), D("RAND", F.PCT, 0, 127, 0)],
+      /* Retired bass IDs alias CHOIR AAH; the remaining 26 choices keep their IDs. */
       presets: [P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5), P("VOX LEAD", [32, 0, 0, 2, 90, 8, 72, 0], [6, 70, 105, 55], 1, 4),
-        P("WOW BASS", [95, 0, 68, 0, 100, 0, 80, 0], [0, 70, 70, 30], 1, 8), P("WHISPER", [0, 95, 88, 3, 50, 120, 50, 0], [50, 90, 110, 90], 0, 5),
-        P("ROUND BASS", [0, 127, 35, -2, 90, 12, 50, 0], [0, 58, 88, 25], 1, 2),
-        P("RUBBER BASS", [24, 107, 35, 0, 90, 15, 58, 0], [0, 58, 88, 25], 1, 2),
-        P("DEEP BASS", [48, 87, 35, 2, 90, 18, 66, 0], [0, 58, 88, 25], 1, 2),
-        P("REED BASS", [72, 67, 35, 4, 90, 21, 74, 0], [0, 58, 88, 25], 1, 2),
+        P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5), P("WHISPER", [0, 95, 88, 3, 50, 120, 50, 0], [50, 90, 110, 90], 0, 5),
+        P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5),
+        P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5),
+        P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5),
+        P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5),
         P("WARM PAD", [0, 127, 72, -2, 60, 12, 50, 0], [66, 90, 112, 85], 0, 5),
         P("AIR PAD", [24, 107, 72, 0, 60, 15, 58, 0], [66, 90, 112, 85], 0, 5),
         P("GLASS PAD", [48, 87, 72, 2, 60, 18, 66, 0], [66, 90, 112, 85], 0, 5),
@@ -1997,7 +1998,7 @@ function makeMockDevice(opt = {}) {
         P("GLASS PLUCK", [24, 107, 15, 0, 60, 15, 58, 0], [0, 68, 0, 52], 0, 3),
         P("WOOD PLUCK", [48, 87, 15, 2, 60, 18, 66, 0], [0, 68, 0, 52], 0, 3),
         P("ECHO PLUCK", [72, 67, 15, 4, 60, 21, 74, 0], [0, 68, 0, 52], 0, 3),
-        P("LOW PULSE", [96, 47, 35, -4, 90, 24, 82, 0], [0, 58, 88, 25], 1, 2),
+        P("CHOIR AAH", [0, 0, 0, 0, 40, 22, 60, 0], [85, 90, 115, 95], 0, 5),
         P("VELVET PAD", [96, 47, 72, -4, 60, 24, 82, 0], [66, 90, 112, 85], 0, 5),
         P("BELL KEYS", [96, 47, 15, -4, 60, 24, 82, 0], [1, 78, 36, 62], 0, 6),
         P("SOLO LEAD", [96, 47, 35, -4, 60, 24, 82, 0], [4, 65, 98, 38], 1, 4)] },
