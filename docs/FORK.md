@@ -10,6 +10,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Needed more songs for a performance | 12 complete songs, in a reorderable setlist; two user sample slots remain. |
 | Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
 | Needed a second controller layer | Hold A-bank pad 1 for Shift; shifted pad 8 taps tempo; shifted faders control track delay + reverb. |
+| Wanted more sound controls | Hold A-bank pad 1; bottom knobs 5–8 shape synth ADSR or FM6 algorithm, feedback, ratio and envelope time. |
 | Wanted a controller cheat sheet | Editor → MiniLab shows normal and shifted assignments. |
 | Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
@@ -45,6 +46,8 @@ Direct DIN MIDI control; no computer needed while playing.
 
 Hold effect pads to engage; release to stop. Works even with FX latch enabled.
 **Shift + pad 8:** tap tempo. **Shift + faders:** track delay + reverb.
+**Shift + bottom knobs 5–8:** synth ADSR or FM6 macros on the keyboard MIDI channel.
+Top shifted knobs and shifted pads 2–7 remain unassigned.
 
 ## Drum kits
 
@@ -60,6 +63,17 @@ Choose them in the **DRUM** preset bank; existing sounds using these kits receiv
 - **Top 2–4:** engine EDIT parameters 2–4.
 - **Bottom 5–7:** engine HOME controls 1–3.
 - **Bottom 8:** LFO/vibrato speed on synths.
+
+Hold **A-bank pad 1** for the bottom row’s second layer:
+
+| Knob | Synths | FM6 |
+| --- | --- | --- |
+| 5 | Attack | Algorithm |
+| 6 | Decay | Feedback |
+| 7 | Sustain | Modulator ratio |
+| 8 | Release | Modulator envelope time |
+
+Higher FM6 envelope time values mean slower envelopes. DRUM shifted knobs are unassigned.
 
 On **DRUM**, play the drum first:
 
