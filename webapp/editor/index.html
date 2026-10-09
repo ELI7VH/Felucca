@@ -8,8 +8,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WaveLoop FM-1 Editor</title>
-<meta name="description" content="Shape sounds, sequence tracks and build your setlist with WaveLoop FM-1.">
+<title>WaveLoop Kit Editor</title>
+<meta name="description" content="Shape sounds, sequence tracks and build your setlist with WaveLoop Kit.">
 <link rel="stylesheet" href="brand/tokens.css">
 <style>
   @font-face { font-family: "Micro 5"; src: url("brand/Micro5-Regular.woff2") format("woff2"); font-display: swap; }
@@ -227,8 +227,8 @@
 <main>
   <div class="masthead">
     <div class="identity">
-      <a class="wordmark" href="../../mod/" aria-label="WaveLoop FM-1 home">WaveLoop</a>
-      <div class="product-name"><h1>FM-1</h1><p data-t="editorTitle"></p></div>
+      <a class="wordmark" href="../../mod/" aria-label="WaveLoop Kit home">WaveLoop</a>
+      <div class="product-name"><h1>Kit</h1><p data-t="editorTitle"></p></div>
     </div>
     <nav aria-label="WaveLoop"><a href="../../mod/" data-t="settingsGuide"></a>
       <a href="../installer/" data-t="installer"></a><button class="lang" id="lang"></button></nav>
@@ -415,9 +415,9 @@
 
   <section class="panel" id="p-settings" data-tab="settings" hidden>
     <div class="settings-brand">
-      <h2>WaveLoop <span>FM-1</span></h2>
+      <h2>WaveLoop <span>Kit</span></h2>
       <p class="dim" data-t="settingsBrand"></p>
-      <nav class="bar" aria-label="WaveLoop FM-1">
+      <nav class="bar" aria-label="WaveLoop Kit">
         <a href="../../mod/" data-t="settingsGuide"></a>
         <a href="#minilab" data-t="settingsMappings"></a>
         <a href="../../admin/" data-t="settingsSupport"></a>
@@ -440,7 +440,7 @@
 
   <section class="panel" id="p-minilab" data-tab="minilab" hidden>
     <h2>MiniLab 3 mappings</h2>
-    <p>WaveLoop FM-1 · midi19. Select the Felucca User preset.</p>
+    <p>WaveLoop Kit · midi19. Select the Felucca User preset.</p>
     <p><strong>Hold cyan A-bank pad 1 for Shift.</strong> Release it for the normal layer.</p>
     <div class="groups">
       <div class="group"><h2>Normal knobs</h2><table>
@@ -498,7 +498,7 @@
     <p class="dim" data-t="devHelp"></p>
   </section>
 
-  <footer><div class="footer-brand">WAVELOOP FM-1</div>
+  <footer><div class="footer-brand">WAVELOOP KIT</div>
     <p><a href="../../mod/" data-t="settingsGuide"></a> · <a href="../../admin/" data-t="settingsSupport"></a> · <a href="https://waveloop.app">WaveLoop</a></p>
     Based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
     <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners.<br>
@@ -3042,7 +3042,7 @@ const TEXT = {
     loadedUser: "音色を読み込みました（シーケンスはそのまま。パターンは本体の SEQ > PHRASES から。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
     appearance: "エディターの外観", appearanceDark: "ダーク", appearanceLight: "ライト", appearanceSystem: "システム",
-    brandCredits: "書体とクレジット", editorTitle: "インストゥルメント・エディター", installer: "ファームウェア",
+    brandCredits: "書体とクレジット", editorTitle: "FM-1 エディター", installer: "ファームウェア",
     tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
     settingsBrand: "音色を作り、シーケンスを組み、セットリストを準備。", settingsGuide: "操作とセットアップ",
@@ -3149,7 +3149,7 @@ const TEXT = {
     loadedUser: "Sound loaded (the sequence stays; its pattern is on the device under SEQ > PHRASES; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
     appearance: "Editor appearance", appearanceDark: "Dark", appearanceLight: "Light", appearanceSystem: "System",
-    brandCredits: "Type and credits", editorTitle: "Instrument editor", installer: "Firmware",
+    brandCredits: "Type and credits", editorTitle: "FM-1 editor", installer: "Firmware",
     tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
     settingsBrand: "Shape sounds. Build sequences. Get your set ready.", settingsGuide: "Controls and setup",
@@ -3600,7 +3600,7 @@ async function refreshDiagnostics(d=dev) {
 $("dev-refresh").addEventListener("click",()=>{if(!busy)op(refreshDiagnostics);});
 $("dev-export").addEventListener("click",()=>{
   if(!dev?.diagnostics)return;
-  download(`WaveLoop-FM1-diagnostics-${new Date().toISOString().slice(0,10)}.json`,{format:"waveloop-fm1-diagnostics",version:1,firmware:dev.info.version,demo:MOCK,...dev.diagnostics});
+  download(`WaveLoop-Kit-diagnostics-${new Date().toISOString().slice(0,10)}.json`,{format:"waveloop-fm1-diagnostics",version:1,firmware:dev.info.version,demo:MOCK,...dev.diagnostics});
 });
 setInterval(()=>{if(tab==="dev"&&dev&&!busy&&!document.hidden)op(refreshDiagnostics);},2000);
 
@@ -3952,7 +3952,7 @@ $("backup-export").addEventListener("click", () => op(async () => {
   assertSession(d);
   const file = await captureBackup((r, o) => sessionRequest(d, r, o), d.info.version, backupProgress);
   assertSession(d);
-  download(`WaveLoop-FM1-backup-${new Date().toISOString().slice(0, 10)}.json`, file);
+  download(`WaveLoop-Kit-backup-${new Date().toISOString().slice(0, 10)}.json`, file);
   sayK("backupDone");
 }));
 $("backup-import").addEventListener("click", () => { if (dev?.info?.backupCaps & 2) $("backup-file").click(); });
@@ -5021,7 +5021,7 @@ $("savefile").addEventListener("click", () => {
     engineName: dev.info.engines[engine], presetName: (dev.names[engine] || [])[preset],
     engine, preset, p: dev.dump.p.slice(), g: dev.dump.g.slice(),
     steps: dev.steps.map((s) => ({ n: s.n, notes: s.notes.slice(), time: s.time, flags: s.flags, vel: s.vel })) };
-  download(`WaveLoop-FM1-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
+  download(`WaveLoop-Kit-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
 });
 $("loadfile").addEventListener("click", () => { $("file").value = ""; $("file").click(); });
 $("file").addEventListener("change", async () => {
@@ -5397,9 +5397,9 @@ const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").repl
 const today = () => new Date().toISOString().slice(0, 10);
 $("libexp1").addEventListener("click", () => {
   const p = lib.find((x) => x.id === libSel);
-  if (p) download(`WaveLoop-FM1-patch-${fileSlug(p.name)}.json`, libraryFile("patch", [p], libCtx()));
+  if (p) download(`WaveLoop-Kit-patch-${fileSlug(p.name)}.json`, libraryFile("patch", [p], libCtx()));
 });
-$("libexport").addEventListener("click", () => download(`WaveLoop-FM1-library-${today()}.json`, libraryFile("library", lib, libCtx())));
+$("libexport").addEventListener("click", () => download(`WaveLoop-Kit-library-${today()}.json`, libraryFile("library", lib, libCtx())));
 $("libimport").addEventListener("click", () => { $("libfile").value = ""; $("libfile").click(); });
 $("libfile").addEventListener("change", async () => {
   let n = 0, skipped = 0;
@@ -5484,7 +5484,7 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
     if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, pattern: u.pattern, grid: u.grid, slot: x.slot, fm6: u.fm6,
       engineName: reservedFm4(dev.info.engines, u.engine) ? "DIGITAL" : dev.info.engines[u.engine] });   /* (DIGITAL's values) */
   }
-  download(`WaveLoop-FM1-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
+  download(`WaveLoop-Kit-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
   sayK("ready");
 }));
 
