@@ -4,45 +4,64 @@
 <!-- Sample input recording and waveform trimming adapted from Andrea (@andreahaku), PR #29.
      Felucca web editor. One file, no libraries. Protocol: EDITOR_PROTOCOL.md.
      Add ?mock=1 to the URL to use a built-in simulated device. -->
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WaveLoop FM-1 Editor</title>
+<meta name="description" content="Shape sounds, sequence tracks and build your setlist with WaveLoop FM-1.">
+<link rel="stylesheet" href="brand/tokens.css">
 <style>
+  @font-face { font-family: "Micro 5"; src: url("brand/Micro5-Regular.woff2") format("woff2"); font-display: swap; }
+  @font-face { font-family: "Finlandica"; src: url("brand/Finlandica.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+  @font-face { font-family: "Inconsolata"; src: url("brand/Inconsolata-Regular.woff2") format("woff2"); font-display: swap; }
   /* Fukiai: Hügelton Instruments' icon font (MIT, FUKIAI-LICENSE.txt). Icons are text in .ic spans;
      they stay hidden until the face has loaded (html.fk), so a missing font never shows boxes. */
   @font-face { font-family: "Fukiai"; src: url("fukiai.ttf") format("truetype"); font-display: block; unicode-range: U+EA00-EB09; }
-  :root { --bg: #fff; --fg: #000; --dim: #777; --line: #ccc; }
+  :root { --bg: var(--wl-foam); --fg: var(--wl-navy-deep); --dim: color-mix(in srgb, var(--fg) 70%, var(--bg));
+    --line: color-mix(in srgb, var(--fg) 22%, var(--bg)); --panel: var(--wl-text);
+    --well: color-mix(in srgb, var(--wl-navy) 8%, var(--wl-foam));
+    --control: color-mix(in srgb, var(--wl-blue) 13%, var(--wl-foam));
+    --accent: color-mix(in srgb, var(--wl-blue) 75%, var(--wl-navy-deep));
+    --on-accent: var(--wl-text); --focus: var(--accent); color-scheme: light; }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #888; --line: #444; }
+    :root:not([data-theme="light"]) { --bg: var(--wl-navy-deep); --fg: var(--wl-text); --dim: var(--muted);
+      --line: var(--wl-navy-lift); --panel: var(--wl-navy); --well: var(--wl-navy-deep);
+      --control: var(--wl-navy-lift); --accent: var(--wl-blue-hi); --on-accent: var(--wl-navy-deep);
+      --focus: var(--wl-gold-hi); color-scheme: dark; }
   }
-  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #888; --line: #444; }
-  html { color-scheme: light dark; }
+  :root[data-theme="dark"] { --bg: var(--wl-navy-deep); --fg: var(--wl-text); --dim: var(--muted);
+    --line: var(--wl-navy-lift); --panel: var(--wl-navy); --well: var(--wl-navy-deep);
+    --control: var(--wl-navy-lift); --accent: var(--wl-blue-hi); --on-accent: var(--wl-navy-deep);
+    --focus: var(--wl-gold-hi); color-scheme: dark; }
+  *, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  html { scroll-padding-top: 180px; }
   body { margin: 0; background: var(--bg); color: var(--fg);
-         font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+         font: 15px/1.5 var(--wl-font-body);
          font-variant-numeric: tabular-nums; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px; }
   h1 { font-size: 18px; font-weight: 600; margin: 0 0 8px; }
-  h2 { font-size: 13px; font-weight: 600; margin: 0 0 4px; padding-bottom: 2px; border-bottom: 1px solid var(--fg); }
-  h3 { font-size: 11px; font-weight: 400; color: var(--dim); margin: 4px 0 0; }
-  a { color: inherit; }
+  h2 { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+  h3 { font-size: 13px; font-weight: 400; color: var(--dim); margin: 8px 0 0; }
+  a { color: var(--accent); text-underline-offset: .2em; }
   .lang { float: right; font-size: 12px; color: var(--dim); text-decoration: underline; background: none; padding: 0; }
-  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 2px 10px; cursor: pointer; }
+  button { font: inherit; font-weight: 500; background: var(--control); color: var(--fg); border: 0; padding: 7px 12px; cursor: pointer; }
+  button:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 18%, var(--control)); }
   button:disabled { opacity: .3; cursor: default; }
   button.lang { color: var(--dim); background: none; }
   select, input[type=text], input[type=number], input[type=search] {
-    font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 1px 3px; border-radius: 0; }
-  input[type=range] { width: 100%; margin: 0; accent-color: var(--fg); }
-  input[type=checkbox] { accent-color: var(--fg); margin: 0; }
+    font: inherit; color: var(--fg); background: var(--control); border: 0; padding: 5px 7px; border-radius: 0; }
+  input[type=range] { width: 100%; margin: 0; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); margin: 0; }
   .bar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 0 0 8px; }
   .dim { color: var(--dim); }
-  #status { min-height: 1.4em; }
+  #status { min-height: 1.5em; color: var(--dim); font-size: 13px; }
   section { margin: 12px 0; }
-  .groups { columns: 250px; column-gap: 20px; }
-  .group { break-inside: avoid; margin: 0 0 12px; }
-  .row { display: grid; grid-template-columns: 46px 1fr 70px; gap: 6px; align-items: center; min-height: 22px; }
-  .row .v { text-align: right; white-space: nowrap; }
+  .groups { columns: 290px; column-gap: 16px; }
+  .group { break-inside: avoid; margin: 0 0 16px; padding: 16px; background: var(--panel); }
+  .row { display: grid; grid-template-columns: 50px minmax(0, 1fr) 70px; gap: 8px; align-items: center; min-height: 32px; }
+  .row .v { text-align: right; white-space: nowrap; font-family: var(--wl-font-mono); }
   .row select { width: 100%; }
   .browser { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
   .browser select[size] { min-width: 150px; }
@@ -77,7 +96,8 @@
   .smp input.name { width: 80px; text-transform: uppercase; }
   .smp input.root { width: 48px; }
   .smp .bad { text-decoration: underline wavy; }
-  footer { margin-top: 24px; font-size: 11px; color: var(--dim); }
+  footer { margin-top: 36px; padding: 20px 0; font-size: 12px; color: var(--dim); }
+  footer .footer-brand { color: var(--fg); font: 28px/1 var(--wl-font-title); margin-bottom: 10px; }
   .row.pushed .v { font-weight: 600; }
   .row.modrow { grid-template-columns: 16px 1fr 1fr 1fr 52px; }
   /* librarian: local library and the device's user bank side by side, stacked on a phone */
@@ -109,24 +129,25 @@
     select.wave option::checkmark { display: none; }
   }
   /* tabs: a wrapping row of plain buttons, the open one inverted; header stays at the top on wide screens */
-  .top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0 0; }
+  .top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 0 0; }
   @media (max-width: 600px) { .top { position: static; } }
-  .tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--fg); margin: 6px 0 0; }
-  .tabs button { background: none; color: var(--dim); padding: 4px 10px; border: 1px solid transparent; border-bottom: 0; white-space: nowrap; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0 0; padding-bottom: 12px; }
+  .tabs button { background: var(--panel); color: var(--dim); padding: 8px 12px; white-space: nowrap; }
   .tabs button:hover { color: var(--fg); }
-  .tabs button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
-  .trackbar { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+  .trackbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 0 0 12px; }
   .seg { display: inline-flex; flex-wrap: wrap; }
-  .seg button, button.tog { background: var(--bg); color: var(--fg); border: 1px solid var(--fg); padding: 1px 10px; }
-  .seg button + button { border-left: 0; }
-  .seg button[aria-pressed="true"], button.tog[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
-  .panel { margin: 12px 0; }
-  .settings-brand { margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-  .settings-brand h2 { border: 0; font-size: 18px; letter-spacing: -.02em; margin-bottom: 4px; }
+  .seg { gap: 4px; }
+  .seg button, button.tog { background: var(--control); color: var(--fg); border: 0; padding: 5px 12px; }
+  .seg button[aria-pressed="true"], button.tog[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  .panel { margin: 16px 0; }
+  .settings-brand { margin-bottom: 20px; padding: 24px; background: var(--panel); }
+  .settings-brand h2 { font: 38px/1 var(--wl-font-title); letter-spacing: .02em; margin-bottom: 10px; }
   .settings-brand h2 span { color: var(--dim); font-weight: 400; }
   .settings-brand p { margin: 0 0 10px; }
   .settings-brand .bar { margin: 0; }
-  .hint { margin: 16px 0; color: var(--dim); }
+  .appearance { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 20px; }
+  .hint { margin: 16px 0; padding: 16px; background: var(--panel); color: var(--dim); }
   /* sequencer: a step grid over the selected track (16 per row, 8 on a phone) */
   .grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; margin: 6px 0 12px; }
   @media (max-width: 600px) { .grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
@@ -142,12 +163,12 @@
   #steps tr.hl td { outline: 1px solid var(--fg); }
   /* mixer: four channel strips as on the device's TRACKS page */
   .mixer { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 640px; margin: 6px 0; }
-  .strip { border: 1px solid var(--line); padding: 6px 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-  .strip.sel { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .strip { background: var(--panel); padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
+  .strip.sel { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
   .strip .num { font-size: 18px; font-weight: 600; line-height: 1; }
   .strip .snd { font-size: 11px; line-height: 1.3; width: 100%; text-align: center; overflow-wrap: anywhere; min-height: 2.6em; }
   .strip .rec { font-size: 11px; color: var(--dim); }
-  .strip .rec.on { color: var(--fg); font-weight: 600; }
+  .strip .rec.on { color: var(--wl-rec); font-weight: 600; }
   .strip .rec:not(.on) .ic { visibility: hidden; }
   .strip input.fader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 150px; }
   .strip .v { font-size: 11px; white-space: nowrap; }
@@ -156,14 +177,62 @@
   .strip button { width: 100%; padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .strip button.selb:disabled { opacity: 1; background: none; color: var(--dim); }
   #sysinfo th { padding-right: 16px; }
+  .masthead { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .identity { display: flex; gap: 14px; align-items: center; }
+  .wordmark { font: 52px/.85 var(--wl-font-title); text-transform: uppercase; letter-spacing: .02em; text-decoration: none; }
+  .product-name { display: grid; gap: 2px; }
+  .product-name h1 { margin: 0; font: 600 19px/1.2 var(--wl-font-head); }
+  .product-name p { margin: 0; color: var(--dim); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .masthead nav { display: flex; align-items: center; gap: 18px; font-size: 13px; }
+  .masthead .lang { float: none; padding: 6px; }
+  #connect { background: var(--wl-gold-hi); color: var(--wl-navy-deep); font-weight: 600; }
+  #connect:hover { background: var(--wl-gold); }
+  #version, #live, #mock { font: 13px/1.5 var(--wl-font-mono); }
+  #mock { color: var(--accent); }
+  .browser { background: var(--panel); padding: 16px; margin-bottom: 16px; }
+  .browser > label { display: grid; gap: 8px; }
+  .browser > label > br { display: none; }
+  .browser select[size] { min-width: 190px; background: var(--well); padding: 6px; }
+  .browser select option { padding: 4px 8px; }
+  #p-minilab table { width: 100%; font-size: 14px; }
+  #p-minilab td { padding: 7px 8px 7px 0; vertical-align: top; }
+  #p-minilab th { padding-bottom: 8px; }
+  .libcols > div, #steps, #slots, #setlist-panel, #backup-panel, .smp { background: var(--panel); padding: 16px; }
+  .list, .list th { background: var(--well); border: 0; }
+  .list tr.sel td { background: var(--accent); color: var(--on-accent); }
+  .grid button { background: var(--control); border: 0; height: 58px; padding: 5px; }
+  .grid button.on { background: var(--accent); color: var(--on-accent); }
+  .grid button.tie { outline: 1px dashed var(--accent); outline-offset: -2px; }
+  .grid button.beat:not(.on) { background: color-mix(in srgb, var(--accent) 12%, var(--control)); }
+  @media (max-width: 600px) {
+    main { padding: 16px 12px; }
+    .masthead { gap: 18px; }
+    .masthead nav { width: 100%; justify-content: space-between; gap: 12px; }
+    .wordmark { font-size: 46px; }
+    .tabs { gap: 4px; }
+    .tabs button { flex: 1 0 auto; padding: 8px 10px; }
+    .groups { columns: auto; }
+    .group, .settings-brand { padding: 16px; }
+    .browser { gap: 16px; }
+    .browser > label { flex: 1 1 120px; min-width: 0; }
+    .browser select[size] { min-width: 0; width: 100%; }
+    .row { grid-template-columns: 46px minmax(0, 1fr) 66px; gap: 6px; }
+    .strip { padding: 10px 5px; }
+    .slots { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 6px; }
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
-  <button class="lang" id="lang"></button>
-  <h1>WaveLoop FM-1 Editor</h1>
-  <p class="dim"><a href="../installer/" style="color:inherit" data-t="installer"></a></p>
+  <div class="masthead">
+    <div class="identity">
+      <a class="wordmark" href="../../mod/" aria-label="WaveLoop FM-1 home">WaveLoop</a>
+      <div class="product-name"><h1>FM-1</h1><p data-t="editorTitle"></p></div>
+    </div>
+    <nav aria-label="WaveLoop"><a href="../../mod/" data-t="settingsGuide"></a>
+      <a href="../installer/" data-t="installer"></a><button class="lang" id="lang"></button></nav>
+  </div>
   <!-- always visible: connection, version, sync mode, the tabs and (Sound / Sequencer / Tracks) the track selector -->
   <header class="top">
     <div class="bar">
@@ -172,7 +241,7 @@
       <span id="live" class="dim"></span>
       <span id="mock" class="dim" hidden data-t="mock"></span>
     </div>
-    <div id="status"></div>
+    <div id="status" role="status" aria-live="polite"></div>
     <nav class="tabs" id="tabs" role="tablist">
       <button role="tab" data-tab="sound" data-t="sound" data-ic="symbol_audio"></button>
       <button role="tab" data-tab="fm6" data-t="tabFm6" data-ic="ui_knob"></button>
@@ -353,6 +422,11 @@
         <a href="#minilab" data-t="settingsMappings"></a>
         <a href="../../admin/" data-t="settingsSupport"></a>
       </nav>
+      <label class="appearance"><span data-t="appearance"></span><select id="appearance">
+        <option value="dark" data-t="appearanceDark"></option>
+        <option value="light" data-t="appearanceLight"></option>
+        <option value="system" data-t="appearanceSystem"></option>
+      </select></label>
     </div>
     <div id="settings-device" hidden>
       <div class="groups" id="setgroups"></div>
@@ -424,9 +498,11 @@
     <p class="dim" data-t="devHelp"></p>
   </section>
 
-  <footer>Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
+  <footer><div class="footer-brand">WAVELOOP FM-1</div>
+    <p><a href="../../mod/" data-t="settingsGuide"></a> · <a href="../../admin/" data-t="settingsSupport"></a> · <a href="https://waveloop.app">WaveLoop</a></p>
+    Based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
     <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners.<br>
-    <a href="FUKIAI-LICENSE.txt" data-t="iconsCredit"></a></footer>
+    <a href="FUKIAI-LICENSE.txt" data-t="iconsCredit"></a> · <a href="../../admin/#editor-brand" data-t="brandCredits"></a></footer>
 </main>
 <script>
 "use strict";
@@ -2891,11 +2967,11 @@ const TEXT = {
     fm6OtherMaker: "別のメーカーの SysEx です", fm6Universal: "音色ではない汎用 SysEx です",
     fm6Factories: "ファクトリー音色",
     fm6NeedDevice: "FM-1 を接続すると 6-OP FM の音色を編集してトラックへ送れます。",
-    fm6NoFw: "このファームウェアには 6-OP FM（FM6）がありません。Felucca 1.0 以降に更新すると使えます。",
+    fm6NoFw: "このファームウェアには 6-OP FM（FM6）がありません。FM-1 のファームウェアを更新してください。",
     motion: "オートメーション", motionOn: "再生", motionClear: "オートメーションを消去", motionConfirm: "選択トラックのオートメーションを消しますか？", chance: "確率 %", ratchet: "ラチェット", motionStep: "ステップ", motionParam: "パラメーター", motionValue: "値",
-    backupTitle: "全体バックアップ", backupExport: "バックアップ保存", backupImport: "バックアップ復元", backupHelp: "現在の曲・A〜D・音色バンク・ユーザーサンプル・設定を、このパソコンへ保存。", backupOld: "全体バックアップには対応版への更新が必要です。", backupConfirm: "全体バックアップを復元しますか？ 現在の曲、保存データとサンプルを置き換えます。USBを抜かないでください。", backupWorking: "バックアップ処理中 ", backupDone: "バックアップを保存しました", backupRestored: "全体バックアップを復元しました",
+    backupTitle: "全体バックアップ", backupExport: "バックアップ保存", backupImport: "バックアップ復元", backupHelp: "曲・音色・ユーザーサンプル・設定を、このパソコンへ保存。", backupOld: "全体バックアップには対応版への更新が必要です。", backupConfirm: "全体バックアップを復元しますか？ 現在の曲、保存データとサンプルを置き換えます。USBを抜かないでください。", backupWorking: "バックアップ処理中 ", backupDone: "バックアップを保存しました", backupRestored: "全体バックアップを復元しました",
     deviceDisplay: "本体の画面",
-    deviceDisplayHelp: "FM-1 の画面に反映し、保存します。再生中の変更は停止後に保存されます。",
+    deviceDisplayHelp: "FM-1 の画面に反映します。停止して、5 秒間無音にすると保存されます。",
     devicePresets: "本体のプリセット",
     deviceFavHelp: "お気に入りと表示フィルターは FM-1 と同期します。パソコンのライブラリの音色は、本体のユーザースロットに保存してから登録してください。",
     deviceList: "表示",
@@ -2927,9 +3003,9 @@ const TEXT = {
     foot: "Chrome か Edge で使えます。", iconsCredit: "アイコン: Fukiai（MIT）Hügelton Instruments",
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。",
     denied: "MIDI（SysEx）の使用が許可されませんでした。",
-    nodevice: "Felucca が見つかりません。USB で接続して、もう一度押してください。",
+    nodevice: "FM-1 が見つかりません。USB で接続して、もう一度押してください。",
     connecting: "接続中", reading: "読み込み中 ", steploading: "ステップを読み込み中 ",
-    ready: "接続しました", disconnected: "切断されました", lost: "Felucca が外されました",
+    ready: "接続しました", disconnected: "切断されました", lost: "FM-1 が外されました",
     noreply: "応答がありません", error: "エラー: ", busy: "処理中",
     applying: "書き込み中 ", applied: "読み込みました", badfile: "ファイルを読み込めません: ",
     savedSlot: "保存しました: スロット ", loadedSlot: "読み込みました: スロット ", emptySlot: "空のスロットです: ",
@@ -2965,14 +3041,15 @@ const TEXT = {
     putDone: "本体に書き込みました: スロット ", storedSlot: "本体に保存しました: スロット ", erasedSlot: "消去しました: スロット ",
     loadedUser: "音色を読み込みました（シーケンスはそのまま。パターンは本体の SEQ > PHRASES から。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
-    installer: "Felucca インストーラー",
+    appearance: "エディターの外観", appearanceDark: "ダーク", appearanceLight: "ライト", appearanceSystem: "システム",
+    brandCredits: "書体とクレジット", editorTitle: "インストゥルメント・エディター", installer: "ファームウェア",
     tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
-    settingsBrand: "FM-1 用の Felucca カスタム版。", settingsGuide: "操作とセットアップ",
+    settingsBrand: "音色を作り、シーケンスを組み、セットリストを準備。", settingsGuide: "操作とセットアップ",
     settingsMappings: "MiniLab の割り当て", settingsSupport: "ビルドとサポート",
     needDevice: "FM-1 を接続すると編集できます。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
     bankConnect: "FM-1 を接続すると本体のユーザープリセットも扱えます。", bankNone: "このファームウェアにはユーザープリセットがありません。",
-    mixer: "ミキサー", mixHelp: "本体の MIXER ページと同じ 4 トラック。フェーダーはレベル。パンはどのトラックも選択を変えずに書き込みます（0.8 のファームウェアでは一瞬そのトラックを選びます）。REC は本体での録音待機の表示です。",
+    mixer: "ミキサー", mixHelp: "4 トラックの音量とパンを調整。REC は録音待機中のトラックです。",
     level: "レベル", pan: "パン", mute: "ミュート", rec: "REC", selectTrack: "選択", selectedTrack: "選択中",
     projHelp: "プロジェクトは本体の状態をまとめて保存します: 4 トラックの音色とパターン、曲の並び順、選択中のトラック、グローバル設定。",
     slot: "スロット", songTitle: "ソング", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
@@ -2997,11 +3074,11 @@ const TEXT = {
     fm6OtherMaker: "SysEx from another manufacturer", fm6Universal: "Universal SysEx, not voice data",
     fm6Factories: "Factory patch",
     fm6NeedDevice: "Connect the FM-1 to edit 6-OP FM voices and send them to a track.",
-    fm6NoFw: "This firmware has no 6-OP FM (FM6). Update to Felucca 1.0 or later to use it.",
+    fm6NoFw: "This firmware has no 6-OP FM (FM6). Update your FM-1 firmware to use it.",
     motion: "Automation", motionOn: "Play automation", motionClear: "Clear automation", motionConfirm: "Clear this track's automation?", chance: "Chance %", ratchet: "Ratchet", motionStep: "Step", motionParam: "Parameter", motionValue: "Value",
-    backupTitle: "Complete backup", backupExport: "Save backup", backupImport: "Restore backup", backupHelp: "Save the current music, A–D, sound banks, user samples and settings to this computer.", backupOld: "Complete backups need firmware with archive support.", backupConfirm: "Restore this complete backup? Current music, saved data and samples will be replaced. Keep USB connected.", backupWorking: "Backing up / restoring ", backupDone: "Backup saved", backupRestored: "Complete backup restored",
+    backupTitle: "Complete backup", backupExport: "Save backup", backupImport: "Restore backup", backupHelp: "Save your songs, sounds, samples and settings to this computer.", backupOld: "Complete backups need firmware with archive support.", backupConfirm: "Restore this complete backup? Current music, saved data and samples will be replaced. Keep USB connected.", backupWorking: "Backing up / restoring ", backupDone: "Backup saved", backupRestored: "Complete backup restored",
     deviceDisplay: "Device display",
-    deviceDisplayHelp: "Changes apply to the FM-1 screen and save. Changes made while playing save after STOP.",
+    deviceDisplayHelp: "Changes apply to the FM-1. Stop and leave five seconds of silence to save.",
     devicePresets: "Device presets",
     deviceFavHelp: "Stars and the favorites filter sync with the FM-1. Save computer-library sounds to a device user slot before starring them.",
     deviceList: "Show",
@@ -3031,11 +3108,11 @@ const TEXT = {
     notesHelp: "Enter notes like C4 E4 G4 (up to 4, C4 = 60). Hits are DRUM lanes: KICK >SNARE HATCL (> = accent).",
     notes: "Notes", hits: "Hits", time: "Time", acc: "Accent", slide: "Slide", vel: "Velocity",
     foot: "Works in Chrome or Edge.", iconsCredit: "Icons: Fukiai (MIT), Hügelton Instruments",
-    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.",
+    nomidi: "MIDI needs Chrome or Edge. Open this page there.",
     denied: "MIDI (SysEx) access was not allowed.",
-    nodevice: "Felucca not found. Connect it by USB and press Connect again.",
+    nodevice: "FM-1 not found. Connect it by USB and press Connect again.",
     connecting: "Connecting", reading: "Reading ", steploading: "Reading steps ",
-    ready: "Connected", disconnected: "Disconnected", lost: "Felucca was unplugged",
+    ready: "Connected", disconnected: "Disconnected", lost: "FM-1 was unplugged",
     noreply: "No reply from the device", error: "Error: ", busy: "Busy",
     applying: "Writing ", applied: "Loaded", badfile: "Cannot read the file: ",
     savedSlot: "Saved to slot ", loadedSlot: "Loaded slot ", emptySlot: "Empty slot: ",
@@ -3071,14 +3148,15 @@ const TEXT = {
     putDone: "Written to the device: slot ", storedSlot: "Stored on the device: slot ", erasedSlot: "Erased slot ",
     loadedUser: "Sound loaded (the sequence stays; its pattern is on the device under SEQ > PHRASES; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
-    installer: "WaveLoop FM-1 installer",
+    appearance: "Editor appearance", appearanceDark: "Dark", appearanceLight: "Light", appearanceSystem: "System",
+    brandCredits: "Type and credits", editorTitle: "Instrument editor", installer: "Firmware",
     tabDev: "Dev", devTitle: "Device diagnostics", devRefresh: "Refresh", devExport: "Save readouts", devCounters: "Live counters", devHelp: "Updates every 2 seconds while open. Memory bars show fixed allocations and headroom, not heap usage. Flash has fixed slots, not a filesystem.",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
-    settingsBrand: "A Felucca instrument mod for FM-1.", settingsGuide: "Controls and setup",
+    settingsBrand: "Shape sounds. Build sequences. Get your set ready.", settingsGuide: "Controls and setup",
     settingsMappings: "MiniLab mappings", settingsSupport: "Build and support",
     needDevice: "Connect the FM-1 to edit.", smpNone: "This firmware has no user sample slots.",
     bankConnect: "Connect the FM-1 to see its user presets too.", bankNone: "This firmware has no user presets.",
-    mixer: "Mixer", mixHelp: "The four tracks of the device's MIXER page. The fader is the level. Pan is written to any track without changing the selection (firmware 0.8: by selecting it for a moment). REC shows a track armed for live recording on the device.",
+    mixer: "Mixer", mixHelp: "Mix four tracks. Adjust volume and pan; REC marks a track armed for recording.",
     level: "Level", pan: "Pan", mute: "Mute", rec: "REC", selectTrack: "Select", selectedTrack: "Selected",
     projHelp: "A project keeps the sounds and patterns of all four tracks, the song chain, the selected track and the global settings.",
     slot: "Slot", songTitle: "Song", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
@@ -3086,6 +3164,16 @@ const TEXT = {
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
   },
 };
+// Browser appearance only: never changes the FM-1 screen or stored music.
+let appearance = "dark";
+try { const saved = localStorage.getItem("waveloop-fm1-theme"); if (["dark", "light", "system"].includes(saved)) appearance = saved; } catch (_) {}
+document.documentElement.dataset.theme = appearance;
+$("appearance").value = appearance;
+$("appearance").addEventListener("change", () => {
+  appearance = $("appearance").value;
+  document.documentElement.dataset.theme = appearance;
+  try { localStorage.setItem("waveloop-fm1-theme", appearance); } catch (_) {}
+});
 let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
 const t = (k) => TEXT[lang][k] ?? k;
 let lastKey = null, lastArg = "";
@@ -3348,7 +3436,7 @@ async function load(d) {
   try {
     /* the first frame after opening the port can be lost: a few tries */
     d.info = parse[CMD.INFO](await sessionRequest(d, req.info(), { timeout: 500, retries: 3 }));
-    $("version").textContent = d.info.version;
+    $("version").textContent = d.info.version.replace(/^FELUCCA\s*/i, "FM-1 · ");
     const total = d.info.pcount + d.info.gcount;
     for (let i = 0; i < d.info.pcount; i++) { sayK("reading", `${i + 1}/${total}`); d.pdesc[i] = await getDescOrNull(0, i, d); }
     for (let i = 0; i < d.info.gcount; i++) { sayK("reading", `${d.info.pcount + i + 1}/${total}`); d.gdesc[i] = await getDescOrNull(1, i, d); }
@@ -3864,7 +3952,7 @@ $("backup-export").addEventListener("click", () => op(async () => {
   assertSession(d);
   const file = await captureBackup((r, o) => sessionRequest(d, r, o), d.info.version, backupProgress);
   assertSession(d);
-  download(`Felucca-backup-${new Date().toISOString().slice(0, 10)}.json`, file);
+  download(`WaveLoop-FM1-backup-${new Date().toISOString().slice(0, 10)}.json`, file);
   sayK("backupDone");
 }));
 $("backup-import").addEventListener("click", () => { if (dev?.info?.backupCaps & 2) $("backup-file").click(); });
@@ -4933,7 +5021,7 @@ $("savefile").addEventListener("click", () => {
     engineName: dev.info.engines[engine], presetName: (dev.names[engine] || [])[preset],
     engine, preset, p: dev.dump.p.slice(), g: dev.dump.g.slice(),
     steps: dev.steps.map((s) => ({ n: s.n, notes: s.notes.slice(), time: s.time, flags: s.flags, vel: s.vel })) };
-  download(`felucca-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
+  download(`WaveLoop-FM1-${fileSlug(data.engineName || "patch")}-${fileSlug(data.presetName || preset)}.json`, data);
 });
 $("loadfile").addEventListener("click", () => { $("file").value = ""; $("file").click(); });
 $("file").addEventListener("change", async () => {
@@ -5309,9 +5397,9 @@ const fileSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").repl
 const today = () => new Date().toISOString().slice(0, 10);
 $("libexp1").addEventListener("click", () => {
   const p = lib.find((x) => x.id === libSel);
-  if (p) download(`felucca-patch-${fileSlug(p.name)}.json`, libraryFile("patch", [p], libCtx()));
+  if (p) download(`WaveLoop-FM1-patch-${fileSlug(p.name)}.json`, libraryFile("patch", [p], libCtx()));
 });
-$("libexport").addEventListener("click", () => download(`felucca-library-${today()}.json`, libraryFile("library", lib, libCtx())));
+$("libexport").addEventListener("click", () => download(`WaveLoop-FM1-library-${today()}.json`, libraryFile("library", lib, libCtx())));
 $("libimport").addEventListener("click", () => { $("libfile").value = ""; $("libfile").click(); });
 $("libfile").addEventListener("change", async () => {
   let n = 0, skipped = 0;
@@ -5396,7 +5484,7 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
     if (u.used) out.push({ name: u.name, engine: u.engine, p: u.p, pattern: u.pattern, grid: u.grid, slot: x.slot, fm6: u.fm6,
       engineName: reservedFm4(dev.info.engines, u.engine) ? "DIGITAL" : dev.info.engines[u.engine] });   /* (DIGITAL's values) */
   }
-  download(`felucca-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
+  download(`WaveLoop-FM1-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
   sayK("ready");
 }));
 

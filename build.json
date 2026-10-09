@@ -3,6 +3,6 @@
   "product": "FM-1_910",
   "sha256": "a813c8a89a54ec4a54fff61647497cf4b6d9a6bfcf341f789388975c1e3cc308",
   "source": "https://github.com/ELI7VH/Felucca",
-  "source_commit": "bdba4a52e87fee0cfb706c22ea7e22566c8a9068",
+  "source_commit": "9345f158db966da1f376b80c663c555dd7f694f6",
   "release": "https://github.com/ELI7VH/Felucca/releases/tag/1.0.5.2-midi19"
 }
