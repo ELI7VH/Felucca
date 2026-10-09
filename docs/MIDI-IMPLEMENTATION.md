@@ -27,7 +27,10 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 | Shift + main encoder | Previous/next visible sound engine; loads its first factory preset |
 | Modulation strip | Vibrato depth on the keyboard channel |
 | Pitch strip | Existing pitch bend on the keyboard channel |
-| A-bank pads 1–8 | Momentary repeat 1/8, 1/16, 1/32, reverse, tape stop, freeze, octave up/down |
+| A-bank pad 1 | Held Shift modifier |
+| A-bank pads 2–8 | Momentary repeat 1/16, 1/32, reverse, tape stop, freeze, octave up/down |
+| Shift + pad 8 | Tap tempo |
+| Shift + faders 1–4 | Combined track delay + reverb amount |
 
 See [the setup guide](../controllers/MiniLab-3.md) and import
 [`Felucca.minilab3`](../controllers/Felucca.minilab3) in Arturia MIDI Control Center.
@@ -42,7 +45,8 @@ Use the correct DIN-to-TRS adapter for the FM-1 input and supply power to both d
 - CC20–27 expose all eight engine EDIT parameters, scaled to their own signed or enum ranges.
 - CC28–31 follow the engine's four HOME knob assignments. The supplied MiniLab preset uses
   CC28–30 for its first three bottom knobs and CC76 for its fourth.
-- CC7 on channels 1–4 always targets the corresponding track's volume, including ROUT SEL.
+- Normal CC7 on channels 1–4 targets the corresponding track's volume, including ROUT SEL.
+  While A-bank pad 1 is held, it writes that track’s delay and reverb amounts together.
   Other parameter controls follow the existing ROUT setting. CH1-4 ignores channels 5–16,
   except the dedicated channel 16 master-effect pad notes and pad panic/reset.
 - CC114 browses presets; CC112 browses engines. Both use MiniLab relative values centred
@@ -176,3 +180,15 @@ Validation: full host suite passed, including new setlist persistence and web pr
 DRUM factory presets append **808** (index 1, KIT 80) and **CR78** (index 2, new KIT value 9). Original preset 0 and stored KIT values 0–8 are unchanged. CR78 is an original synthesized approximation using the existing fixed-point voice renderers: kick, snare, maracas, closed hat, longer hat, conga, claves, cowbell. Maracas occupy the clap lane; conga the tom lane; claves the rim lane. Per-lane sound, volume, pan and sends continue to apply. No samples or additional sample slots are needed. This adapts the CR-78's eleven-instrument layout to eight lanes; it is not a sample-exact replica. Reference instrument list: https://support.roland.com/hc/en-us/articles/201934399-CR-78-Technical-Specifications .
 
 Validation: all C host checks passed, including drum controls, clipping/DC/retrigger/choke, persistence, backup, editor, UI and target costs. Regression covers 353 golden renders: all 350 prior hashes retained and three new hashes appended. Web tests were updated for the expanded kit list. Target image 447256 bytes; static RAM 94384/98304 bytes and pool 330208/344064 bytes, unchanged from midi13.
+
+### midi15 pad modifier
+
+A-bank pad 1 (channel 16 note 36) is a held modifier, colored cyan (MiniLab color 13).
+Shift + pad 8 (note 43) queues the existing tap-tempo command. Shifted pads 2–7 and the eight mapped knobs are reserved.
+Shifted fixed-channel CC7 faders set that track’s delay and reverb sends together, without changing its volume.
+On DRUM these are track defaults; existing per-lane send overrides remain independent.
+A track popup labels the combined control DELAY + REVERB. No new effect DSP, project format or sample storage is required.
+Each pad remembers its press layer until release, including zero-velocity note-on. Panic/reset on channel 16 and MIDI input overflow release Shift and pad ownership.
+The editor MiniLab tab documents the layout offline; it does not program the controller.
+
+Validation: midi15 full host suite passed, including modifier ownership, reserved controls, combined sends, drum lane preservation, popup rendering, panic/overflow and web navigation. All 353 sound renders remained unchanged. Static RAM and audio pool allocations remain unchanged. MiniLab User 5 was read back across all 319 parameters; only A-bank pad 1 color changed to cyan.

@@ -9,6 +9,8 @@ Direct DIN MIDI control; no computer needed while playing.
 | --- | --- |
 | Needed more songs for a performance | 12 complete songs, in a reorderable setlist; two user sample slots remain. |
 | Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
+| Needed a second controller layer | Hold A-bank pad 1 for Shift; shifted pad 8 taps tempo; shifted faders control track delay + reverb. |
+| Wanted a controller cheat sheet | Editor → MiniLab shows normal and shifted assignments. |
 | Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
 | Wanted separate kick/snare edits and mixing | Each drum lane keeps its own sound, volume, pan and effect sends. |
@@ -17,7 +19,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted transport and tap without a computer | B-bank 1–2: previous/next song; 5–8: Stop, Play, selected-track Record, Tap. |
 | Never wanted to press Save or rebuild a session | Autosave after five seconds of silence; restore at power-on. |
 | Needed a standalone setup | MiniLab plugs directly into FM-1 over DIN MIDI. |
-| Wanted four independent track volumes | Faders 1–4 always mix tracks 1–4. |
+| Wanted four independent track volumes | Normal faders 1–4 mix tracks 1–4. |
 | Faders felt too sensitive near the top | More travel for fine upper-level mixing; bottom reaches silence. |
 | Wanted knobs to follow the MIDI channel | Channels 1–4 control the corresponding tracks. |
 | Wanted the bottom row to match FM-1’s main knobs | Bottom knobs 5–7 follow HOME controls 1–3. |
