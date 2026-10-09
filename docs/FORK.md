@@ -9,6 +9,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | --- | --- |
 | Needed more songs for a performance | 12 complete songs, in a reorderable setlist; two user sample slots remain. |
 | Wanted songs to evolve without manual saves | Current song and setlist order autosave after five seconds of silence. |
+| Wanted developer readouts | Dev tab: CPU, RAM, flash, audio, MIDI/USB and autosave; export a snapshot. |
 | Wanted a web view for this mod | Dedicated mod installer, setlist editor and full backups. |
 | Wanted separate kick/snare edits and mixing | Each drum lane keeps its own sound, volume, pan and effect sends. |
 | Wanted playing a drum to select its sequencer lane | Hit a drum, then edit that lane with the step buttons. |
