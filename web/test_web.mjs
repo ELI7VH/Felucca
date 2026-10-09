@@ -1227,7 +1227,7 @@ async function editorSessions() {
     ;({ beginBusy, resetBusy, sessionRequest, load, libOp,
        setDevice: d => { dev = d; }, count: () => busy })`, {
     Date, Error, tab: "sound", refreshDiagnostics: async()=>{},
-    $: id => { if (!nodes.has(id)) nodes.set(id, {}); return nodes.get(id); },
+    $: id => { if (!nodes.has(id)) nodes.set(id, { dataset: {} }); return nodes.get(id); },
     CMD: { INFO: 1, PROJECT: 2, SMP_INFO: 3, DUMP: 4 },
     parse: { 1: r => r, 2: () => ({ used: false }), 3: () => ({}), 4: r => r },
     req: { info: () => "info", project: () => "project", smpInfo: () => "sample", dump: () => "dump" },
@@ -1237,12 +1237,16 @@ async function editorSessions() {
     renderBank: noop, renderSysinfo: noop, sayK: noop, report: noop, syncPreferences: noop, readSetlist: noop,
   });
   const oldRelease = S.beginBusy();
+  ok(nodes.get("status").dataset.wlCursorBusy === "true", "editor: active operation shows cursor busy feedback");
   S.resetBusy();
+  ok(nodes.get("status").dataset.wlCursorBusy === "false", "editor: disconnect clears cursor busy feedback");
   const newRelease = S.beginBusy();
   oldRelease();
   ok(S.count() === 1, "editor: old completion cannot release new connection's busy count");
+  ok(nodes.get("status").dataset.wlCursorBusy === "true", "editor: old completion preserves current cursor busy feedback");
   newRelease(); newRelease(); oldRelease();
   ok(S.count() === 0, "editor: operation release is idempotent and never goes negative");
+  ok(nodes.get("status").dataset.wlCursorBusy === "false", "editor: cursor busy feedback clears after completion");
 
   let resolve;
   const d = { link: { request: () => new Promise(r => { resolve = r; }) } };
@@ -1310,7 +1314,8 @@ function editorTabs() {
   const odd = [...ja].filter((k) => !en.has(k)).concat([...en].filter((k) => !ja.has(k)));
   ok(!miss.length && !odd.length, `editor: every string in ja and en (${used.size} used${miss.length ? ", missing " + miss : ""}${odd.length ? ", one language only " + odd : ""})`);
   /* the page script parses (the browser's view of it) */
-  const script = html.slice(html.indexOf("<script>") + 8, html.lastIndexOf("</script>"));
+  const scriptStart = html.indexOf("<script>") + 8;
+  const script = html.slice(scriptStart, html.indexOf("</script>", scriptStart));
   let err = null;
   try { new vm.Script(script); } catch (e) { err = e.message; }
   ok(!err, "editor: page script compiles" + (err ? ` (${err})` : ""));
