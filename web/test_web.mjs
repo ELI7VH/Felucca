@@ -1268,7 +1268,7 @@ async function editorSessions() {
   adopted = new Promise(r => { resolve = r; });
   const reachedAdoption = new Promise(r => { adoptStarted = r; });
   const next = { pdesc: [], gdesc: [], names: [], slotUsed: [], link: { request: async kind =>
-    kind === "info" ? { pcount: 0, gcount: 0, nengines: 0 } : {} } };
+    kind === "info" ? { version: "FELUCCA v1.0", pcount: 0, gcount: 0, nengines: 0 } : {} } };
   S.setDevice(next);
   const loadingNext = S.load(next).then(() => null, e => e);
   await reachedAdoption;
@@ -1279,6 +1279,8 @@ async function editorSessions() {
   S.setDevice(next);
   await S.load(next);
   ok(shown === 1 && S.count() === 0, "editor: a current connection still completes its initial load");
+  ok(nodes.get("version").textContent === "FM-1 · v1.0" && next.info.version === "FELUCCA v1.0",
+    "editor: branded version display preserves the raw firmware identity");
 
   const savedDevice = { link: { request: async () => { sent++; } } };
   sent = 0;
@@ -1312,8 +1314,26 @@ function editorTabs() {
   let err = null;
   try { new vm.Script(script); } catch (e) { err = e.message; }
   ok(!err, "editor: page script compiles" + (err ? ` (${err})` : ""));
-  ok(!/#[0-9a-f]{3,6}\b/i.test(html.slice(html.indexOf("[hidden]") - 6000, html.indexOf("[hidden]")).replace(/:root[^}]*\}/g, "")),
-    "editor: no colours beyond the black / white tokens in the new styles");
+  /* The branded editor still works with only its own static assets: no font or UI CDN. */
+  const local = (url) => !!url && !/^(?:[a-z][a-z\d+.-]*:|\/)/i.test(url);
+  const attr = (tag, name) => (new RegExp(`\\b${name}=["']([^"']+)["']`, "i").exec(tag) || [])[1];
+  const styles = [...html.matchAll(/<link\b[^>]*>/gi)].map(([tag]) =>
+    /\bstylesheet\b/i.test(attr(tag, "rel") || "") ? attr(tag, "href") : null).filter(Boolean);
+  const stylesLocal = styles.every((url) => local(url) && existsSync(join(HERE, url)));
+  ok(styles.includes("brand/tokens.css") && stylesLocal, "editor: WaveLoop tokens and stylesheets ship beside the page");
+  const css = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join("\n")
+    + (stylesLocal ? styles.map((url) => readFileSync(join(HERE, url), "utf8")).join("\n") : "");
+  const defined = new Set([...css.matchAll(/(--wl-[\w-]+)\s*:/g)].map((m) => m[1]));
+  const missingTokens = [...new Set([...css.matchAll(/var\((--wl-[\w-]+)/g)].map((m) => m[1]))].filter((name) => !defined.has(name));
+  ok(!missingTokens.length, `editor: all WaveLoop token references resolve${missingTokens.length ? " (" + missingTokens.join(", ") + ")" : ""}`);
+  const fontURLs = [...css.matchAll(/@font-face\s*\{([^}]+)\}/gi)].flatMap((m) =>
+    [...m[1].matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)/gi)].map((u) => u[1]));
+  ok(fontURLs.length > 0 && fontURLs.every((url) => local(url) && existsSync(join(HERE, url))),
+    "editor: every font is a local, shipped asset");
+  const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map(([tag]) => attr(tag, "src")).filter(Boolean)
+    .concat([...script.matchAll(/\bimport\s*\(\s*["']([^"']+)["']/g)].map((m) => m[1]));
+  ok(scripts.every((url) => local(url) && existsSync(join(HERE, url))) && !/@import\b/i.test(css),
+    "editor: UI scripts stay local and CSS has no external imports");
 }
 
 /* ------------------------------------------------- editor icons (Fukiai) --- */

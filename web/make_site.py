@@ -80,6 +80,7 @@ def main(pkg, version, out):
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt", "fm1backup.js"):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
+    shutil.copytree(HERE / "brand", ed / "brand", dirs_exist_ok=True)
     for folder, source in (("mod", "mod.html"), ("admin", "admin.html")):
         target=out/folder; target.mkdir(exist_ok=True)
         shutil.copy(HERE/source,target/"index.html")
