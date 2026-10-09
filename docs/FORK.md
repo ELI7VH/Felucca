@@ -23,6 +23,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted the bottom row to match FM-1’s main knobs | Bottom knobs 5–7 follow HOME controls 1–3. |
 | Needed quick vibrato-speed control | Bottom knob 8 controls LFO speed on synths; drum volume on DRUM. |
 | Wanted mod-wheel pitch modulation | Mod strip adds vibrato; LFO controls its speed and shape. |
+| Wanted classic drum kits | DRUM bank presets: 808 and an eight-lane CR-78-style kit. |
 | Thin sound banks | 32 mixed factory patches in each of ten synth engines; existing patch IDs retained. |
 | Needed preset browsing without the editor | Turn the main encoder to browse the addressed track’s presets. |
 | Wanted Shift to change sound engines | Shift + encoder browses engines and loads their first preset. |
