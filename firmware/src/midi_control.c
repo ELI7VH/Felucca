@@ -303,12 +303,13 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
     if (midi_pad_shift) {
         static const uint8_t knobs[8]={19,21,22,23,28,29,30,76};
         for (uint32_t k=0;k<8;k++) if (cc==knobs[k]) {
-            /* Alt top 1/2: the track LFO's rate and filter/brightness depth.
+            /* Alt top 1/2/3: the track LFO's rate, filter/brightness depth and waveform.
              * Bottom row follows ENV, or FM6's operator-crafting macros.
-             * Top 3/4 and DRUM's Alt knobs remain reserved. */
+             * Top 4 and DRUM's Alt knobs remain reserved. */
             const engine_t *e=ENGINES[t->eng_req % NENGINES];
-            if (k<2u && !e->oneshot) {
-                id=k==0u ? P_LRATE : P_LD_FLT;
+            if (k<3u && !e->oneshot) {
+                static const uint8_t lfo[3]={P_LRATE,P_LD_FLT,P_LWAVE};
+                id=lfo[k];
                 midi_parameter(t,id,value);
                 midi_notify(t,track_desc(t,id),t->p[id],0);
             } else if (k>=4u && !e->oneshot && (!e->ownenv || t->eng_req==ENGI_FM6)) {

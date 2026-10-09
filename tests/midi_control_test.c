@@ -91,11 +91,10 @@ static int pad_shift_test(void)
     int bad=0; midi_test_reset(); perf_midi_held=0;
     queued(0x9F,36,100,2);
     bad+=check("pad 1 holds Shift without triggering FX or a note",midi_pad_shift && !perf_midi_held && !midi_notes[15][36]);
-    const uint8_t knobs[2]={22,23};
-    for (uint32_t k=0;k<2;k++) {
+    {
         int16_t before[P_COUNT]; memcpy(before,trk[1].p,sizeof before);
-        queued(0xB1,knobs[k],127,2);
-        bad+=check("reserved shifted knobs leave sound unchanged",!memcmp(before,trk[1].p,sizeof before));
+        queued(0xB1,23,127,2);
+        bad+=check("reserved Alt top knob 4 leaves sound unchanged",!memcmp(before,trk[1].p,sizeof before));
     }
     int16_t level=trk[2].p[P_LEVEL]; queued(0xB2,7,127,2);
     bad+=check("shifted fader changes track send and preserves volume",trk[2].p[P_REV]==127 && trk[2].p[P_DLY]==127 && trk[2].p[P_LEVEL]==level);
@@ -119,20 +118,23 @@ static int pad_shift_test(void)
 }
 static int alt_filter_lfo_test(void)
 {
-    const uint8_t cc[2]={19,21}, id[2]={P_LRATE,P_LD_FLT}, input[3]={0,64,127};
+    const uint8_t cc[3]={19,21,22}, id[3]={P_LRATE,P_LD_FLT,P_LWAVE}, input[3]={0,64,127};
     const int16_t value[2][3]={{0,64,127},{-64,0,63}};
+    const uint8_t wave_input[5]={0,32,64,95,127};
+    const char *const wave_name[5]={"SIN","TRI","SAW","SQR","S&H"};
     int bad=0; midi_test_reset(); perf_k[0]=37;
     queued(0x9F,36,100,2);
     for (uint32_t e=0;e<NENGINES;e++) {
         uint32_t ch=e%NPART;
         host_preset(&trk[ch],e,0); events_block(CTL); song.sel=(ch+1u)%NPART;
         trk[ch].mw=31; trk[ch].at=42; trk[ch].ex_off=53;
-        for (uint32_t k=0;k<2;k++) for (uint32_t point=0;point<3;point++) {
+        for (uint32_t k=0;k<3;k++) for (uint32_t point=0;point<(k==2u?5u:3u);point++) {
+            int16_t want=k==2u ? (int16_t)point : value[k][point];
             int16_t expected[NPART][P_COUNT];
             for (uint32_t tr=0;tr<NPART;tr++) memcpy(expected[tr],trk[tr].p,sizeof expected[tr]);
-            if (!ENGINES[e]->oneshot) expected[ch][id[k]]=value[k][point];
+            if (!ENGINES[e]->oneshot) expected[ch][id[k]]=want;
             midi_notice_pending=0;
-            queued(0xB0|ch,cc[k],input[point],(point&1u)+1u);
+            queued(0xB0|ch,cc[k],k==2u?wave_input[point]:input[point],(point&1u)+1u);
             int same=1;
             for (uint32_t tr=0;tr<NPART;tr++) same &= !memcmp(expected[tr],trk[tr].p,sizeof expected[tr]);
             bad+=check("Alt filter LFO reaches only its MIDI track and parameter in every sustained engine",same);
@@ -143,46 +145,51 @@ static int alt_filter_lfo_test(void)
                 midi_ui_poll();
                 bad+=check("Alt filter LFO popup reports actual track, parameter and endpoint/neutral value",
                            midi_popup.active && midi_popup.notice.track==ch && midi_popup.notice.kind==0 &&
-                           midi_popup.notice.desc==track_desc(&trk[ch],id[k]) && midi_popup.notice.value==value[k][point]);
+                           midi_popup.notice.desc==track_desc(&trk[ch],id[k]) && midi_popup.notice.value==want);
+                if (k==2u) bad+=check("Alt shape popup identifies WAVE and all five named shapes",
+                                     !strcmp(midi_popup.notice.desc->label,"WAVE") &&
+                                     !strcmp(midi_popup.notice.desc->names[want],wave_name[point]));
             }
         }
     }
     host_preset(&trk[1],0,0); events_block(CTL);
-    queued(0xB1,19,83,2); queued(0xB1,21,0,2); queued(0x8F,36,0,2);
-    queued(0xB1,19,127,2); queued(0xB1,21,127,2);
-    const param_desc_t *edit2=track_desc(&trk[1],P_E1);
-    bad+=check("Alt release restores top 1 master filter and top 2 EDIT parameter without changing LFO",
+    queued(0xB1,19,83,2); queued(0xB1,21,0,2); queued(0xB1,22,32,2); queued(0x8F,36,0,2);
+    queued(0xB1,19,127,2); queued(0xB1,21,127,2); queued(0xB1,22,127,2);
+    const param_desc_t *edit2=track_desc(&trk[1],P_E1), *edit3=track_desc(&trk[1],P_E2);
+    bad+=check("Alt release restores top 1 master and top 2/3 EDIT parameters without changing LFO",
                perf_k[0]==100 && trk[1].p[P_E1]==param_fit(edit2,edit2->max) &&
-               trk[1].p[P_LRATE]==83 && trk[1].p[P_LD_FLT]==-64);
+               trk[1].p[P_E2]==param_fit(edit3,edit3->max) &&
+               trk[1].p[P_LRATE]==83 && trk[1].p[P_LD_FLT]==-64 && trk[1].p[P_LWAVE]==1);
     queued(0x9F,36,100,1); host_preset(&trk[2],ENGI_FM6,0);
     song.g[G_ROUTE]=1; song.sel=2; events_block(CTL);
-    int16_t other_rate=trk[0].p[P_LRATE], other_depth=trk[0].p[P_LD_FLT];
-    queued(0xB8,19,45,1); queued(0xB8,21,64,2);
+    int16_t other_rate=trk[0].p[P_LRATE], other_depth=trk[0].p[P_LD_FLT], other_wave=trk[0].p[P_LWAVE];
+    queued(0xB8,19,45,1); queued(0xB8,21,64,2); queued(0xB8,22,95,1);
     bad+=check("Alt filter LFO follows SEL routing, including FM6",
-               trk[2].p[P_LRATE]==45 && trk[2].p[P_LD_FLT]==0 &&
-               trk[0].p[P_LRATE]==other_rate && trk[0].p[P_LD_FLT]==other_depth);
+               trk[2].p[P_LRATE]==45 && trk[2].p[P_LD_FLT]==0 && trk[2].p[P_LWAVE]==3 &&
+               trk[0].p[P_LRATE]==other_rate && trk[0].p[P_LD_FLT]==other_depth && trk[0].p[P_LWAVE]==other_wave);
     song.g[G_ROUTE]=0; events_block(CTL); midi_notice_pending=0;
-    queued(0xB8,19,127,1); queued(0xB8,21,127,2);
+    queued(0xB8,19,127,1); queued(0xB8,21,127,2); queued(0xB8,22,127,1);
     bad+=check("CH1-4 ignores unsupported Alt filter LFO channels without popup",
-               trk[2].p[P_LRATE]==45 && trk[2].p[P_LD_FLT]==0 && !midi_notice_pending);
-    int16_t saved[NPART][2];
-    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<2;k++) saved[ch][k]=trk[ch].p[id[k]];
+               trk[2].p[P_LRATE]==45 && trk[2].p[P_LD_FLT]==0 && trk[2].p[P_LWAVE]==3 && !midi_notice_pending);
+    int16_t saved[NPART][3];
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<3;k++) saved[ch][k]=trk[ch].p[id[k]];
     project_capture(&proj_scratch);
-    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<2;k++) trk[ch].p[id[k]]=0;
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<3;k++) trk[ch].p[id[k]]=0;
     project_restore_runtime(&proj_scratch);
     int restored=1;
-    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<2;k++) restored &= trk[ch].p[id[k]]==saved[ch][k];
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<3;k++) restored &= trk[ch].p[id[k]]==saved[ch][k];
     bad+=check("project/autosave capture restores Alt filter LFO settings",restored);
     midi_test_reset(); host_preset(&trk[0],0,0); events_block(CTL);
-    trk[0].p[P_LRATE]=23; trk[0].p[P_LD_FLT]=7; song.sel=0; song.rec=1;
+    trk[0].p[P_LRATE]=23; trk[0].p[P_LD_FLT]=7; trk[0].p[P_LWAVE]=1; song.sel=0; song.rec=1;
     seq_start(); seq_tick(&trk[0],CTL); queued(0x9F,36,100,2);
-    queued(0xB0,19,92,2); queued(0xB0,21,0,2);
-    bad+=check("Alt filter LFO records rate and signed depth while preserving motion bases",
-               motion.count==2u && motion.event[0].param==P_LRATE && motion.event[0].value==92 &&
+    queued(0xB0,19,92,2); queued(0xB0,21,0,2); queued(0xB0,22,127,2);
+    bad+=check("Alt filter LFO records rate, signed depth and shape while preserving motion bases",
+               motion.count==3u && motion.event[0].param==P_LRATE && motion.event[0].value==92 &&
                motion.event[1].param==P_LD_FLT && motion.event[1].value==-64 &&
-               motion_base_value(&trk[0],P_LRATE)==23 && motion_base_value(&trk[0],P_LD_FLT)==7);
+               motion.event[2].param==P_LWAVE && motion.event[2].value==4 &&
+               motion_base_value(&trk[0],P_LRATE)==23 && motion_base_value(&trk[0],P_LD_FLT)==7 && motion_base_value(&trk[0],P_LWAVE)==1);
     seq_stop();
-    bad+=check("stopping Alt filter LFO automation restores the saved patch values",trk[0].p[P_LRATE]==23 && trk[0].p[P_LD_FLT]==7);
+    bad+=check("stopping Alt filter LFO automation restores the saved patch values",trk[0].p[P_LRATE]==23 && trk[0].p[P_LD_FLT]==7 && trk[0].p[P_LWAVE]==1);
     midi_test_reset(); return bad;
 }
 static int shifted_adsr_test(void)
