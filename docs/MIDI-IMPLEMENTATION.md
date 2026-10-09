@@ -24,11 +24,13 @@ With FM-1 **ROUT = CH1-4**, keyboard MIDI channels 1–4 address tracks 1–4.
 | Faders 1–4 | Fixed volumes for tracks 1–4, with finer upper-range travel |
 | Main encoder click | Cycle the displayed track 1 → 2 → 3 → 4 → 1; keyboard channel stays unchanged |
 | Main encoder | Previous/next factory or saved user preset within the current engine |
-| Shift + main encoder | Previous/next visible sound engine; loads its first factory preset |
+| Arturia Shift + main encoder | Previous/next visible sound engine; loads its first factory preset |
 | Modulation strip | Vibrato depth on the keyboard channel |
 | Pitch strip | Existing pitch bend on the keyboard channel |
 | A-bank pad 1 | Held Shift modifier |
 | A-bank pads 2–8 | Momentary repeat 1/16, 1/32, reverse, tape stop, freeze, octave up/down |
+| Pad Shift + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time; DRUM unassigned |
+| Pad Shift + top knobs 1–4 / pads 2–7 | Reserved |
 | Shift + pad 8 | Tap tempo |
 | Shift + faders 1–4 | Combined track delay + reverb amount |
 
@@ -45,6 +47,10 @@ Use the correct DIN-to-TRS adapter for the FM-1 input and supply power to both d
 - CC20–27 expose all eight engine EDIT parameters, scaled to their own signed or enum ranges.
 - CC28–31 follow the engine's four HOME knob assignments. The supplied MiniLab preset uses
   CC28–30 for its first three bottom knobs and CC76 for its fourth.
+- While A-bank pad 1 is held, those CC28/29/30/76 messages edit attack/decay/sustain/release
+  on the MIDI-addressed synth track. FM6 instead maps them to algorithm/feedback/modulator
+  ratio/modulator envelope time; higher envelope-time values make envelopes longer.
+  DRUM leaves shifted knobs unassigned.
 - Normal CC7 on channels 1–4 targets the corresponding track's volume, including ROUT SEL.
   While A-bank pad 1 is held, it writes that track’s delay and reverb amounts together.
   Other parameter controls follow the existing ROUT setting. CH1-4 ignores channels 5–16,
@@ -84,8 +90,8 @@ automation timeouts. Direct DIN/audio performance still needs hands-on verificat
 Follow [BUILDING.md](../BUILDING.md) for the JieLi toolchain and SDK. For this build:
 
 ```sh
-./build.sh --release 1.0.5.2-midi10
-python3 tools/fm1_install.py build/felucca-1.0.5.2-midi10.fwsc
+./build.sh --release 1.0.5.2-midi17
+python3 tools/fm1_install.py build/felucca-1.0.5.2-midi17.fwsc
 ```
 
 Back up projects and presets before flashing. The custom release archive includes the
@@ -96,7 +102,7 @@ Original copyrights, GPL-3.0-only licensing and third-party attribution are reta
 
 ### Momentary A-bank effects
 
-Pads 1–8 hold repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up and octave down. They send Gate notes 36–43 on fixed channel 16, intercepted before track routing. They never sound notes and ignore FX LATCH. A separate MIDI hold mask preserves local FX keys when pads release. The last held buffer effect wins; channel 16 panic/reset clears MIDI holds. B-bank retains ordinary notes.
+Pad 1 is the held Shift modifier. Normal pads 2–8 hold repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up and octave down. The eight pads send Gate notes 36–43 on fixed channel 16, intercepted before track routing. They never sound notes and ignore FX LATCH. A separate MIDI hold mask preserves local FX keys when pads release. The last held buffer effect wins; channel 16 panic/reset clears MIDI holds. B-bank pads 1–2 switch setlist songs, 3–4 retain ordinary notes and 5–8 provide transport/tap.
 
 ### Fader taper and controller feedback
 
@@ -184,7 +190,7 @@ Validation: all C host checks passed, including drum controls, clipping/DC/retri
 ### midi15 pad modifier
 
 A-bank pad 1 (channel 16 note 36) is a held modifier, colored cyan (MiniLab color 13).
-Shift + pad 8 (note 43) queues the existing tap-tempo command. Shifted pads 2–7 and the eight mapped knobs are reserved.
+Shift + pad 8 (note 43) queues the existing tap-tempo command. midi15 initially reserved shifted pads 2–7 and all eight mapped knobs; midi17 assigns the bottom four knobs below.
 Shifted fixed-channel CC7 faders set that track’s delay and reverb sends together, without changing its volume.
 On DRUM these are track defaults; existing per-lane send overrides remain independent.
 A track popup labels the combined control DELAY + REVERB. No new effect DSP, project format or sample storage is required.
@@ -207,3 +213,25 @@ Rim-drive and cowbell-strike envelope products now widen before shifting, preven
 New independent sound checks require the 808 kick to be lower and longer than CR78, CR78 maracas to be darker than its closed hat, and the bell spectra to differ after gain normalization. Dry single-lane demos and complete beat renders are generated in `build/drum_demo/`. Only the two preset and two model-kit golden hashes change; all 349 other renders stay bit-identical.
 
 Validation: full host suite passed, followed by final drum, 353-render regression and target-cost checks after the arithmetic fixes. The 808/CR78 signed-overflow sanitizer passes all tested control corners. Target drum loop cost is 83 against budget 86; image 447464 bytes, static RAM 94384/98304 and pool 330208/344064. Emscripten and DaisySP reference checks were unavailable. Separate legacy validation debt: the unchanged KIT66 snare can overflow its noise-gain product at extreme settings; the release-scoped sanitizer does not claim all other kits are overflow-free.
+
+### midi17 Pad Shift sound controls
+
+With A-bank pad 1 held, the MiniLab bottom row uses the addressed track’s existing
+parameters through the normal MIDI routing and parameter-edit path:
+
+| Knob / CC | Standard synth | FM6 |
+| --- | --- | --- |
+| 5 / CC28 | P_ATK: attack | P_E0: algorithm |
+| 6 / CC29 | P_DEC: decay | P_E1: feedback |
+| 7 / CC30 | P_SUS: sustain | P_E3: modulator ratio |
+| 8 / CC76 | P_REL: release | P_E4: modulator envelope time |
+
+Higher FM6 envelope time values lengthen the modulator envelopes. These are existing
+FM6 macros; the mapping adds no new DSP or envelopes. DRUM shifted knobs are unassigned.
+Releasing pad 1 restores HOME 1–3 and LFO speed (or selected-drum volume).
+Shifted top knobs 1–4 and pads 2–7 remain reserved. Shifted faders still set track delay +
+reverb, and shifted pad 8 still taps tempo.
+The MiniLab preset file and its stored controller assignments are unchanged. The editor’s
+MiniLab page separates normal knobs from the Pad Shift layer.
+
+Validation: midi17 full host suite passed. USB/DIN tests cover channel isolation, SEL routing, ADSR endpoints, FM6 signed/enum ranges and neutral values, exact popup targets, normal-layer restoration, DRUM no-ops, motion capture and project roundtrip. All 353 golden sound renders are unchanged. Target image 447596 bytes; main RAM 94384/98304 and pool 330208/344064 remain unchanged. No controller preset update is needed.

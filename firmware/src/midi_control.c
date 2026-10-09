@@ -302,8 +302,18 @@ static int midi_parameter_cc(uint32_t ch, uint32_t cc, uint32_t value)
     uint32_t id;
     if (midi_pad_shift) {
         static const uint8_t knobs[8]={19,21,22,23,28,29,30,76};
-        /* Shifted knobs are reserved until their assignments are chosen. */
-        for (uint32_t k=0;k<8;k++) if (cc==knobs[k]) return 1;
+        for (uint32_t k=0;k<8;k++) if (cc==knobs[k]) {
+            /* Bottom row follows ENV, or FM6's operator-crafting macros.
+             * The top row and DRUM's shifted knobs remain reserved. */
+            const engine_t *e=ENGINES[t->eng_req % NENGINES];
+            if (k>=4u && !e->oneshot && (!e->ownenv || t->eng_req==ENGI_FM6)) {
+                static const uint8_t fm6[4]={P_E0,P_E1,P_E3,P_E4};
+                id=t->eng_req==ENGI_FM6 ? fm6[k-4u] : P_ATK+k-4u;
+                midi_parameter(t,id,value);
+                midi_notify(t,track_desc(t,id),t->p[id],0);
+            }
+            return 1;
+        }
         if (cc==7u && ch<NPART) {
             t=&trk[ch];
             /* One track-wide macro, including on drums. */

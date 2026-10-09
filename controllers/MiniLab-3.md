@@ -1,12 +1,12 @@
 # MiniLab 3 — standalone Felucca MIDI
 
-Use the custom `felucca-1.0.5.2-midi16.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi17.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
 | Main encoder click | Cycle the displayed track 1 → 2 → 3 → 4 → 1 (CC115 Gate) |
 | Main encoder | Previous/next preset in current engine, on keyboard channel (CC114 relative 64) |
-| Shift + main encoder | Previous/next sound engine, on keyboard channel (CC112 relative 64); loads first preset |
+| Arturia Shift + main encoder | Previous/next sound engine, on keyboard channel (CC112 relative 64); loads first preset |
 | Top knob 1 | CC19; master DJ filter: left low-pass, centre bypass, right high-pass |
 | Top knobs 2–4 | CC21–23; engine EDIT parameters 2–4 on keyboard channel |
 | Bottom knobs 5–7 | CC28–30; FM-1 HOME knobs 1–3 for the current engine, on keyboard channel |
@@ -14,7 +14,13 @@ Use the custom `felucca-1.0.5.2-midi16.fwsc` firmware and `Felucca.minilab3` pre
 | Faders 1–4 | CC7; fixed MIDI channels 1–4; track volumes with finer upper-range travel |
 | Mod strip | CC1 on keyboard channel; vibrato |
 | Pitch strip | Pitch bend on keyboard channel |
-| A-bank pads 1–8 | Hold for repeat 1/8, repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
+| A-bank pad 1 | Hold for Pad Shift; cyan |
+| A-bank pads 2–8 | Hold for repeat 1/16, repeat 1/32, reverse, tape stop, freeze, octave up, octave down |
+| Pad Shift + bottom knobs 5–8 | Synth ADSR; FM6 algorithm / feedback / modulator ratio / modulator envelope time, on keyboard channel |
+| Pad Shift + top knobs 1–4 | Unassigned |
+| Pad Shift + pads 2–7 | Unassigned |
+| Pad Shift + pad 8 | Tap tempo |
+| Pad Shift + faders 1–4 | Track 1–4 delay + reverb together |
 | B-bank pads 1–2 | CC110/111 Gate on channel 16; previous/next setlist song |
 | B-bank pads 3–4 | Factory notes on keyboard channel |
 | B-bank pad 5 / Stop | CC106 Gate; stop transport |
@@ -31,7 +37,7 @@ The bottom row's first three knobs follow the current engine's HOME knob assignm
 
 CC1 adds up to ±0.5 semitone of vibrato using the track's LFO rate, waveform and fade. An explicit active MODW matrix assignment overrides this default. DRUM ignores vibrato. The wheel does not overwrite saved LFO pitch depth.
 
-A-bank pads use Gate notes 36–43 on fixed MIDI channel 16. They affect the whole mix, bypass track routing, and always release on lift regardless of FX LATCH. Buffer effects share memory: the last held pad takes priority; releasing it returns to the previous held effect. Repeats/reverse start on the next 1/16 while running, immediately while stopped. Channel 16 CC120/121/123 clears held pads. Other notes on channel 16 remain subject to normal ROUT.
+A-bank pads use Gate notes 36–43 on fixed MIDI channel 16. Pad 1 is Shift; normal pads 2–8 affect the whole mix, bypass track routing, and always release on lift regardless of FX LATCH. Buffer effects share memory: the last held pad takes priority; releasing it returns to the previous held effect. Repeats/reverse start on the next 1/16 while running, immediately while stopped. Channel 16 CC120/121/123 clears held pads. Other notes on channel 16 remain subject to normal ROUT.
 
 Additional direct CCs: pan 10; sustain level 70; release 72; attack 73; decay 75; LFO rate 76; distortion 90; reverb 91; chorus 93; delay 94. All follow ROUT, except CC7 on channels 1–4 always controls the corresponding track volume. CH1-4 ignores channels 5–16 except the dedicated channel 16 pad notes and pad panic/reset.
 
@@ -99,7 +105,18 @@ For longer patterns, set **SEQ → PATTERN → LEN** to 32, 48 or 64 (any length
 ## Pad Shift layer
 
 Hold cyan A-bank pad 1 for a second layer; it replaces repeat 1/8.
-Shift + pad 8 taps tempo. Shift + pads 2–7 and knobs are reserved and do nothing.
+Shift + bottom knobs 5–8 follow the keyboard MIDI channel:
+
+| Knob | Synths | FM6 |
+| --- | --- | --- |
+| 5 | Attack | Algorithm |
+| 6 | Decay | Feedback |
+| 7 | Sustain | Modulator ratio |
+| 8 | Release | Modulator envelope time |
+
+Higher FM6 envelope time values mean slower envelopes. DRUM shifted knobs are unassigned.
+Shift + pad 8 taps tempo. Shift + pads 2–7 and top knobs 1–4 are reserved and do nothing.
 Shift + faders 1–4 control the corresponding track’s delay + reverb together; normal faders stay track volumes.
+This layer uses A-bank pad 1, not the MiniLab’s Arturia Shift button. The controller preset is unchanged from midi16.
 The editor’s MiniLab tab shows the full layout, even without a connected device.
 Release ownership follows each pad’s press layer, so releasing Shift first cannot stick an effect.

@@ -91,8 +91,8 @@ static int pad_shift_test(void)
     int bad=0; midi_test_reset(); perf_midi_held=0;
     queued(0x9F,36,100,2);
     bad+=check("pad 1 holds Shift without triggering FX or a note",midi_pad_shift && !perf_midi_held && !midi_notes[15][36]);
-    const uint8_t knobs[8]={19,21,22,23,28,29,30,76};
-    for (uint32_t k=0;k<8;k++) {
+    const uint8_t knobs[4]={19,21,22,23};
+    for (uint32_t k=0;k<4;k++) {
         int16_t before[P_COUNT]; memcpy(before,trk[1].p,sizeof before);
         queued(0xB1,knobs[k],127,2);
         bad+=check("reserved shifted knobs leave sound unchanged",!memcmp(before,trk[1].p,sizeof before));
@@ -115,6 +115,103 @@ static int pad_shift_test(void)
     bad+=check("panic clears held modifier and pad layers",!midi_pad_shift && !midi_pad_down && !midi_pad_layer);
     queued(0x9F,36,100,2); midi_in_overflow=1; events_block(CTL);
     bad+=check("MIDI overflow cannot leave Shift held",!midi_pad_shift && !midi_pad_down);
+    midi_test_reset(); return bad;
+}
+static int shifted_adsr_test(void)
+{
+    const uint8_t cc[4]={28,29,30,76};
+    int bad=0;
+    midi_test_reset();
+    for (uint32_t ch=0;ch<NPART;ch++) host_preset(&trk[ch],0,0);
+    queued(0x9F,36,100,2);
+    for (uint32_t ch=0;ch<NPART;ch++) {
+        song.sel=(ch+1u)%NPART;                         /* screen selection must not steal the channel */
+        for (uint32_t k=0;k<4;k++) for (uint32_t endpoint=0;endpoint<2;endpoint++) {
+            int16_t expected[NPART][P_COUNT];
+            for (uint32_t tr=0;tr<NPART;tr++) memcpy(expected[tr],trk[tr].p,sizeof expected[tr]);
+            expected[ch][P_ATK+k]=(int16_t)(endpoint*127u);
+            queued(0xB0|ch,cc[k],endpoint*127u,(ch&1u)+1u);
+            midi_ui_poll();
+            int same=1;
+            for (uint32_t tr=0;tr<NPART;tr++) same &= !memcmp(expected[tr],trk[tr].p,sizeof expected[tr]);
+            bad+=check("Shift ADSR reaches only the addressed envelope parameter at both endpoints",same);
+            bad+=check("Shift ADSR popup identifies the actual track and envelope control",
+                       midi_popup.notice.track==ch && midi_popup.notice.desc==track_desc(&trk[ch],P_ATK+k) &&
+                       midi_popup.notice.value==(int32_t)(endpoint*127u) && midi_popup.notice.kind==0);
+        }
+    }
+    queued(0x8F,36,0,2);
+    queued(0xB1,76,73,2);
+    bad+=check("releasing Shift restores normal knob 8 LFO control without changing release",
+               trk[1].p[P_LRATE]==73 && trk[1].p[P_REL]==127);
+    queued(0x9F,36,100,1); song.g[G_ROUTE]=1; song.sel=2; events_block(CTL);
+    queued(0xB8,28,37,1);
+    bad+=check("Shift ADSR follows the selected track in SEL routing",trk[2].p[P_ATK]==37 && trk[0].p[P_ATK]==127);
+    song.g[G_ROUTE]=0; events_block(CTL); queued(0xB8,28,99,1);
+    bad+=check("CH1-4 ignores unsupported channels for Shift ADSR",trk[2].p[P_ATK]==37);
+    {
+        host_preset(&trk[0],ENGI_DRUM,0); events_block(CTL);
+        int16_t before[P_COUNT]; memcpy(before,trk[0].p,sizeof before); midi_notice_pending=0;
+        for (uint32_t k=0;k<4;k++) queued(0xB0,cc[k],91+k,2);
+        bad+=check("DRUM ignores Shift ADSR without changing normal targets or showing false feedback",
+                   !memcmp(before,trk[0].p,sizeof before) && !midi_notice_pending);
+    }
+    midi_test_reset(); trk[0].p[P_ATK]=23; song.sel=0; song.rec=1;
+    seq_start(); seq_tick(&trk[0],CTL); queued(0x9F,36,100,2); queued(0xB0,28,92,2);
+    bad+=check("Shift ADSR records motion through the existing envelope path",
+               motion.count==1u && motion.event[0].param==P_ATK && motion.event[0].value==92 && motion_base_value(&trk[0],P_ATK)==23);
+    seq_stop(); midi_test_reset(); return bad;
+}
+static int shifted_fm6_test(void)
+{
+    const uint8_t cc[4]={28,29,30,76}, id[4]={P_E0,P_E1,P_E3,P_E4};
+    const uint8_t input[3]={0,64,127};
+    /* Explicit design ranges, including ALG's 0 = patch algorithm and bipolar neutral at CC64. */
+    const int16_t value[4][3]={{0,16,32},{-7,0,7},{-16,0,16},{-64,0,63}};
+    int bad=0;
+    midi_test_reset();
+    for (uint32_t ch=0;ch<NPART;ch++) host_preset(&trk[ch],ENGI_FM6,0);
+    events_block(CTL); queued(0x9F,36,100,2);
+    for (uint32_t ch=0;ch<NPART;ch++) {
+        song.sel=(ch+1u)%NPART;
+        for (uint32_t k=0;k<4;k++) for (uint32_t point=0;point<3;point++) {
+            int16_t expected[NPART][P_COUNT];
+            for (uint32_t tr=0;tr<NPART;tr++) memcpy(expected[tr],trk[tr].p,sizeof expected[tr]);
+            expected[ch][id[k]]=value[k][point];
+            queued(0xB0|ch,cc[k],input[point],(ch&1u)+1u); midi_ui_poll();
+            int same=1;
+            for (uint32_t tr=0;tr<NPART;tr++) same &= !memcmp(expected[tr],trk[tr].p,sizeof expected[tr]);
+            bad+=check("FM6 Shift ALG/FB/MRAT/MEG respect endpoint/neutral ranges and change only the addressed parameter",same);
+            bad+=check("FM6 Shift popup identifies actual MIDI track, macro descriptor and signed value",
+                       midi_popup.notice.track==ch && midi_popup.notice.desc==track_desc(&trk[ch],id[k]) &&
+                       midi_popup.notice.value==value[k][point] && midi_popup.notice.kind==0);
+        }
+    }
+    queued(0x8F,36,0,2);
+    const uint8_t home[4]={P_E2,P_E3,P_E4,P_LRATE};
+    const int16_t home_value[4]={0,0,0,64};
+    for (uint32_t k=0;k<4;k++) {
+        int16_t expected[NPART][P_COUNT];
+        for (uint32_t tr=0;tr<NPART;tr++) memcpy(expected[tr],trk[tr].p,sizeof expected[tr]);
+        expected[1][home[k]]=home_value[k];
+        queued(0xB1,cc[k],64,2);
+        int same=1;
+        for (uint32_t tr=0;tr<NPART;tr++) same &= !memcmp(expected[tr],trk[tr].p,sizeof expected[tr]);
+        bad+=check("FM6 Shift release restores original HOME/LFO targets without leaking to other parameters",same);
+    }
+    queued(0x9F,36,100,1); song.g[G_ROUTE]=1; song.sel=2; events_block(CTL);
+    queued(0xB8,29,0,1);
+    bad+=check("FM6 Shift follows SEL routing",trk[2].p[P_E1]==-7 && trk[0].p[P_E1]==7);
+    song.g[G_ROUTE]=0; events_block(CTL); queued(0xB8,29,127,1);
+    bad+=check("CH1-4 rejects unsupported channels for FM6 Shift",trk[2].p[P_E1]==-7);
+    int16_t saved[NPART][4];
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<4;k++) saved[ch][k]=trk[ch].p[id[k]];
+    project_capture(&proj_scratch);
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<4;k++) trk[ch].p[id[k]]=0;
+    project_restore_runtime(&proj_scratch);
+    int restored=1;
+    for (uint32_t ch=0;ch<NPART;ch++) for (uint32_t k=0;k<4;k++) restored &= trk[ch].p[id[k]]==saved[ch][k];
+    bad+=check("project/autosave capture restores FM6 shifted macros on all four tracks",restored);
     midi_test_reset(); return bad;
 }
 static int pads_test(void)
@@ -645,7 +742,7 @@ static int transport_controls_test(void)
 
 int main(void)
 {
-    int bad = pad_shift_test() + drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
+    int bad = shifted_adsr_test() + shifted_fm6_test() + pad_shift_test() + drum_controls_test() + transport_controls_test() + controller_feedback_test() + pads_test() + controls_test() + sustain_test() + ownership_test() + clock_test(1) + clock_test(2) + clock_arp_and_boundaries() +
               arp_ext_stop_test() + usb_burst_test() + route_test() + standalone_cc_test() + browse_test() + home_knob_test() + master_filter_test();
     printf("%s\n", bad ? "MIDI CONTROL/CLOCK TEST FAILED" : "MIDI control/clock integration tests passed"); return bad != 0;
 }
