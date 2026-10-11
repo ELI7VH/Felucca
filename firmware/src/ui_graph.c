@@ -1361,6 +1361,50 @@ static void graph_scope(uint16_t c)
     }
 }
 
+/* HOME: the four tracks at once, one lane each (fx.c scope_tap), so the track making the sound is seen at a
+ * glance. A lane scales to its own peak, but at most 12 dB above the loudest lane's scale: a quiet track
+ * stays small beside a loud one and a silent one is its centre line. The selected track in the theme colour. */
+static void graph_scope4(uint16_t c)
+{
+    static int16_t snap[NTRK][TSCOPE_N] __attribute__((section(".pool")));
+    int32_t pk[NTRK], top = 1500, lh = (int32_t)cv_h / (int32_t)NTRK, a = lh / 2 - 2, lab = lh >= 16, x0 = PANEL_X0 + (lab ? 12 : 0);
+    uint32_t k, i;
+    for (k = 0; k < NTRK; k++) {
+        uint32_t w = trk_scope_w[k];
+        pk[k] = 0;
+        for (i = 0; i < TSCOPE_N; i++) {
+            int32_t v = snap[k][i] = trk_scope[k][(w + i) & (TSCOPE_N - 1u)];
+            if (v < 0) v = -v;
+            if (v > pk[k]) pk[k] = v;
+        }
+        if (pk[k] > top) top = pk[k];
+    }
+    for (k = 0; k < NTRK; k++) {
+        int32_t cy = lh * (int32_t)k + lh / 2, py = cy, x, n = PANEL_X0 + PANEL_W - x0, peak = pk[k] > top / 4 ? pk[k] : top / 4;
+        uint32_t trig = 0;
+        uint16_t col = k == song.sel ? c : T_MID;
+        char b[4];
+        for (i = 1; i < TSCOPE_N - (uint32_t)n; i++)
+            if (snap[k][i - 1] < 0 && snap[k][i] >= 0) {
+                trig = i;
+                break;
+            }
+        if (lab) {
+            fmt_int(b, (int32_t)k + 1);
+            cv_text_on(PANEL_X0 - 2, cy - 7, &AF_S, b, pk[k] > 64 ? col : T_DIM, T_SURF);
+        }
+        cv_rect(x0, cy, n, 1, T_RAISE);
+        if (pk[k] <= 64)
+            continue;
+        for (x = 0; x < n; x++) {
+            int32_t y = cy - snap[k][trig + (uint32_t)x] * a / peak;
+            if (x)
+                cv_line_t(x0 - 1 + x, py, x0 + x, y, col, 2);
+            py = y;
+        }
+    }
+}
+
 /* SONG is a playing order of the four stored project patterns. Letters match
  * PROJECT A..D; loading a project still restores its sound, SONG borrows steps. */
 static void graph_setlist(void)
@@ -1429,7 +1473,7 @@ static void draw_graph(void)
         uint32_t k = strip_kind();
         cv_oy = k == SK_ADSR || k == SK_LFO ? 3 : 0;
         graph_ht = LG_H_GRAPH - 6;
-        if (k == SK_SCOPE) graph_scope(c);
+        if (k == SK_SCOPE) graph_scope4(c);
         else if (k == SK_ADSR) graph_adsr(t, c);
         else if (k == SK_LFO) graph_lfo(t, c);
         else if (k == SK_STEPS) graph_steps(t, c);
@@ -1437,7 +1481,7 @@ static void draw_graph(void)
         graph_ht = 100;
     } else if (ui.home) {
         cv_oy = 0;
-        graph_scope(c);
+        graph_scope4(c);
     } else {
         switch (pg->graph) {
         case GR_ADSR:

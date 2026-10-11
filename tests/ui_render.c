@@ -585,6 +585,12 @@ static void state(void)                          /* a playing song with steps on
     for (i = 0; i < SCOPE_N; i++)                 /* a stand-in signal for the scope */
         scope_buf[i] = (int16_t)((int32_t)((i * 37u) % 128u) * 200 - 12800 + (int32_t)((i % 32u) < 16u ? 3000 : -3000));
     scope_w = 0;
+    for (i = 0; i < TSCOPE_N; i++) {              /* the four lanes: loud, medium, silent, quiet */
+        trk_scope[0][i] = (int16_t)((int32_t)((i % 48u) < 24u ? 9000 : -9000));
+        trk_scope[1][i] = (int16_t)((int32_t)(i % 32u) * 250 - 4000);
+        trk_scope[2][i] = 0;
+        trk_scope[3][i] = (int16_t)((int32_t)(i % 16u) * 100 - 800);
+    }
 }
 static void drum(uint32_t kit)
 {
@@ -656,6 +662,12 @@ static void mock_state(int s)
         scope_buf[i] = (int16_t)((ph * 2.0 - 1.0) * 9000.0 + sin(i * 0.4908) * 2500.0);
     }
     scope_w = 0;
+    for (i = 0; i < TSCOPE_N; i++) {                 /* the four lanes: loud, medium, silent, quiet */
+        trk_scope[0][i] = (int16_t)((fmod(i / 64.0, 1.0) * 2.0 - 1.0) * 9000.0);
+        trk_scope[1][i] = (int16_t)(sin(i * 0.2454) * 4000.0);
+        trk_scope[2][i] = 0;
+        trk_scope[3][i] = (int16_t)(sin(i * 0.4908) * 800.0);
+    }
     song.playing = 1;
     song.g[G_BPM] = 124;
     for (i = 0; i < NTRK; i++) trk[i].seq_idx = 5;

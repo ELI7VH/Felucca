@@ -341,6 +341,20 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
 static void events_block(uint32_t n);                    /* seq.c */
 static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_r[CTL];
 
+/* HOME's four-lane scope (ui_graph.c): each track after its level, every other sample, as the master's
+ * scope_buf (audio.c). 256 per track: a lane's 208 px and a short trigger search. */
+#define TSCOPE_N 256u
+static int16_t trk_scope[NTRK][TSCOPE_N] __attribute__((section(".pool")));
+static uint8_t trk_scope_w[NTRK];                        /* (wraps at TSCOPE_N) */
+static __attribute__((noinline)) void scope_tap(uint32_t k, const int32_t *b, uint32_t n, int32_t lvl)
+{
+    int16_t *d = trk_scope[k];
+    uint32_t w = trk_scope_w[k], i;
+    for (i = 1; i < n; i += 2u, w++)
+        d[w & (TSCOPE_N - 1u)] = b ? (int16_t)clamp(((b[i] >> 2) * lvl) >> 10, -32767, 32767) : 0;
+    trk_scope_w[k] = (uint8_t)w;
+}
+
 static int32_t drum_dist_state[NTRK][NLANE][3];
 /* Separate lane buses retain pan/send differences; the existing track fader
  * scales all lanes together. Chorus/delay/reverb remain shared return buses. */
@@ -379,6 +393,7 @@ static __attribute__((noinline)) void mix_drum_lanes(track_t *t, uint32_t n)
         int32_t x=(((sum[i]-original[i])>>2)*level)>>10;
         mix_l[i]+=(x*gl)>>12; mix_r[i]+=(x*gr)>>12;
     }
+    scope_tap(k,sum,n,level);
     t->peak=pk;
 }
 
@@ -407,6 +422,7 @@ static void mix_part(track_t *t, uint32_t n)
         t->tail = 16;                                   /* blocks of DIST state to run out after the last voice */
     else if ((!t->tail || (!t->p[P_DIST] && !drum_mix_enabled) || !--t->tail) && !slicer_busy(t)) {
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
+        scope_tap((uint32_t)(t - trk), 0, n, 0);        /* a silent lane */
         goto done;
     }
     if (drum_mix_enabled) {
@@ -437,6 +453,7 @@ static void mix_part(track_t *t, uint32_t n)
             mix_l[i] += (x * gl) >> 12;
             mix_r[i] += (x * gr) >> 12;
         }
+        scope_tap((uint32_t)(t - trk), b, n, lvl);
         t->peak = pk;
     }
 done:
