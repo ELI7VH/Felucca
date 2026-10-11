@@ -93,8 +93,8 @@ def main(pkg, version, out):
     (out/".nojekyll").touch()
     (out / "index.html").write_text(
         '<!doctype html><meta charset="utf-8"><title>WaveLoop Kit</title>'
-        '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-        '<a href="webapp/installer/">WaveLoop Kit installer</a>\n', encoding="utf-8")
+        '<meta http-equiv="refresh" content="0; url=mod/">'
+        '<a href="mod/">WaveLoop Kit</a>\n', encoding="utf-8")
     print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
 
 
