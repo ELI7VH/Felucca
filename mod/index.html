@@ -1,12 +1,46 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WaveLoop Kit · MiniLab 3</title>
-<style>body{max-width:720px;margin:40px auto;padding:0 20px;font:18px/1.5 system-ui;background:#101211;color:#eef2ed}a{color:#a9efb6}h1,h2{line-height:1.2}li{margin:10px 0}nav{display:flex;gap:20px;flex-wrap:wrap}table{border-collapse:collapse;width:100%;font-size:16px}td,th{padding:12px 8px;border-bottom:1px solid #454945;text-align:left}small{color:#adb5ad}</style>
-<nav><a href="../webapp/installer/">Install firmware</a><a href="../webapp/editor/">Open editor</a><a href="../controllers/Felucca.minilab3" download>MiniLab preset</a></nav>
-<h1>WaveLoop Kit</h1><p>An FM-1 instrument mod for the MiniLab 3. Plug in over DIN MIDI and play without a computer.</p>
+<meta name="description" content="WaveLoop Kit: an FM-1 mod for the MiniLab 3. Record in Choppa and send your pads to the FM-1.">
+<link rel="stylesheet" href="../webapp/editor/brand/ultrakit.css">
+<style>
+@font-face{font-family:"Micro 5";src:url("../webapp/editor/brand/Micro5-Regular.woff2") format("woff2");font-display:swap}
+@font-face{font-family:"Finlandica";src:url("../webapp/editor/brand/Finlandica.woff2") format("woff2");font-weight:400 700;font-display:swap}
+*{box-sizing:border-box;border-radius:0}
+body{max-width:760px;margin:0 auto;padding:28px 16px 48px;font:17px/1.5 var(--uk-font-body);background:var(--uk-ground);color:var(--uk-text)}
+a{color:var(--uk-primary-hi);text-underline-offset:.2em}
+:focus-visible{outline:2px solid var(--uk-primary-top);outline-offset:3px}
+h1{font:64px/.85 var(--uk-font-brand);text-transform:uppercase;letter-spacing:.02em;margin:0 0 6px}
+h1 span{color:var(--uk-muted)}
+h2{font-size:20px;line-height:1.2;margin:36px 0 10px}
+li{margin:8px 0}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}
+nav a,.go{display:inline-block;padding:9px 14px;background:var(--uk-surface);color:var(--uk-text);text-decoration:none;font-weight:600}
+nav a:hover{background:var(--uk-primary-dim)}
+.go{background:var(--uk-primary-top);color:var(--uk-ground)}
+.go:hover{background:var(--uk-primary-hi)}
+.choppa{background:var(--uk-surface);padding:20px;margin:24px 0}
+.choppa h2{font:44px/.9 var(--uk-font-brand);text-transform:uppercase;letter-spacing:.02em;margin:0 0 8px}
+.choppa ol{margin:12px 0 16px;padding-left:22px}
+.choppa p{margin:8px 0}
+.soon{display:inline-block;padding:2px 8px;background:var(--uk-armed);color:var(--uk-ground);font-size:13px;font-weight:700;letter-spacing:.06em}
+table{border-collapse:collapse;width:100%;font-size:16px}
+td,th{padding:10px 8px;text-align:left;vertical-align:top}
+tr:nth-child(even) td{background:var(--uk-surface)}
+th{color:var(--uk-muted);font-weight:400}
+small{color:var(--uk-muted)}
+</style>
+<h1>WaveLoop <span>Kit</span></h1><p>An FM-1 instrument mod for the MiniLab 3. Plug in over DIN MIDI and play without a computer.</p>
+<nav><a class="go" href="../webapp/installer/">Install firmware</a><a href="../webapp/editor/">Open editor</a><a href="../controllers/Felucca.minilab3" download>MiniLab preset</a></nav>
+<section class="choppa" id="choppa"><h2>Choppa → FM-1</h2>
+<p>Record anything on your phone. Choppa chops it into 16 pads. Send the bank straight to an FM-1 track.</p>
+<ol><li>Record a take in Choppa.</li><li>Plug the phone or tablet into the FM-1 with USB-C.</li><li>Hold a bank, choose SEND TO FM-1, pick a track. Listen to how it will sound first.</li></ol>
+<p><span class="soon">COMING IN CHOPPA 1.13</span> The App Store has 1.12 today; Send to FM-1 arrives with the next update.</p>
+<p><a class="go" href="https://apps.apple.com/app/apple-store/id6759894845?pt=126554207&amp;ct=fm1-kit&amp;mt=8">Get Choppa</a></p>
+<p><small>Making your own sender? The sample format and transfer are open: <a href="../docs/EDITOR_PROTOCOL.md">editor protocol</a>.</small></p></section>
 <h2>Problems → solutions</h2>
 <ul><li>Four song slots → <strong>12 complete songs in a setlist.</strong></li><li>Forgetting to save → <strong>current song and setlist order autosave.</strong></li><li>Hard to mix → four track faders with finer control near the top.</li><li>Shared drum edits → separate sound, volume, pan and sends per drum.</li><li>Lost in menus → MIDI parameter popups and encoder track switching.</li></ul>
 <p><a href="../webapp/editor/#minilab">MiniLab mappings</a>: normal and Alt controls.</p>
-<p>Editor → Dev shows memory, storage and performance readouts.</p><h2>Sounds</h2><p>A thin line at the bottom of the FM-1 screen shows your patch’s position in its bank.</p><p>Up to 32 patches per synth bank: basses, pads, keys, leads and textures. Voice has 26 patches with its bass sounds removed. Other patches keep their numbers.</p>
+<p>Editor → Dev shows memory, storage and performance readouts.</p><h2>Sounds</h2><p>From midi24, HOME shows all four tracks at once, one waveform each, so you can see which track is sounding.</p><p>A thin line at the bottom of the FM-1 screen shows your patch’s position in its bank.</p><p>Up to 32 patches per synth bank: basses, pads, keys, leads and textures. Voice has 26 patches with its bass sounds removed. Other patches keep their numbers.</p>
 <ul><li><strong>808:</strong> deeper, longer kick, fuller snare and clap, smoother metallic hats.</li><li><strong>CR78:</strong> dry kick and snare, soft maracas, woody conga, short claves and a rounded bell.</li><li><strong>Yama-bruh:</strong> eight FM kits, from Standard and Brush to Synth and Lo-Fi.</li></ul><p>Choose a kit in the DRUM bank; Yama-bruh kits start with YB. Edit and mix each drum separately.</p><h2>Play</h2><table><tr><th>MiniLab control</th><th>FM-1 action</th></tr><tr><td>Faders 1–4</td><td>Track volumes 1–4</td></tr><tr><td>Top knob 1</td><td>Master filter: low-pass / clean / high-pass</td></tr><tr><td>Top 2–4</td><td>Synth EDIT 2–4; drum pan / reverb / delay</td></tr><tr><td>Bottom 5–8</td><td>Synth HOME 1–3 / LFO speed; drum pitch / tone / decay / volume</td></tr><tr><td>Alt + top 1 / 2 / 3</td><td>Cutoff LFO rate / amount / shape; FM6 brightness</td></tr><tr><td>Alt + bottom 5–8</td><td>Synths: attack / decay / sustain / release<br>FM6: algorithm / feedback / modulator ratio / envelope time</td></tr><tr><td>Encoder / Arturia Shift + encoder</td><td>Preset / sound engine for MIDI channel</td></tr><tr><td>Encoder click</td><td>Cycle displayed track</td></tr><tr><td>Mod strip</td><td>Pitch vibrato</td></tr><tr><td>A-bank pad 1, held</td><td>Alt button</td></tr><tr><td>A-bank pads 2–8, held</td><td>Repeat ×2, reverse, tape stop, freeze, octave up/down</td></tr><tr><td>Alt + pad 8</td><td>Tap tempo</td></tr><tr><td>Alt + faders</td><td>Track delay + reverb</td></tr><tr><td>B-bank pads 1–2</td><td>Previous / next setlist song</td></tr><tr><td>B-bank pads 5–8</td><td>Stop / Play / Record current track / Tap tempo</td></tr></table><p>Hold Alt (cyan A-bank pad 1) for the second layer. Knobs follow the keyboard MIDI channel. LFO rate and shape are shared with vibrato; amount at centre is off, left reverses the motion. The destination varies by engine; WHEEL ignores the amount. Higher FM6 envelope time values mean slower modulator envelopes. Alt + DRUM knobs, Alt + top knob 4 and Alt + pads 2–7 are unassigned.</p><p>LFO shapes: sine, triangle, saw, square and sample-and-hold.</p>
 <h2>Setlist</h2><ul><li>FM-1: SEQ → SETLIST. Knob 1 picks a song; knob 2 moves it. Knobs 3/4 pick Load/Save; OCT+ confirms.</li><li>Save into an empty entry once. Future edits evolve that song automatically.</li><li>Stop and leave five seconds of actual silence. Autosave waits for effect tails and settled edits.</li><li>Song changes wait for silence and save the current song first. Press Play after loading.</li><li>Each song stores tempo, sounds, drum settings, sequences and automation.</li><li>Two user sample slots remain. Slot 3 supplies the extra song storage.</li></ul>
 <h2>Setup</h2><ol><li>Back up your FM-1, then install this mod.</li><li>Import the MiniLab preset in Arturia MIDI Control Center. Store it to User 5 and activate User 5.</li><li>Set FM-1 ROUT to CH1-4. Use MIDI channels 1–4 for the four tracks.</li><li>Use the correct DIN-to-TRS adapter. A computer is only needed for setup.</li></ol>
