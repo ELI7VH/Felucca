@@ -354,6 +354,7 @@ static int ed_flash_stop(void)
 #include "editor_menu.c"
 #include "editor_learn.c"                    /* 1.5: MIDI LEARN's map (cmds 78, 79) */
 #include "editor_palette.c"                  /* 1.6: CUSTOM, the user's palette (cmds 80, 81) */
+#include "editor_zone.c"                     /* live zones: a published slot changed in RAM (cmd 96) */
 
 /* MOTION's reply: the records of track k as (step, id, v14), a lock's id without its MOTION_LOCK bit (a 7-bit SysEx
  * byte); kinds (1.1: the ops 5..7): then one byte per record, in the same order, 0 automation, 1 lock. The query and
@@ -419,6 +420,8 @@ static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
                a[0] < NTRK;
     case ED_SONG:
         return n && (a[0] == 1u || a[0] == 5u || n == 1u);
+    case ED_SMP_ZONE:                              /* (editor_zone.c) */
+        return n >= 2u && a[0] < SMP_USER_SLOTS && a[1] < 16u;
     default:
         return 1;                                  /* variable payloads validate in their handler */
     }
@@ -445,6 +448,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     if (ed_menu_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_learn_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_palette_handle(cmd, a, na)) { ed_send(); return; }
+    if (ed_zone_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
     case ED_MOTION: {
         track_t *t = &trk[a[0]]; uint32_t rc = 0;

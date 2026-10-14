@@ -71,6 +71,13 @@ static void slc_user_scan(uint32_t k, int valid);   /* eng_slice.c: SLICE's slic
 #endif
 static uint32_t smp_user_gen;                       /* + 1 per slot scan (GRAIN: its seek index follows uploads) */
 
+/* a user zone fits its slot's data (data_len bytes) and the voices can play it (smp_user_scan, editor SMP_ZONE) */
+static int smp_zone_ok(const smp_zone_t *z, uint32_t data_len)
+{
+    return z->off <= data_len && z->n <= 2u * SMP_USER_SIZE && z->off + (z->n + 1u) / 2u <= data_len &&
+           z->idx <= 88u && z->rate && z->rate <= 4u << 16 && z->ls <= z->le && z->le < z->n && z->lo <= z->hi;
+}
+
 /* (re)read slot k from flash: valid header -> zones usable; call after boot and after an upload
  * (main loop: SLICE scans the slot's audio here). The zones are checked in a copy: an unusable slot leaves
  * every zone of it empty (n 0: a voice still on it ends), never a half-checked one */
@@ -88,8 +95,7 @@ static void smp_user_scan(uint32_t k)
         for (nz = h->nz, i = 0; i < nz; i++) {
             smp_zone_t *z = &zt[i];
             *z = h->zone[i];
-            if (z->off > h->data_len || z->n > 2u * SMP_USER_SIZE || z->off + (z->n + 1u) / 2u > h->data_len ||
-                z->idx > 88u || !z->rate || z->rate > 4u << 16 || z->ls > z->le || z->le >= z->n || z->lo > z->hi) {
+            if (!smp_zone_ok(z, h->data_len)) {
                 nz = 0;                             /* zone outside the data or malformed: slot unusable */
                 break;
             }

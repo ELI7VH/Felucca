@@ -1006,6 +1006,29 @@ knob turn picks a built-in palette. A preview by the slider is op 0 sent at most
 settings changes only with op 1. Example: `F0 7D 46 4C 51 01 01 02 05 03 04 0A 06 ...` is op 1 with BG = (r 1, g 2, b 5),
 SURF = (3, 4, 10), ...
 
+## Live zones (96)
+
+A connected editor can read or change one zone of a published user slot while it plays. The change goes
+into the device's RAM copy of the zone table only: no flash write, the transport keeps running, and the
+slot returns to the zones of its stored header at the next boot or upload. To keep a change, upload the
+slot again (SMP_BEGIN / SMP_WRITE / SMP_END).
+
+| cmd | Request args | Reply args |
+| --- | --- | --- |
+| 96 SMP_ZONE | slot, zone (get); or slot, zone, pack7 zone (set) | slot, zone, rc, then (rc 0) pack7 zone |
+
+The zone is the stored record: 28 bytes in the header's layout (off relative to the slot's data, n, loop
+start, loop end, rate, root, predictor, step index, lo, hi, looped). rc: 0 ok, 1 arguments, 2 no such zone
+(the slot is empty or the zone is past its count), 3 not valid for this slot's data (the checks of a stored
+header: inside the data, rate 1 .. 4 × 44.1 kHz, loop start ≤ loop end < n, lo ≤ hi, step index ≤ 88). A slot
+past the last gets no reply. Zones cannot be added or removed.
+
+What follows a change: a sounding SAMPLE voice takes a new pitch (rate, root) at its next block and a new end
+or loop at once; a new start (off) ends the voices on that zone. Decoding starts at a zone's start from
+predictor 0, step index 0, so a new start must point at data encoded from that state (another zone's start,
+or data uploaded that way). GRAIN re-reads the slot; SLICE keeps the slices it scanned at upload. Older
+firmware does not answer: probe with a get.
+
 ## Tagged device preferences v1
 
 INFO appends `0x55, 1, uiCaps` after the existing `NTRK, CHAIN_ROWS` bytes.

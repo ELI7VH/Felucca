@@ -431,6 +431,42 @@ static int samples(void)
     bad += check("END cannot change published sample zones without BEGIN",
                  request(ED_SMP_END, a, n) == 8u && host_wire[6] == 2 && host_writes == 2 &&
                  usr_zone[0][0].rate == 65536u);
+    {   /* SMP_ZONE: the published zone read and changed in RAM, playing on, flash untouched */
+        smp_zone_t z = h.zone[0];
+        voice_t *v = &trk[0].v[0];
+        uint32_t w0 = host_writes, e0 = host_erases;
+        z.rate = 65536;
+        a[0] = 0; a[1] = 0;
+        bad += check("SMP_ZONE get: slot, zone, rc 0 and the stored zone (pack7 of 28 bytes)",
+                     request(ED_SMP_ZONE, a, 2) == 41u && host_wire[5] == 0 && host_wire[6] == 0 && !host_wire[7]);
+        song.playing = 1; host_progress = 0;
+        trk[0].engine = ENGI_SAMPLE; v->active = 1; v->s[4] = 0x8000; v->s[6] = 0;
+        z.rate = 98304; z.root16 = 62 * 16;
+        n = pack7((const uint8_t *)&z, sizeof z, a + 2) + 2u;
+        bad += check("SMP_ZONE set while playing: the new pitch is live, no flash write, the transport runs on",
+                     request(ED_SMP_ZONE, a, n) == 41u && !host_wire[7] && usr_zone[0][0].rate == 98304u &&
+                     usr_zone[0][0].root16 == 62 * 16 && host_writes == w0 && host_erases == e0 && song.playing &&
+                     !v->s[6]);
+        z.n = 500; z.le = 499; z.off = 2;
+        n = pack7((const uint8_t *)&z, sizeof z, a + 2) + 2u;
+        bad += check("SMP_ZONE set: a new start ends the voices positioned in the old data",
+                     request(ED_SMP_ZONE, a, n) == 41u && !host_wire[7] && v->s[6] == 1 && usr_zone[0][0].n == 500u);
+        z.n = 600; z.le = 599;
+        n = pack7((const uint8_t *)&z, sizeof z, a + 2) + 2u;
+        bad += check("SMP_ZONE set: a zone past the slot's data is refused (rc 3), the live zone kept",
+                     request(ED_SMP_ZONE, a, n) == 9u && host_wire[7] == 3 && usr_zone[0][0].n == 500u);
+        z.n = 500; z.le = 500;
+        n = pack7((const uint8_t *)&z, sizeof z, a + 2) + 2u;
+        bad += check("SMP_ZONE set: a loop end at or past the zone's end is refused (rc 3)",
+                     request(ED_SMP_ZONE, a, n) == 9u && host_wire[7] == 3);
+        a[1] = 1;
+        bad += check("SMP_ZONE: a zone past the slot's count answers rc 2",
+                     request(ED_SMP_ZONE, a, 2) == 9u && host_wire[7] == 2);
+        a[0] = SMP_USER_SLOTS; a[1] = 0;
+        bad += check("SMP_ZONE: a slot past the last gets no reply",
+                     request(ED_SMP_ZONE, a, 2) == 0u);
+        v->active = 0; song.playing = 0; host_progress = 1;
+    }
     song.playing = 1; host_progress = 0; a[0] = 0; a[1] = 0;
     bad += check("user-preset STORE does not mutate RAM when audio cannot stop",
                  request(ED_UP_STORE, a, 2) == 8u && host_wire[6] == 2 && !up_used(0));
