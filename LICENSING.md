@@ -12,7 +12,7 @@ Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 Every file in this tree that carries an `SPDX-License-Identifier: GPL-3.0-only` header:
 
 - the firmware: `firmware/` (app, HAL, update loader; not `firmware/engines/`, MIT: below)
-- the build script and tools: `build.sh`, `tools/`
+- the build script and tools: `build.sh`, `tools/` (not `tools/gen_waves.py`, the Hügelton Sample Pack: CC0 1.0, below)
 - the web pages (installer, editor, the browser emulator `web/emu/`) and their tests: `web/` (not the Fukiai and DotGothic16 fonts, below)
 - the host tests: `tests/`
 
@@ -45,9 +45,9 @@ All by Hügelton Instruments (Leo Kuroshita), in this tree:
 | What | Licence | Where |
 | --- | --- | --- |
 | Felucca: firmware, tools, web pages, tests | GPL-3.0-only | `LICENSE` |
-| The PHASE engine's waveforms: a C port of the oscillator of CrispyZebra (<https://github.com/hugelton/CrispyZebra>) | GPL-3.0 | `firmware/src/eng_phase.c` |
+| The PHASE engine | GPL-3.0-only | `firmware/src/eng_phase.c` |
 | The DRUM voices and kit | GPL-3.0-only | `firmware/src/drum_voice.c`, `firmware/src/eng_drum.c` |
-| The Hügelton Sample Pack: Felucca's drum sounds, made by `tools/gen_waves.py`, from which the SLICE engine's BREAK is built (not CC0) | GPL-3.0-only | `tools/gen_waves.py` |
+| The Hügelton Sample Pack: Felucca's drum sounds, made by `tools/gen_waves.py`, from which the SLICE engine's BREAK is built; the script and the sounds it makes | CC0 1.0 (<https://creativecommons.org/publicdomain/zero/1.0/>) | `tools/gen_waves.py` |
 | The controls picture | GPL-3.0-only | `docs/controls.jpg` |
 | The Fukiai icon font (<https://github.com/hugelton/Fukiai>): the firmware's icons (rasterised at build time by `tools/gen_aa_icons.py`) and the web editor's | MIT | `web/fukiai.ttf`, `LICENSES/MIT-Fukiai.txt`, `web/FUKIAI-LICENSE.txt` |
 | The ANALOG, LOFI, TRIO, WHEEL and NOISE engines, the engine interface and the shared DSP helpers: Felucca-Engines (<https://github.com/hugelton/Felucca-Engines>) | MIT | `firmware/engines/`, `LICENSES/MIT-Felucca-Engines.txt` |
