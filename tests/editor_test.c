@@ -112,19 +112,20 @@ static int preferences(void)
     uint8_t a[4] = {0, 7, 0, 0};
     reset();
     uint32_t n = request(ED_INFO, a, 0);
+    /* (n - 3: WaveLoop Kit's SHAYPE tag 41 01 30 ends it now) */
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
-        host_wire[n - 34] == CHAIN_ROWS && host_wire[n - 33] == 0x55 &&
-        host_wire[n - 32] == 1 && host_wire[n - 31] == 9 &&
-        host_wire[n - 30] == 0x4d && host_wire[n - 29] == 1 &&
-        host_wire[n - 28] == MOTION_MAX && host_wire[n - 27] == 1 &&
-        host_wire[n - 26] == 0x42 && host_wire[n - 25] == 1 && host_wire[n - 24] == 3 &&
-        host_wire[n - 23] == 0x46 && host_wire[n - 22] == 1 && host_wire[n - 21] == FM6_NFACTORY &&
-        host_wire[n - 20] == 0 &&                        /* (no bank since 1.0.3) */
-        host_wire[n - 19] == 0x53 && host_wire[n - 18] == 1 && host_wire[n - 17] == 3 &&
-        host_wire[n - 16] == 0x50 && host_wire[n - 15] == 1 && host_wire[n - 14] == 3 &&   /* FM6 v2: no bank, preset patches */
-        host_wire[n - 13] == 0x4E && host_wire[n - 12] == 1 && host_wire[n - 11] == 12 &&   /* MENU settings: 12 items */
-        host_wire[n - 10] == 0x52 && host_wire[n - 9] == 1 && host_wire[n - 8] == 4);   /* RATCH */
+        host_wire[n - 3 - 34] == CHAIN_ROWS && host_wire[n - 3 - 33] == 0x55 &&
+        host_wire[n - 3 - 32] == 1 && host_wire[n - 3 - 31] == 9 &&
+        host_wire[n - 3 - 30] == 0x4d && host_wire[n - 3 - 29] == 1 &&
+        host_wire[n - 3 - 28] == MOTION_MAX && host_wire[n - 3 - 27] == 1 &&
+        host_wire[n - 3 - 26] == 0x42 && host_wire[n - 3 - 25] == 1 && host_wire[n - 3 - 24] == 3 &&
+        host_wire[n - 3 - 23] == 0x46 && host_wire[n - 3 - 22] == 1 && host_wire[n - 3 - 21] == FM6_NFACTORY &&
+        host_wire[n - 3 - 20] == 0 &&                        /* (no bank since 1.0.3) */
+        host_wire[n - 3 - 19] == 0x53 && host_wire[n - 3 - 18] == 1 && host_wire[n - 3 - 17] == 3 &&
+        host_wire[n - 3 - 16] == 0x50 && host_wire[n - 3 - 15] == 1 && host_wire[n - 3 - 14] == 3 &&   /* FM6 v2: no bank, preset patches */
+        host_wire[n - 3 - 13] == 0x4E && host_wire[n - 3 - 12] == 1 && host_wire[n - 3 - 11] == 12 &&   /* MENU settings: 12 items */
+        host_wire[n - 3 - 10] == 0x52 && host_wire[n - 3 - 9] == 1 && host_wire[n - 3 - 8] == 4);   /* RATCH */
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -344,6 +345,106 @@ static int song_protocol(void)
                  request(ED_SONG, a, sizeof a) == 14u && host_wire[6] == 2 && !memcmp(&before, &chain_config, sizeof before));
     chain.armed = 0; a[0] = 2;
     bad += check("SONG PLAY refuses extra argument bytes", !request(ED_SONG, a, 2) && !transport_req);
+    return bad;
+}
+
+/* WaveLoop Kit: SHAYPE (76 ARP_GET, 77 ARP_SET; EDITOR_PROTOCOL.md "SHAYPE"): a fresh track's reply byte for byte (the
+ * document's example), a SET applied exactly (settings, PAT ROOT OCT, the notes in their order), every refusal with its
+ * rc and nothing changed, the INFO tag, the grid redrawn and the WATCH shadow following */
+static uint32_t arp_set(uint32_t k, const uint8_t *s10, const uint8_t (*nt)[3], uint32_t n, uint32_t len)
+{
+    static uint8_t a[12 + 3 * 40];
+    uint32_t i;
+    a[0] = (uint8_t)k;
+    memcpy(a + 1, s10, 10);
+    a[11] = (uint8_t)n;
+    for (i = 0; i < n && i < 40u; i++)
+        memcpy(a + 12 + 3 * i, nt[i], 3);
+    return request(77, a, len ? len : 12u + 3u * n);
+}
+static int arp_protocol(void)
+{
+    static const uint8_t FRESH[] = {0xF0, 0x7D, 0x46, 0x4C, 0x4C, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00, 0x4B, 0x00,
+        0x00, 0x00, 0x03, 0x01, 0x1E, 0x08, 0x00, 0x00, 0x01, 0x00, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01, 0x03, 0x01, 0x02,
+        0x02, 0x01, 0x02, 0x03, 0x01, 0x03, 0x00, 0x01, 0x03, 0x03, 0x01, 0xF7};
+    static const uint8_t S[10] = {1, 8, 5, 2, 1, 50, 1, 20, 8, 4};   /* ON, 8 steps, 1/16, PEND, OCT, 50 %, HOLD, 20, G, +1 */
+    static const uint8_t N3[3][3] = {{0, 0, 2}, {2, 7, 1}, {4, 3, 4}};
+    uint8_t a[2] = {0, 0};
+    arp_pat_t keep;
+    uint32_t n, i;
+    int bad = 0, ok;
+    reset();
+    n = request(ED_INFO, a, 0);
+    bad += check("INFO ends with the SHAYPE tag 41 01 30 (cmds 76, 77; 30 notes)",
+                 n > 5u && host_wire[n - 4u] == 0x41 && host_wire[n - 3u] == 1 && host_wire[n - 2u] == ARP_NMAX);
+    n = request(76, a, 1);
+    bad += check("ARP_GET of a fresh track: the document's example, byte for byte",
+                 n == sizeof FRESH && !memcmp(host_wire, FRESH, sizeof FRESH));
+    ui.force = 0;
+    n = arp_set(2, S, N3, 3, 0);
+    ok = n == 5u + 15u + 9u + 1u && host_wire[5] == 2 && !host_wire[6] && trk[2].p[P_AMODE] == 1 && trk[2].p[P_APROB] == 8 &&
+         trk[2].p[P_ARATE] == 5 && trk[2].p[P_AOCT] == AD_PEND && trk[2].p[P_AORDER] == AB_OCT && trk[2].p[P_AGATE] == 50 &&
+         trk[2].p[P_AHOLD] == 1 && trk[2].p[P_ASWING] == 20 && arp_x[2][ARPX_ROOT] == 8 && arp_x[2][ARPX_OCT] == 1 &&
+         arp_x[2][ARPX_PAT] == 0 && arp_pat[2].n == 3u && arp_pat[2].note[0] == ARP_NOTE(0, 0, 2) &&
+         arp_pat[2].note[1] == ARP_NOTE(2, 7, 1) && arp_pat[2].note[2] == ARP_NOTE(4, 3, 4) && ui.force;
+    ok &= host_wire[19] == 3u && host_wire[20] == 0 && host_wire[21] == 0 && host_wire[22] == 2 && host_wire[28] == 4;
+    bad += check("ARP_SET: settings, ROOT, OCT, the notes in their order; PAT USER; the reply as GET; the page redraws", ok);
+    keep = arp_pat[2];
+    {
+        static const struct { uint8_t i, v; const char *what; } BADS[] = {
+            {0, 2, "on 2"}, {1, 0, "steps 0"}, {1, 65, "steps 65"}, {2, 8, "rate 8"}, {3, 4, "dir 4"}, {4, 2, "bound 2"},
+            {5, 9, "gate 9"}, {5, 101, "gate 101"}, {6, 2, "hold 2"}, {7, 101, "swing 101"}, {8, 13, "root 13"},
+            {9, 7, "oct 7"}};
+        uint8_t s[10];
+        ok = 1;
+        for (i = 0; i < NELEM(BADS); i++) {
+            memcpy(s, S, 10);
+            s[BADS[i].i] = BADS[i].v;
+            n = arp_set(2, s, N3, 3, 0);
+            if (n < 7u || host_wire[6] != 3u || memcmp(&arp_pat[2], &keep, sizeof keep) || trk[2].p[P_ARATE] != 5) {
+                ok = 0;
+                printf("    %s: rc %u\n", BADS[i].what, n >= 7u ? host_wire[6] : 255u);
+            }
+        }
+        bad += check("ARP_SET: every setting out of its range is rc 3, nothing changes", ok);
+    }
+    {
+        static const uint8_t PAST[1][3] = {{7, 0, 2}}, ROW[1][3] = {{0, 8, 1}}, LEN0[1][3] = {{0, 0, 0}},
+                             OVER[2][3] = {{0, 1, 3}, {2, 1, 1}}, START[1][3] = {{8, 0, 1}};
+        static uint8_t MANY[31][3];
+        for (i = 0; i < 31u; i++) { MANY[i][0] = (uint8_t)(i / 8u); MANY[i][1] = (uint8_t)(i % 8u); MANY[i][2] = 1; }
+        ok = arp_set(2, S, PAST, 1, 0) && host_wire[6] == 4;
+        ok &= arp_set(2, S, ROW, 1, 0) && host_wire[6] == 4;
+        ok &= arp_set(2, S, LEN0, 1, 0) && host_wire[6] == 4;
+        ok &= arp_set(2, S, START, 1, 0) && host_wire[6] == 4;
+        ok &= arp_set(2, S, OVER, 2, 0) && host_wire[6] == 5;
+        ok &= arp_set(2, S, (const uint8_t (*)[3])MANY, 31, 0) && host_wire[6] == 2;
+        ok &= arp_set(2, S, N3, 3, 12u + 3u * 3u - 1u) && host_wire[6] == 1;   /* (a byte short) */
+        ok &= arp_set(2, S, N3, 3, 12u + 3u * 3u + 1u) && host_wire[6] == 1;   /* (a byte over) */
+        ok &= !memcmp(&arp_pat[2], &keep, sizeof keep);
+        a[0] = 4;
+        n = request(76, a, 1);
+        ok &= n == 8u && host_wire[5] == 4 && host_wire[6] == 1;
+        n = request(76, a, 0);
+        ok &= n == 8u && host_wire[6] == 1;
+        bad += check("ARP_SET refusals: past STEPS / row 8 / length 0 rc 4, overlap rc 5, 31 notes rc 2, the wrong length "
+                     "or track rc 1; nothing changes", ok);
+    }
+    {
+        static uint8_t FULL[30][3];
+        for (i = 0; i < 30u; i++) { FULL[i][0] = (uint8_t)(i / 8u * 2u); FULL[i][1] = (uint8_t)(i % 8u); FULL[i][2] = 2; }
+        ok = arp_set(1, S, (const uint8_t (*)[3])FULL, 30, 0) && !host_wire[6] && arp_pat[1].n == 30u && ash_valid(&arp_pat[1]);
+        ok &= arp_set(1, S, (const uint8_t (*)[3])FULL, 0, 0) && !host_wire[6] && arp_pat[1].n == 0u;
+        a[0] = 1;
+        n = request(76, a, 1);
+        ok &= n == 5u + 15u + 1u && host_wire[19] == 0;
+        bad += check("ARP_SET: 30 notes (the most) and none both land; GET of none is 15 bytes", ok);
+    }
+    song.sel = 0;                                    /* the selected track: the WATCH shadow takes the editor's write */
+    ed_shadow();
+    arp_set(0, S, N3, 3, 0);
+    bad += check("ARP_SET of the selected track: the WATCH shadow follows (no CHANGED about its own write)",
+                 !host_wire[6] && ed_w.v[P_ARATE] == 5 && ed_w.v[P_AMODE] == 1 && ed_w.v[P_APROB] == 8);
     return bad;
 }
 
@@ -956,7 +1057,7 @@ static int diagnostics(void)
 
 int main(void)
 {
-    int bad = diagnostics() + preferences() + framing() + uart_recovery() + steps() + samples() + song_protocol() + malformed_saves() +
+    int bad = diagnostics() + preferences() + framing() + uart_recovery() + steps() + samples() + song_protocol() + arp_protocol() + malformed_saves() +
               fm6_patches() + user_preset_roundtrip() + live_sync() + usb_burst() + menu_protocol() + drum_kit_retired();
     printf("%s\n", bad ? "EDITOR TEST FAILED" : "editor test passed");
     return bad != 0;

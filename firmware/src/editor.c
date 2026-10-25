@@ -18,7 +18,8 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_TRACK, ED_TRACK_MIX, ED_TRACK_DUMP, ED_TRACK_STEP,                    /* v3: tracks */
        ED_TRACK_PARAM, ED_TRACK_CHANGED, ED_SONG,
        ED_UI_STATE, ED_UI_SET, ED_UI_PALETTES, ED_FAV_GET, ED_FAV_SET,
-       ED_MOTION = 64, ED_BACKUP_LIST, ED_BACKUP_GET, ED_BACKUP_PUT, ED_SETLIST = 74, ED_DIAG = 75 };                              /* v6: song chain */
+       ED_MOTION = 64, ED_BACKUP_LIST, ED_BACKUP_GET, ED_BACKUP_PUT, ED_SETLIST = 74, ED_DIAG = 75,
+       ED_ARP_GET = 76, ED_ARP_SET };                    /* WaveLoop Kit: SHAYPE, the ARP's pattern */                              /* v6: song chain */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -354,6 +355,98 @@ static void ed_motion_reply(uint32_t k, uint32_t rc)
         ed_b(e->place & 63u); ed_b(e->param); ed_v(e->value);
     }
 }
+/* ---- WaveLoop Kit: SHAYPE (76 ARP_GET, 77 ARP_SET; web/EDITOR_PROTOCOL.md "SHAYPE"): a track's ARP settings, PAT
+ * ROOT OCT (seq.c arp_x) and pattern (arp_pat). A SET is checked whole before anything changes (never trust the
+ * host): its length, the note count, every setting's range, every note inside STEPS x 8 rows, no two of a row
+ * overlapping; then written with the audio ISR held off (the arp reads the pattern), as a device edit: the ARP page
+ * redraws (its graph signature), the autosave sees it, the WATCH shadow takes the selected track's new values (no
+ * CHANGED push about the editor's own write) */
+enum { ED_ARP_OK, ED_ARP_ARGS, ED_ARP_MANY, ED_ARP_RANGE, ED_ARP_GRID, ED_ARP_OVERLAP };
+static const uint8_t ED_ARP_ID[8] = {P_AMODE, P_APROB, P_ARATE, P_AOCT, P_AORDER, P_AGATE, P_AHOLD, P_ASWING};
+static const uint8_t ED_ARP_LO[10] = {0, 1, 0, 0, 0, 10, 0, 0, 0, 0}, ED_ARP_HI[10] = {1, 64, 7, 3, 1, 100, 1, 100, 12, 6};
+static uint32_t ed_arp_set(uint32_t k, const uint8_t *a, uint32_t na)
+{
+    track_t *t = &trk[k];
+    arp_pat_t p;
+    uint64_t occ[ARP_ROWS];
+    uint32_t i, n, steps, s, r, l;
+    if (na < 12u)
+        return ED_ARP_ARGS;
+    n = a[11];
+    if (n > ARP_NMAX)
+        return ED_ARP_MANY;
+    if (na != 12u + 3u * n)
+        return ED_ARP_ARGS;
+    for (i = 0; i < 10u; i++)                          /* on steps rate dir bound gate hold swing root oct+3 */
+        if (a[1u + i] < ED_ARP_LO[i] || a[1u + i] > ED_ARP_HI[i])
+            return ED_ARP_RANGE;
+    steps = a[2];
+    memset(&p, 0, sizeof p);
+    memset(occ, 0, sizeof occ);
+    for (i = 0; i < n; i++) {
+        s = a[12u + 3u * i];
+        r = a[13u + 3u * i];
+        l = a[14u + 3u * i];
+        if (r >= ARP_ROWS || !l || s >= steps || s + l > steps)
+            return ED_ARP_GRID;
+        {
+            uint64_t m = (l >= 64u ? ~(uint64_t)0 : (((uint64_t)1 << l) - 1u)) << s;
+            if (occ[r] & m)
+                return ED_ARP_OVERLAP;
+            occ[r] |= m;
+        }
+        p.note[p.n++] = ARP_NOTE(s, r, l);
+    }
+    fm1_irq_off();
+    if (p.n != arp_pat[k].n || memcmp(p.note, arp_pat[k].note, 2u * p.n))
+        arp_x[k][ARPX_PAT] = 0;                        /* (other notes: the user's pattern now) */
+    arp_pat[k] = p;
+    for (i = 0; i < 8u; i++)                           /* (ED_ARP_ID: the settings in the request's order) */
+        t->p[ED_ARP_ID[i]] = (int16_t)a[1u + i];
+    arp_x[k][ARPX_ROOT] = a[9];
+    arp_x[k][ARPX_OCT] = (int16_t)(a[10] - 3);
+    fm1_irq_on();
+    if (k == song.sel)
+        for (i = 0; i < 8u; i++)
+            ed_w.v[ED_ARP_ID[i]] = t->p[ED_ARP_ID[i]];
+    ui.force = 1;
+    return ED_ARP_OK;
+}
+static void ed_arp_reply(uint32_t k, uint32_t rc)       /* ARP_GET's shape */
+{
+    const track_t *t = &trk[k];
+    const arp_pat_t *p = &arp_pat[k];
+    uint32_t i, n = p->n < ARP_NMAX ? p->n : ARP_NMAX;
+    ed_b(k); ed_b(rc);
+    for (i = 0; i < 8u; i++)
+        ed_b((uint32_t)clamp(t->p[ED_ARP_ID[i]], 0, 127));
+    ed_b((uint32_t)clamp(arp_x[k][ARPX_ROOT], 0, 12));
+    ed_b((uint32_t)(clamp(arp_x[k][ARPX_OCT], -3, 3) + 3));
+    ed_b((uint32_t)clamp(arp_x[k][ARPX_PAT], 0, 7));
+    ed_b(ARP_NMAX);
+    ed_b(n);
+    for (i = 0; i < n; i++) {
+        ed_b(ARP_STEP(p->note[i]));
+        ed_b(ARP_ROW(p->note[i]));
+        ed_b(ARP_LEN(p->note[i]));
+    }
+}
+static int ed_arp_handle(uint32_t cmd, const uint8_t *a, uint32_t na)
+{
+    uint32_t rc = ED_ARP_OK;
+    if (cmd != ED_ARP_GET && cmd != ED_ARP_SET)
+        return 0;
+    if (!na || a[0] >= NTRK || (cmd == ED_ARP_GET && na != 1u)) {
+        ed_b(na ? a[0] : 127u);
+        ed_b(ED_ARP_ARGS);
+        return 1;
+    }
+    if (cmd == ED_ARP_SET)
+        rc = ed_arp_set(a[0], a, na);
+    ed_arp_reply(a[0], rc);
+    return 1;
+}
+
 static int ed_args_ok(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
     switch (cmd) {
@@ -408,6 +501,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     if (ed_backup_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_fm6_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_menu_handle(cmd, a, na)) { ed_send(); return; }
+    if (ed_arp_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
     case ED_MOTION: {
         track_t *t = &trk[a[0]]; uint32_t rc = 0;
@@ -445,6 +539,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0x52); ed_b(1); ed_b(4);   /* RATCH: a step's ratchet (1..4 hits) after its chance */
         ed_b(0x44); ed_b(1); ed_b(1); /* read-only telemetry, cmd 75 */
         ed_b(0x4C); ed_b(1); ed_b(12); /* complete song setlist, cmd 74 */
+        ed_b(0x41); ed_b(1); ed_b(ARP_NMAX);   /* WaveLoop Kit: SHAYPE, cmds 76 77; the notes a pattern holds */
         break;
     case ED_DIAG:
         ed_diag_reply();
