@@ -2,7 +2,7 @@
 
 A one-pixel line along the FM-1 screen’s bottom fills left to right as you browse the current bank.
 
-Use the custom `felucca-1.0.5.2-midi23.fwsc` firmware and `Felucca.minilab3` preset together.
+Use the custom `felucca-1.0.5.2-midi25.fwsc` firmware and `Felucca.minilab3` preset together.
 
 | Control | Mapping |
 | --- | --- |
@@ -55,6 +55,14 @@ Pad Gate behavior is documented in [Arturia’s MiniLab 3 MIDI Control Center ma
 Fader travel uses a smooth concave taper: level = round(value × (381 − value) / 254). The slope falls from 1.5 near the bottom to 0.5 near the top, giving about three times as much travel per upper-level step. MIDI 0 is silence and 127 remains full level. Stored levels and the synth’s dB scale are unchanged; this spreads the existing level steps across physical travel.
 
 Moving a parameter knob or fader shows a 1.2-second popup with its track, actual parameter name and formatted value. The master filter shows LPF/HPF amount or BYPASS. The popup temporarily pauses page drawing to prevent LCD flicker, then restores the current page; menus, naming and confirmation dialogs take priority. Encoder click changes the displayed track only, not the MiniLab keyboard MIDI channel. Turned knobs and played notes still follow ROUT and the keyboard channel.
+
+## SHAYPE arp from the MiniLab (midi25)
+
+No preset change is needed. Chords played on the MiniLab feed SHAYPE on the track their channel plays,
+like the FM-1's own keys; HOLD latches them. With ARP on, a recorded chord plays back through SHAYPE.
+On SEQ → STEP, with REC armed and the transport stopped, MiniLab notes on the displayed track's channel
+write the cursor step: a chord held together is one step, and letting go moves to the next step. Notes on
+another track's channel only play. Patterns are edited on the FM-1's ARP pages or in the editor's SHAYPE tab.
 
 ## Automatic session resume
 

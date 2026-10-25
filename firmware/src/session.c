@@ -29,7 +29,7 @@ static void session_boot(void)
     if (!flash_ok) return;
     proj_wire_gen++;
     int n = st_load(OBJ_PROJECT0 + SESSION_SLOT, &proj_wire, sizeof proj_wire);
-    if (n != sizeof proj_wire || proj_wire.raw[65] != SESSION_MARK ||
+    if ((n != sizeof proj_wire && n != (int)PROJ_STORE_V8) || proj_wire.raw[65] != SESSION_MARK ||   /* (FUN8: midi24's) */
         !proj_import(&proj_scratch, &proj_wire, n)) return;
     uint32_t filter = proj_wire.raw[67];
     uint8_t view[8]; memcpy(view, proj_wire.raw + SESSION_UI_OFF, sizeof view);

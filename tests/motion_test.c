@@ -18,7 +18,7 @@ static int motion_recording(void)
     project_t q; project_store_t packed;
     project_capture(&q);
     bad += check("project snapshot saves base + independent events while sounding", q.t[0].p[P_REV] == 23 && q.motion.event[0].value == 110 &&
-        proj_pack(&packed, &q) && sizeof packed == 3584u);
+        proj_pack(&packed, &q) && sizeof packed == 3840u);
     seq_stop();
     bad += check("stop before another step restores the original parameter", t->p[P_REV] == 23);
     seq_start(); seq_tick(t, CTL);
@@ -73,12 +73,15 @@ static int compact_project(void)
 {
     int bad = 0; ui_power_on(); track_t *t = &trk[0];
     t->step[3] = (step_t){{60, 67}, 2, ST_NOTE, SF_ACCENT, 110, 0x81, 0x80, 0};
+    ash_load(&arp_pat[0], 3); ash_paint(&arp_pat[0], 7, 5, 3);   /* (SHAYPE: STABS and a note: a pattern of its own) */
+    arp_x[0][ARPX_PAT] = 0; arp_x[0][ARPX_ROOT] = 5; arp_x[0][ARPX_OCT] = -2;
     step_set_chance(&t->step[3], 25); t->p[P_FM1_LEVEL] = 80; t->p[P_ED_FLT] = -50;
     motion_set_event(t, 3, P_REV, 110);
     project_t before, after; project_store_t packed, corrupt;
     project_capture(&before);
-    bad += check("FUN8 fits the retained and flash extent", sizeof(proj_slot) == 4u * 3584u && proj_pack(&packed, &before));
-    bad += check("FUN8 round trip preserves signed values/FM params/probability/motion", proj_import(&after, &packed, sizeof packed) &&
+    bad += check("FUN9 fits the retained and flash extent", sizeof(proj_slot) == 4u * 3840u && sizeof packed <= 4096u - 256u &&
+        proj_pack(&packed, &before));
+    bad += check("FUN9 round trip preserves signed values/FM params/probability/motion/SHAYPE", proj_import(&after, &packed, sizeof packed) &&
         !memcmp(&before, &after, sizeof before));
     corrupt = packed; corrupt.raw[112] ^= 1u;
     bad += check("FUN7 torn or corrupted payload is refused", !proj_import(&after, &corrupt, sizeof corrupt));
@@ -102,9 +105,54 @@ static int compact_project(void)
         after.t[0].p[P_FM1_LEVEL] == 127 && !after.motion.count && step_chance(&after.t[0].step[3]) == 100u);
     bad += check("migrated FUN6 can be written as fixed-size FUN7", proj_pack(&packed, &after));
     project_save(1); motion_clear(t); t->p[P_FM1_LEVEL] = 127; step_set_chance(&t->step[3], 100);
-    project_load(1);
-    bad += check("actual project save/load restores motion, chance and operator settings", motion_count(t) == 1u &&
-        step_chance(&t->step[3]) == 25u && t->p[P_FM1_LEVEL] == 80);
+    {
+        arp_pat_t mine = arp_pat[0];
+        arp_defaults(0);
+        project_load(1);
+        bad += check("actual project save/load restores motion, chance, operator settings and SHAYPE", motion_count(t) == 1u &&
+            step_chance(&t->step[3]) == 25u && t->p[P_FM1_LEVEL] == 80 && !memcmp(&arp_pat[0], &mine, sizeof mine) &&
+            arp_x[0][ARPX_PAT] == 0 && arp_x[0][ARPX_ROOT] == 5 && arp_x[0][ARPX_OCT] == -2);
+    }
+    {   /* FUN8 (midi24 and before: 3584 bytes, no SHAYPE blocks) loads: SHAYPE on every track, the old ARP mapped */
+        project_store_t v8;
+        uint32_t h;
+        int ok;
+        before.t[1].p[P_AMODE] = 3; before.t[1].p[P_ARATE] = 2; before.t[1].p[P_AOCT] = 3; before.t[1].p[P_AGATE] = 96;
+        before.t[1].p[P_APROB] = 100; before.t[1].p[P_AORDER] = 1; before.t[1].p[P_AHOLD] = 1; before.t[1].p[P_ASWING] = 30;
+        before.t[2].p[P_AMODE] = 0; before.t[2].p[P_ARATE] = 8;   /* (2BAR: the slowest) */
+        ok = proj_pack(&packed, &before);
+        memset(&v8, 0, sizeof v8);
+        memcpy(v8.raw, packed.raw, PROJ_STORE_V8 - 16u);                   /* (FUN9 keeps FUN8's bytes up to its name) */
+        memcpy(v8.raw + PROJ_STORE_V8 - 16u, packed.raw + PROJ_NAME_OFF, PROJ_NAME_LEN);
+        h = PROJ_MAGIC_V8; memcpy(v8.raw, &h, 4); h = PROJ_STORE_V8; memcpy(v8.raw + 4, &h, 4);
+        h = proj_hash(v8.raw, PROJ_STORE_V8 - 4u); memcpy(v8.raw + PROJ_STORE_V8 - 4u, &h, 4);
+        ok &= proj_import(&after, &v8, PROJ_STORE_V8);
+        {
+            arp_pat_t p; int16_t x[ARPX_N];
+            proj_arp_get(after.arp[0], &p, x);
+            ok &= p.n == 8u && p.note[1] == ARP_NOTE(0, 2, 1) && x[ARPX_PAT] == 1 && x[ARPX_ROOT] == 0 && x[ARPX_OCT] == 0;
+        }
+        ok &= after.t[1].p[P_AMODE] == 1 && after.t[1].p[P_ARATE] == 5 && after.t[1].p[P_AOCT] == AD_UP &&
+              after.t[1].p[P_AGATE] == 75 && after.t[1].p[P_APROB] == 4 && after.t[1].p[P_AORDER] == AB_WRAP &&
+              after.t[1].p[P_AHOLD] == 1 && after.t[1].p[P_ASWING] == 30 && after.t[2].p[P_AMODE] == 0 &&
+              after.t[2].p[P_ARATE] == 0 && !strcmp(after.name, before.name) && after.t[0].p[P_E0] == before.t[0].p[P_E0];
+        bad += check("a FUN8 project (midi24) loads: SHAYPE on every track, MODE UPDN -> ON, 1/16 kept, GATE 96 -> 75 %, "
+                     "DIR UP, STEPS 4, WRAP; HOLD and SWING kept", ok);
+        memcpy(&proj_slot[2], &v8, PROJ_STORE_V8);               /* (a retained slot of midi24: its own size inside) */
+        memset(proj_slot[2].raw + PROJ_STORE_V8, 0, PROJ_STORE_SIZE - PROJ_STORE_V8);
+        bad += check("  a retained FUN8 slot (midi24's RAM) loads too, and saves back as FUN9",
+                     proj_import(&after, &proj_slot[2], sizeof proj_slot[2]) && proj_pack(&packed, &after) &&
+                     ((uint32_t *)packed.raw)[0] == PROJ_MAGIC);
+        packed.raw[PROJ_ARP_OFF] = 31u;                          /* (a block of 31 notes: damaged) */
+        h = proj_hash(packed.raw, PROJ_STORE_SIZE - 4u); memcpy(packed.raw + PROJ_STORE_SIZE - 4u, &h, 4);
+        ok = proj_import(&after, &packed, sizeof packed);
+        {
+            arp_pat_t p; int16_t x[ARPX_N];
+            proj_arp_get(after.arp[0], &p, x);
+            ok &= p.n == 8u && x[ARPX_PAT] == 1;
+        }
+        bad += check("  a damaged SHAYPE block: that track gets SHAYPE, the project still loads", ok);
+    }
     return bad;
 }
 /* a FUN7 image as the firmware of 89 parameters (before the chord keys P_CHRD / P_VOIC) wrote it: the engine's
@@ -186,23 +234,139 @@ static int loads_and_song(void)
     seq_stop(); bad += check("song stop restores current base and editable pattern", t->p[P_REV] == 43 && t->step[0].note[0] == 72);
     return bad;
 }
-static int repeat_mode(void)
+/* WaveLoop Kit: the ARP is SHAYPE (seq.c arp_fire over arp_shape.c; the core's parity with the toy: tests/arp_shape_test.c).
+ * Here the host: the keys held as the chord, the steps on the track's clock, the notes and their gates, HOLD, ROOT,
+ * the rate, recording. arp_next runs blocks until the next step plays; with GATE under 100 % and length-1 notes the
+ * notes sounding then are exactly that step's */
+static uint32_t arp_next(track_t *t, uint8_t *got)
 {
-    int bad = 0; ui_power_on(); track_t *t = &trk[0];
-    t->p[P_AMODE] = 6; t->p[P_AOCT] = 4; t->p[P_APROB] = 127;
-    arp_add(t, 72); arp_add(t, 60);
+    uint32_t idx = t->arp_idx, g = 0, i;
+    while (t->arp_idx == idx && g++ < 200000u)
+        arp_tick(t, CTL);
+    for (i = 0; i < t->arp_n; i++)
+        got[i] = arp_snd[trk_index(t)].note[i];
+    return t->arp_n;
+}
+static int arp_seq(track_t *t, const uint8_t *want, uint32_t steps, uint32_t per)   /* the next steps play these */
+{
+    uint8_t got[ARP_SND];
+    uint32_t s, n;
+    int ok = 1;
+    for (s = 0; s < steps; s++) {
+        n = arp_next(t, got);
+        if (n != per || memcmp(got, want + s * per, per)) {
+            ok = 0;
+            printf("    step %u: %u notes (%u %u), want %u %u\n", (unsigned)s, (unsigned)n, got[0], n > 1 ? got[1] : 0u,
+                   want[s * per], per > 1 ? want[s * per + 1] : 0u);
+        }
+    }
+    return ok;
+}
+static void arp_chord(track_t *t, const uint8_t *notes, uint32_t n)
+{
+    uint32_t i;
+    arp_silence(t);
+    t->nheld = 0; t->arp_phys = 0;
+    for (i = 0; i < n; i++)
+        arp_add(t, notes[i]);
+}
+static int shape_arp(void)
+{
+    static const uint8_t CEGBD[5] = {60, 64, 67, 71, 74}, CEG[3] = {60, 64, 67};
+    uint8_t got[ARP_SND];
+    uint32_t i, k, c0;
+    int bad = 0, ok;
+    track_t *t;
+    ui_power_on();
+    t = &trk[0];
+    bad += check("ARP: the power-on pattern is SHAYPE (the toy's DEFAULT_PATTERN), 4 steps, 1/8, GATE 75 %, ARP off",
+                 arp_pat[0].n == 8u && arp_pat[0].note[1] == ARP_NOTE(0, 2, 1) && t->p[P_APROB] == 4 && t->p[P_ARATE] == 3 &&
+                 t->p[P_AGATE] == 75 && !t->p[P_AMODE] && arp_x[0][ARPX_PAT] == 1);
+    t->p[P_AMODE] = 1;
+    arp_chord(t, CEGBD, 5);
+    bad += check("  C E G B D held: pass 1 C+G E+B G+B C+B, pass 2 a place up (the toy's example)",
+                 arp_seq(t, (const uint8_t[]){60, 67, 64, 71, 67, 71, 60, 71, 64, 71, 67, 74, 71, 74, 64, 74}, 8, 2));
+    t->p[P_AOCT] = AD_DOWN;
+    arp_chord(t, CEGBD, 5);
+    bad += check("  DOWN: the second pass a place down, wrapping round the top (D+E)",
+                 arp_seq(t, (const uint8_t[]){60, 67, 64, 71, 67, 71, 60, 71, 74, 64}, 5, 2));
+    t->p[P_AOCT] = AD_UP; t->p[P_AORDER] = AB_OCT;
+    arp_chord(t, CEG, 3);
+    bad += check("  BOUND OCT over C E G: row 4 is C an octave up", arp_seq(t, (const uint8_t[]){60, 67, 64, 72}, 2, 2));
+    t->p[P_AORDER] = AB_WRAP; arp_x[0][ARPX_ROOT] = 8;   /* ROOT G */
+    arp_chord(t, CEG, 3);
+    bad += check("  ROOT G over C E G: G C E, step 1 plays G and E an octave up", arp_seq(t, (const uint8_t[]){67, 76}, 1, 2));
+    arp_x[0][ARPX_ROOT] = 0;
+    /* the rate: a step of 1/8 at 120 BPM is 11025 samples, 1/16T 3675 */
+    arp_chord(t, CEG, 3);
+    arp_next(t, got);
+    c0 = t->arp_clk;
+    arp_next(t, got);
+    k = t->arp_clk - c0;
+    t->p[P_ARATE] = 6;
+    arp_next(t, got);
+    c0 = t->arp_clk;
+    arp_next(t, got);
+    bad += check("  RATE: 1/8 and 1/16T steps their length (within a block)",
+                 k >= 11025u && k < 11025u + CTL && t->arp_clk - c0 >= 3675u && t->arp_clk - c0 < 3675u + CTL);
+    t->p[P_ARATE] = 3;
+    /* gates: a note of length 2 over GATE 75 % sounds 1.5 steps: on at the next step, gone before the one after */
+    fm1_irq_off(); arp_pat[0].n = 0; ash_paint(&arp_pat[0], 0, 0, 2); fm1_irq_on();
+    arp_chord(t, CEG, 3);
+    arp_next(t, got);
+    ok = t->arp_n == 1u && got[0] == 60;
+    arp_next(t, got);
+    ok &= t->arp_n == 1u && got[0] == 60;
+    arp_next(t, got);
+    ok &= t->arp_n == 0u;
+    bad += check("  a note two steps long sounds 1.5 steps at GATE 75 %", ok);
+    ash_load(&arp_pat[0], 0);
+    /* let go: the notes end; HOLD: the chord stays, the next press replaces it from step 1 */
+    arp_chord(t, CEG, 3);
+    arp_next(t, got);
+    for (i = 0; i < 3u; i++) arp_remove(t, CEG[i]);
     arp_tick(t, CTL);
-    bad += check("REPEAT retriggers the last played note without octave traversal", t->arp_note == 60);
-    t->arp_pos = 0xFFFFFFF; arp_tick(t, CTL);
-    bad += check("REPEAT remains on the same note on the next pulse", t->arp_note == 60);
-    arp_remove(t, 60); arp_remove(t, 72); arp_tick(t, CTL);
-    bad += check("REPEAT releases after the last held key is released", !t->nheld && !t->arp_note);
-    t->p[P_AHOLD] = 1; arp_add(t, 65); arp_remove(t, 65); t->arp_pos = 0xFFFFFFF; arp_tick(t, CTL);
-    bad += check("REPEAT supports ARP HOLD", t->nheld == 1u && t->arp_note == 65);
+    bad += check("  the keys let go: nothing sounds, nothing held", !t->nheld && !t->arp_n);
+    t->p[P_AHOLD] = 1;
+    arp_chord(t, CEG, 3);
+    for (i = 0; i < 3u; i++) arp_remove(t, CEG[i]);
+    ok = t->nheld == 3u && arp_seq(t, (const uint8_t[]){60, 67, 64, 60}, 2, 2);   /* (C E G: row 3 wraps to C) */
+    arp_add(t, 62); arp_add(t, 65); arp_add(t, 69);
+    ok &= t->nheld == 3u && arp_seq(t, (const uint8_t[]){62, 69}, 1, 2);
+    for (i = 0; i < 3u; i++) arp_remove(t, (uint32_t[]){62, 65, 69}[i]);
+    bad += check("  HOLD: the chord stays after the keys; a new one replaces it from the first step", ok && t->nheld == 3u);
+    t->p[P_AHOLD] = 0;
+    t->nheld = 0; arp_tick(t, CTL);
+    /* recording: the chord played is written, not what the arp plays: C E G pressed into step 1, the arp
+     * stepping meanwhile (SHAYPE: C+G, E+C, ..), one step holds C E G and nothing else is written */
+    song.sel = 0; song.rec = 1;
+    t->p[P_VOICE] = V_POLY;
+    for (i = 0; i < NSTEP; i++)
+        t->step[i] = (step_t){0};
+    seq_start();
+    seq_tick(t, CTL);
+    for (i = 0; i < 3u; i++)
+        input_on(t, CEG[i], 100);
+    for (k = 0; k < 3u * 5512u / CTL; k++) {           /* three steps of 1/16, the arp at 1/8 playing */
+        seq_tick(t, CTL);
+        arp_tick(t, CTL);
+    }
+    ok = t->arp_n != 0u;
+    for (i = 0; i < 3u; i++)
+        input_off(t, CEG[i]);
+    for (i = 0, k = 0; i < NSTEP; i++)
+        k += t->step[i].time == ST_NOTE && t->step[i].n;
+    ok &= k == 1u && t->step[0].n == 3u && t->step[0].note[0] == 60 && t->step[0].note[1] == 64 && t->step[0].note[2] == 67 &&
+          t->step[1].time == ST_TIE && t->step[2].time == ST_TIE;
+    seq_stop();
+    song.rec = 0;
+    bad += check("  recording: the chord played (C E G) into one step, held as TIEs; not the arp's notes", ok);
+    t->nheld = 0; t->p[P_AMODE] = 0; arp_tick(t, CTL);
+    ash_load(&arp_pat[0], 0);
     return bad;
 }
 int main(void)
 {
-    int bad = motion_recording() + motion_capacity() + probability_playback() + compact_project() + fun7_89() + loads_and_song() + repeat_mode();
+    int bad = motion_recording() + motion_capacity() + probability_playback() + compact_project() + fun7_89() + loads_and_song() + shape_arp();
     printf("%s\n", bad ? "MOTION TEST FAILED" : "motion/chance/compact storage tests passed"); return bad != 0;
 }

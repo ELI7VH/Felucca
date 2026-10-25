@@ -214,6 +214,8 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
         midi_expression(t, c);
         if (t != TSEL)
             midi_hint = (uint8_t)(trk_index(t) + 1u);
+        else
+            mst_push(note);                         /* (WaveLoop Kit: SEQ > STEP's step recording takes it, seq.c) */
         c->targets |= (uint8_t)(1u << trk_index(t));
         midi_play(t, ch, note, vel);
         midi_notes[ch][note] = (uint8_t)(trk_index(t) + 1u);
@@ -260,8 +262,8 @@ static void midi_silence_track(uint32_t track)
     track_t *t = &trk[track];
     uint32_t i;
     trk_all_off(t);
-    t->nheld = t->arp_phys = t->arp_note = t->rh_n = 0;
-    t->seq_n = t->seq_hold = t->slide_glide = 0;
+    t->nheld = t->arp_phys = t->arp_n = t->rh_n = 0;
+    t->seq_n = t->seq_arp = t->seq_hold = t->slide_glide = 0;
     for (i = 0; i < NVOICE; i++)
         if (t->v[i].active)
             voice_kill(&t->v[i]);             /* one-block fade, regardless of RELEASE */
@@ -413,7 +415,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         for (i = 0; i < NTRK; i++)
             if ((mask & (1u << i)) && !midi_track_held(i)) {
                 trk_all_off(&trk[i]);
-                trk[i].nheld = trk[i].arp_phys = trk[i].arp_note = trk[i].rh_n = 0;
+                trk[i].nheld = trk[i].arp_phys = trk[i].arp_n = trk[i].rh_n = 0;
             }
         break;
     case 121:                                      /* Reset All Controllers, keep bend sensitivity */

@@ -137,6 +137,11 @@ static struct {
         uint8_t sig;             /* a card: what its value is of (label, unit, track, engine, palette) */
     } roll[5];
     int16_t roll_bpm;            /* the BPM last drawn */
+    struct {                     /* WaveLoop Kit: the ARP pages' editing (ui_arp.c) */
+        uint8_t cur;             /* the cursor step (PRESETS moves it) */
+        uint8_t down;            /* the row keys held, a bit per row */
+        uint8_t made, moved;     /* .. rows whose press wrote a note, whose length a knob set (their release keeps it) */
+    } arp;
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
@@ -168,7 +173,7 @@ static uint32_t large_kind(void)
         return LK_TALL;
     g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_SETLIST || g == GR_ROLL ||
-           g == GR_CHANCE || g == GR_SLICES ? LK_LABEL : LK_TALL;
+           g == GR_CHANCE || g == GR_SLICES || g == GR_ARP ? LK_LABEL : LK_TALL;   /* (SHAYPE's grid as the roll) */
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -268,6 +273,10 @@ static void chain_play_ui(void)
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
+    static uint8_t was_arp;                      /* WaveLoop Kit: the ARP pages say how they edit as they are entered */
+    if (!ui.home && pg->graph == GR_ARP && !was_arp)
+        ui_message("[KEYS] ROWS OP+OCT");         /* (the row keys F3..F4; an OP key held + OCT-/+: ui_arp.c) */
+    was_arp = !ui.home && pg->graph == GR_ARP;
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
@@ -885,6 +894,7 @@ static void track_defaults(track_t *t)
     uint32_t i;
     for (i = 0; i < P_E0; i++)
         t->p[i] = TP[i].def;
+    arp_defaults(trk_index(t));                   /* WaveLoop Kit: SHAYPE's pattern (the toy's DEFAULT_PATTERN) */
     track_defaults_steps(t);
 }
 
@@ -1109,6 +1119,7 @@ static void track_select(uint32_t i)
     ui.hot_t = 0;
     ui.cursor = 0;
     ui.bank = 0;
+    memset(&ui.arp, 0, sizeof ui.arp);           /* (the ARP's cursor and row keys were the other track's) */
     sync_reload = 1;
     ui.force = 1;
 }
@@ -1162,6 +1173,7 @@ static void midi_ui_poll(void)
 }
 
 #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
+#include "ui_arp.c"                               /* WaveLoop Kit: the ARP pages (SHAYPE's grid: the cursor, the row keys) */
 
 /* ---------------------------------------------------- action pages --- */
 /* Pages whose purpose is an action (SEQ > PATTERNS, SAVE > USER, PROJECT, TOOLS, EDIT > SLICES): the knobs pick,

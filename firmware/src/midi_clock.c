@@ -53,6 +53,8 @@ static __attribute__((noinline)) void midi_clock_pulse(uint32_t ms)
                         trk[i].seq_pos = (uint32_t)(((uint64_t)trk[i].seq_pos * ratio + 2048u) >> 12);
                     if (trk[i].seq_off)
                         trk[i].seq_off = (uint32_t)(((uint64_t)trk[i].seq_off * ratio + 2048u) >> 12);
+                    if (trk[i].arp_pos < (uint32_t)FS * 2u)   /* (the arp's grid is the song's: with it) */
+                        trk[i].arp_pos = (uint32_t)(((uint64_t)trk[i].arp_pos * ratio + 2048u) >> 12);
                 }
             }
             midi_beat_samples = new_beat;

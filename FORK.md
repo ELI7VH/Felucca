@@ -39,6 +39,10 @@ Direct DIN MIDI control; no computer needed while playing.
 | Wanted to remember where patches sit in a bank | A one-pixel theme-colored line at the screen’s bottom shows patch position. |
 | Could not see which track was sounding | HOME’s scope shows all four tracks, one lane each; the selected track is in the theme color. |
 | Couldn’t see what a MIDI knob was changing | Brief popup shows track, parameter name and value. |
+| Wanted WaveLoop's Shape Arp on the FM-1 | The ARP is SHAYPE: draw a pattern of rows over the chord you hold. |
+| Wanted the sequencer to play through the arp | With ARP on, each step's chord is the arp's chord; record chords, hear the shape. |
+| Wanted to step-record from the MiniLab | On SEQ → STEP with REC armed and stopped, MiniLab notes write the step like the keys. |
+| Wanted to draw arp patterns on a computer | Editor → SHAYPE: draw, zoom and shift; it sends to the FM-1 live or on WRITE SHAYPE. |
 | Needed quick screen-track switching | Encoder click cycles the displayed track 1 → 2 → 3 → 4 → 1. |
 
 ## A-bank pads
@@ -55,6 +59,33 @@ Hold effect pads to engage; release to stop. Works even with FX latch enabled.
 **Alt + bottom knobs 5–8:** synth ADSR or FM6 macros on the keyboard MIDI channel.
 **Alt + top knobs 1–3:** cutoff LFO rate / amount / shape; FM6 brightness modulation.
 Alt + top knob 4 and Alt + pads 2–7 remain unassigned.
+
+## SHAYPE, the ARP
+
+The ARP is **SHAYPE**, WaveLoop's Shape Arp. A pattern is up to 30 notes on 1–64 steps by 8 rows.
+Row 1 is the lowest note you hold, row 2 the next, and so on. Each pass moves the rows (DIR), and
+rows past the chord wrap round it or go up octaves (BOUND).
+
+- **ARP:** ARP on/off, STEPS, RATE (1/2 to 1/32 with triplets), DIR (UP, DOWN, PEND, RAND).
+- **ARP 2:** BOUND (WRAP, OCT), GATE, HOLD, SWING.
+- **ARP 3:** PAT (load SHAYPE, UP 4, UPDOWN, STABS, OCT RUN, PEDAL, DRONE), ROOT, OCT.
+- On every ARP page the grid shows the pattern. PRESETS moves the cursor step.
+- The white keys **F3–F4** are rows 1–8 at the cursor: tap to add or remove a note. Hold a row key and turn a knob to set its length. EDIT clears the step.
+- The black keys **F#3 G#3 A#3 C#4 D#4 are OP1–OP5**. Hold one and press OCT− / OCT+:
+
+| Key | OCT− | OCT+ |
+| --- | --- | --- |
+| OP1 F#3 | ZOOM out (half the steps and rate) | ZOOM in (double) |
+| OP2 G#3 | SHIFT left | SHIFT right |
+| OP3 A#3 | OCT down | OCT up (−3..+3) |
+| OP4 C#4 | MIRROR flip (rows upside down) | MIRROR reverse (backwards) |
+| OP5 D#4 | MUTATE: remove a random note | MUTATE: add a note on an empty cell |
+
+The OP keys breathe on the ARP pages; OCT− / OCT+ light only where the held OP can act.
+With ARP on, the sequencer's chords feed SHAYPE and recording writes the chords you play.
+Patterns, PAT, ROOT and OCT save with every project and setlist song. Songs from midi24 and earlier
+load with SHAYPE's pattern and their old ARP settings mapped. Back up before going back to an older
+firmware: it cannot read songs saved by midi25.
 
 ## Drum kits
 

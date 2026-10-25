@@ -580,12 +580,12 @@ async function editorLibrarian() {
   /* another engine, an empty sequencer, then UP_LOAD brings the sound back, not the stored pattern */
   await rq(E.req.preset(2, 0));
   for (let i = 0; i < info.nstep; i++) await rq(E.req.stepSet(i, emptyStep));
-  await rq(E.req.set(0, 17, 3));                 /* the track's own: ARP MODE */
+  await rq(E.req.set(0, 17, 1));                 /* the track's own: ARP ON */
   rc = await E.bank.load(rq, 10);
   const d2 = E.parse[C.DUMP](await rq(E.req.dump()), info);
   const st = [];
   for (let i = 0; i < 16; i++) st.push(E.parse[C.STEP_GET](await rq(E.req.stepGet(i))));
-  ok(rc === 0 && d2.engine === 0 && eq(d2.p.filter((_, i) => i !== 17), cap.p.filter((_, i) => i !== 17)) && d2.p[17] === 3
+  ok(rc === 0 && d2.engine === 0 && eq(d2.p.filter((_, i) => i !== 17), cap.p.filter((_, i) => i !== 17)) && d2.p[17] === 1
     && st.every((x) => !x.n) && cap.pattern, "librarian: UP_LOAD applies the sound only (steps and the track's ARP stay)");
   await rq(E.req.set(0, 17, 0));
   for (let i = 0; i < 16; i++) await rq(E.req.stepSet(i, E.stepsFromPattern(cap.pattern)[i]));   /* (for the captures below) */
@@ -598,8 +598,8 @@ async function editorLibrarian() {
   /* audition: a PHASE patch that holds a pattern; the sound only, the sequence (with notes) stays */
   const bass = await E.bank.get(rq, info, 2);   /* PHASE RESO, with the ACID pattern */
   await rq(E.req.stepSet(20, { n: 1, notes: [50, 0, 0, 0], time: 0, flags: 0, vel: 90 }));
-  await rq(E.req.set(0, 29, 24));               /* the track's own: LEN 24, ARP MODE 2 */
-  await rq(E.req.set(0, 17, 2));
+  await rq(E.req.set(0, 29, 24));               /* the track's own: LEN 24, ARP ON */
+  await rq(E.req.set(0, 17, 1));
   await rq(E.req.set(0, 81, 1));                /* CHRD DIA3: the track's too */
   const seqBefore = [];
   for (let i = 0; i < 24; i++) seqBefore.push(E.parse[C.STEP_GET](await rq(E.req.stepGet(i))));
@@ -610,7 +610,7 @@ async function editorLibrarian() {
   for (let i = 0; i < 24; i++) st3.push(E.parse[C.STEP_GET](await rq(E.req.stepGet(i))));
   const own = new Set([0, 39, 40, ...Array.from({ length: 16 }, (_, i) => 17 + i), 45, 46, 47, 48, 81, 82]);
   ok(d3.engine === bass.engine && eq(d3.p.filter((_, i) => !own.has(i)), bass.p.filter((_, i) => !own.has(i)))
-    && d3.p[29] === 24 && d3.p[81] === 1 && d3.p[17] === 2 && js(st3) === js(seqBefore) && st3[20].notes[0] === 50 && js(m.state.bank) === flashBefore,
+    && d3.p[29] === 24 && d3.p[81] === 1 && d3.p[17] === 1 && js(st3) === js(seqBefore) && st3[20].notes[0] === 50 && js(m.state.bank) === flashBefore,
     "librarian: audition = G_ENGSEL + SETs of the sound; steps, LEN and ARP stay; no flash write");
   /* the next audition: the same rule */
   const bell = await E.bank.get(rq, info, 1);

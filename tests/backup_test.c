@@ -176,8 +176,8 @@ int main(void)
 
     reset();
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
-    bad += check("LIST captures the runtime: 23 objects including setlist, runtime 3584 B (FUN8)",
-                 list(0, &len, &crc) == 0 && rep[2] == 23u && len == sizeof(project_store_t) && len == 3584u &&
+    bad += check("LIST captures the runtime: 23 objects including setlist, runtime 3840 B (FUN9)",
+                 list(0, &len, &crc) == 0 && rep[2] == 23u && len == sizeof(project_store_t) && len == 3840u &&
                  crc == st_crc32(ED_BK_RAW, len));
     bad += check("an empty project slot lists as length 0", list(2, &len, &crc) == 0 && len == 0);
     bad += check("GET of the runtime copy", get(0, 0, 64) == 0);
@@ -278,6 +278,21 @@ int main(void)
     bad += check("a FUN7 project restores into slot 3 (flash and RAM)",
                  put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && project_used(2) &&
                  !memcmp(&proj_slot[2], &st, sizeof st) && st_load(OBJ_PROJECT0 + 2, &proj_wire, sizeof proj_wire) == (int)sizeof st);
+    {   /* WaveLoop Kit: an archive of midi24 or before holds FUN8 projects and songs (3584 bytes): they restore as FUN9 */
+        static uint8_t v8[PROJ_STORE_V8];
+        uint32_t h;
+        memcpy(v8, st.raw, PROJ_STORE_V8 - 16u);
+        memcpy(v8 + PROJ_STORE_V8 - 16u, st.raw + PROJ_NAME_OFF, PROJ_NAME_LEN);
+        h = 0x46554E38u; memcpy(v8, &h, 4); h = PROJ_STORE_V8; memcpy(v8 + 4, &h, 4);
+        h = proj_hash(v8, PROJ_STORE_V8 - 4u); memcpy(v8 + PROJ_STORE_V8 - 4u, &h, 4);
+        bad += check("a FUN8 project (an older archive) restores into slot 2 as FUN9, its steps and SHAYPE",
+                     put_all(3, v8, sizeof v8, st_crc32(v8, sizeof v8)) == 0 && ((uint32_t *)proj_slot[1].raw)[0] == PROJ_MAGIC &&
+                     proj_import(&proj_scratch, &proj_slot[1], sizeof st) && proj_scratch.t[1].step[3].note[0] == 64 &&
+                     proj_scratch.arp[0][0] == 8u);
+        bad += check("a FUN8 setlist song (an older archive) restores as FUN9",
+                     put_all(10, v8, sizeof v8, st_crc32(v8, sizeof v8)) == 0 && project_used(4) &&
+                     ((uint32_t *)project_cached(4)->raw)[0] == PROJ_MAGIC);
+    }
     memset(&v6, 0, sizeof v6);                           /* FUN6: 69 parameters, steps out of range */
     v6.magic = PROJ_MAGIC_V6;
     v6.size = sizeof v6;

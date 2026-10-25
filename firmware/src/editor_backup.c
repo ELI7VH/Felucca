@@ -105,14 +105,15 @@ static uint32_t ed_bk_commit(void)
     if (ed_bk_pos != ed_bk_len || st_crc32(raw, ed_bk_len) != ed_bk_crc) return 2;
     if (ed_bk_id == 0u || (ed_bk_id >= 2u && ed_bk_id <= 5u)) {
         if (ed_bk_len && !proj_import(&proj_scratch, raw, (int)ed_bk_len)) return 2;
-        uint8_t active=ed_bk_len==sizeof(project_store_t) ? raw[SESSION_UI_OFF+7] : 0u;
+        int full = ed_bk_len == sizeof(project_store_t) || ed_bk_len == PROJ_STORE_V8;   /* (FUN8: an older archive) */
+        uint8_t active=full ? raw[SESSION_UI_OFF+7] : 0u;
         uint8_t resume_meta[10];
-        int resume = ed_bk_id == 5u && ed_bk_len == sizeof(project_store_t) && raw[65] == SESSION_MARK;
+        int resume = ed_bk_id == 5u && full && raw[65] == SESSION_MARK;
         if (resume) {
             resume_meta[0] = raw[65]; resume_meta[1] = raw[67];
             memcpy(resume_meta + 2, raw + SESSION_UI_OFF, 8);
         }
-        if (ed_bk_len) {                            /* an older format becomes FUN8 inside its ranges */
+        if (ed_bk_len) {                            /* an older format becomes FUN9 inside its ranges */
             proj_bound(&proj_scratch);
             if (!proj_pack((project_store_t *)raw, &proj_scratch)) return 2;
             ed_bk_len = sizeof(project_store_t);
@@ -154,7 +155,13 @@ static uint32_t ed_bk_commit(void)
         sync_reload = 1; ui.force = 1;
         return upf_save() == 2 ? 4u : 0u;           /* (a failed write keeps the restored RAM copy) */
     } else if (ed_bk_id>=10u && ed_bk_id<=18u) {
-        if (ed_bk_len && (ed_bk_len!=sizeof(project_store_t) || !proj_import(&proj_scratch,raw,(int)ed_bk_len))) return 2;
+        if (ed_bk_len && ((ed_bk_len!=sizeof(project_store_t) && ed_bk_len!=PROJ_STORE_V8) ||
+                          !proj_import(&proj_scratch,raw,(int)ed_bk_len))) return 2;
+        if (ed_bk_len) {                            /* (a FUN8 song of an older archive: FUN9, as a load would) */
+            proj_bound(&proj_scratch);
+            if (!proj_pack((project_store_t *)raw, &proj_scratch)) return 2;
+            ed_bk_len = sizeof(project_store_t);
+        }
         obj=OBJ_SONG0+ed_bk_id-10u;
     } else if (ed_bk_id==19u) {
         if (ed_bk_len!=sizeof setlist || !setlist_valid((const setlist_store_t *)raw)) return 2;
@@ -201,9 +208,10 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
     if (a[0] == 0u) {
         if (n != 12u || a[6] > 15u || a[11] > 15u) return 1;
         uint32_t len = ed_bk_r32(a + 2);
-        if (len > ED_BK_MAX || (a[1]>=10u && a[1]<=18u && len && len!=sizeof(project_store_t)) || (a[1]==19u && len!=sizeof setlist) || (a[1] == 0u && len != sizeof(project_store_t) && len != PROJ_STORE_V7) ||
+        if (len > ED_BK_MAX || (a[1]>=10u && a[1]<=18u && len && len!=sizeof(project_store_t) && len!=PROJ_STORE_V8) || (a[1]==19u && len!=sizeof setlist) ||
+            (a[1] == 0u && len != sizeof(project_store_t) && len != PROJ_STORE_V8 && len != PROJ_STORE_V7) ||
             (a[1] == 1u && len != sizeof(persist_t)) ||
-            (a[1] >= 2u && a[1] <= 5u && len && len != sizeof(project_store_t) && len != PROJ_STORE_V7) ||
+            (a[1] >= 2u && a[1] <= 5u && len && len != sizeof(project_store_t) && len != PROJ_STORE_V8 && len != PROJ_STORE_V7) ||
             ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t)) ||
             (a[1] == 8u && len && len != sizeof(fm6_bank_t)) || (a[1] == 9u && len && len != sizeof(upf_t))) return 1;
         ed_bk_valid = 0; ed_bk_put = 1; ed_bk_id = a[1]; ed_bk_len = len; ed_bk_gen = ++proj_wire_gen;

@@ -56,9 +56,18 @@
  * as they are, the rest of its sound kept; proj_perc, on every import as proj_fm4). Its motion events on the
  * EDIT values are dropped (SAMPLE's meanings, not DRUM's).
  *
+ * Format 9 ("FUN9", written since WaveLoop Kit midi25) = FUN8 with each track's SHAYPE block (the ARP's pattern and
+ * its PAT ROOT OCT: seq.c arp_pat, arp_x; 4 x PROJ_ARP_BLK bytes between the FM6 patches and the name): 3840 bytes,
+ * the storage object's whole payload (storage.c ST_PAYLOAD_MAX). FUN8, FUN7 and older load with SHAYPE's pattern on
+ * every track and their old ARP settings mapped (proj_arp_migrate); firmware before midi25 does not read FUN9.
+ *
  * Built on the Mac too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
  * PROJ_HOST needs core.h, params.c (TP) and engines.c. */
-#define PROJ_MAGIC 0x46554E38u                 /* "FUN8": FUN7 + the tracks' FM6 patches */
+#ifdef PROJ_HOST
+#include "arp_shape.c"                         /* (the firmware has it from seq.c) */
+#endif
+#define PROJ_MAGIC 0x46554E39u                 /* "FUN9": FUN8 + the tracks' SHAYPE blocks (WaveLoop Kit) */
+#define PROJ_MAGIC_V8 0x46554E38u              /* "FUN8": FUN7 + the tracks' FM6 patches */
 #define PROJ_MAGIC_V7 0x46554E37u              /* "FUN7": serialized (byte params, packed steps), chain, motion */
 #define PROJ_MAGIC_V6 0x46554E36u              /* FUN6: 69 parameters, drum grid, chain */
 #define PROJ_MAGIC_V5 0x46554E35u              /* "FUN5": the grid, without the chain; read only */
@@ -89,6 +98,7 @@ typedef struct {
     chain_config_t chain;
     motion_store_t motion;
     uint8_t fm6[NTRK][FM6_PACKED];             /* each track's FM6 patch, packed (eng_fm6.c) */
+    uint8_t arp[NTRK][64];                     /* each track's SHAYPE block (PROJ_ARP_BLK, proj_arp_put / proj_arp_get) */
     char name[PROJ_NAME_LEN];                  /* the project's name: upper-case ASCII 32..126, 0-padded; "" = none */
     uint32_t sum;
 } project_t;
@@ -112,13 +122,18 @@ _Static_assert(sizeof(project_v5_t) == 3352u && sizeof(project_v6_t) == 3388u, "
  * never reads them, so every FUN7 file stays valid both ways; FUN6..FUN1 imports get no name.
  * FUN8: the same, 3584 bytes, the four packed FM6 patches at PROJ_FM6_OFF (before the name); 16 bytes of the
  * reserved tail are left for parameters added later. */
-#define PROJ_STORE_SIZE 3584u
+#define PROJ_STORE_SIZE 3840u                  /* FUN9 */
+#define PROJ_STORE_V8 3584u                    /* FUN8 */
 #define PROJ_STORE_V7 3388u                    /* FUN7 */
+#define PROJ_ARP_BLK 64u                       /* FUN9: a track's SHAYPE block: n, pat, root, oct + 3, ARP_NMAX notes LE */
 #define PROJ_NAME_OFF (PROJ_STORE_SIZE - 4u - PROJ_NAME_LEN)
-#define PROJ_FM6_OFF (PROJ_NAME_OFF - NTRK * FM6_PACKED)
+#define PROJ_ARP_OFF (PROJ_NAME_OFF - NTRK * PROJ_ARP_BLK)
+#define PROJ_FM6_OFF (PROJ_ARP_OFF - NTRK * FM6_PACKED)   /* (3056, as FUN8's) */
 typedef union { uint32_t align; uint8_t raw[PROJ_STORE_SIZE]; } project_store_t;
 _Static_assert(G_COUNT == 27u, "FUN7 globals retain original IDs");
-_Static_assert(sizeof(project_store_t) == 3584u && PROJ_STORE_V7 == sizeof(project_v6_t), "FUN8 / FUN7 sizes");
+_Static_assert(sizeof(project_store_t) == 3840u && PROJ_STORE_V7 == sizeof(project_v6_t), "FUN9 / FUN7 sizes");
+_Static_assert(PROJ_FM6_OFF == PROJ_STORE_V8 - 16u - NTRK * FM6_PACKED, "FUN9 keeps FUN8's bytes up to its name");
+_Static_assert(4u + 2u * ARP_NMAX == PROJ_ARP_BLK && sizeof(arp_pat_t) == PROJ_ARP_BLK, "a SHAYPE block per track");
 typedef struct {                               /* a track of format 4, read only */
     int16_t p[PROJ_NP_V4];
     uint8_t engine, preset;
@@ -456,6 +471,7 @@ static int proj_import(project_t *q, const void *b, int n)
     proj_perc(q);
     return 1;
 }
+static void proj_arp_old(project_t *q);
 static int proj_import_any(project_t *q, const void *b, int n)
 {
     if (n == PROJ_STORE_SIZE && ((const uint32_t *)b)[0] == PROJ_MAGIC)
@@ -463,6 +479,8 @@ static int proj_import_any(project_t *q, const void *b, int n)
     if (n == PROJ_STORE_SIZE && ((const uint32_t *)b)[1] >= 8u && ((const uint32_t *)b)[1] < PROJ_STORE_SIZE)
         n = (int)((const uint32_t *)b)[1];      /* a retained slot holding an older, shorter record: its own size
                                                  * (every format checks its magic and hash) */
+    if (n == (int)PROJ_STORE_V8 && ((const uint32_t *)b)[0] == PROJ_MAGIC_V8)
+        return proj_unpack(q, b, PROJ_STORE_V8);
     if (n == (int)PROJ_STORE_V7 && ((const uint32_t *)b)[0] == PROJ_MAGIC_V7)
         return proj_unpack(q, b, PROJ_STORE_V7);
     if (n == (int)sizeof *q && proj_ok((const project_t *)b)) {
@@ -474,6 +492,7 @@ static int proj_import_any(project_t *q, const void *b, int n)
     if (!proj_import_old(q, b, n))
         return 0;
     proj_fm6_init(q);
+    proj_arp_old(q);
     return 1;
 }
 static int proj_import_old(project_t *q, const void *b, int n)
@@ -560,6 +579,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
     memcpy(b + pos, &q->chain, sizeof q->chain); pos += sizeof q->chain;
     memcpy(b + pos, &q->motion, sizeof q->motion);
     memcpy(b + PROJ_FM6_OFF, q->fm6, sizeof q->fm6);
+    memcpy(b + PROJ_ARP_OFF, q->arp, sizeof q->arp);   /* (WaveLoop Kit: SHAYPE's blocks, proj_arp_put's) */
     {   /* the name (0-padded; stops at the first 0) */
         char n[PROJ_NAME_LEN + 1u];
         memcpy(b + PROJ_NAME_OFF, n, proj_name_get(n, (const uint8_t *)q->name));
@@ -577,13 +597,77 @@ static void proj_motion_ids(motion_store_t *m, uint32_t np)
         if (np < P_COUNT && m->event[i].param >= np - 8u && m->event[i].param < np)
             m->event[i].param = (uint8_t)(m->event[i].param + P_COUNT - np);
 }
-/* a stored FUN8 (st = PROJ_STORE_SIZE) or FUN7 (PROJ_STORE_V7: no patches, the init one) */
+/* WaveLoop Kit: the SHAYPE block of a track (FUN9, PROJ_ARP_BLK bytes) <-> its pattern and PAT ROOT OCT */
+static void proj_arp_put(uint8_t *a, const arp_pat_t *p, const int16_t *x)
+{
+    uint32_t i, n = p->n < ARP_NMAX ? p->n : ARP_NMAX;
+    memset(a, 0, PROJ_ARP_BLK);
+    a[0] = (uint8_t)n;
+    a[1] = (uint8_t)clamp(x[ARPX_PAT], 0, 7);
+    a[2] = (uint8_t)clamp(x[ARPX_ROOT], 0, 12);
+    a[3] = (uint8_t)(clamp(x[ARPX_OCT], -3, 3) + 3);
+    for (i = 0; i < n; i++) {
+        a[4u + 2u * i] = (uint8_t)p->note[i];
+        a[5u + 2u * i] = (uint8_t)(p->note[i] >> 8);
+    }
+}
+static void proj_arp_get(const uint8_t *a, arp_pat_t *p, int16_t *x)   /* (damaged: SHAYPE, its extras' defaults) */
+{
+    uint32_t i;
+    memset(p, 0, sizeof *p);
+    if (a[0] <= ARP_NMAX && a[1] <= 7u && a[2] <= 12u && a[3] <= 6u) {
+        p->n = a[0];
+        for (i = 0; i < a[0]; i++)
+            p->note[i] = (uint16_t)(a[4u + 2u * i] | a[5u + 2u * i] << 8);
+        if (ash_valid(p)) {
+            x[ARPX_PAT] = a[1];
+            x[ARPX_ROOT] = a[2];
+            x[ARPX_OCT] = (int16_t)(a[3] - 3);
+            return;
+        }
+    }
+    ash_load(p, 0);
+    x[ARPX_PAT] = 1;
+    x[ARPX_ROOT] = 0;
+    x[ARPX_OCT] = 0;
+}
+/* a project saved before the ARP was SHAYPE (FUN8 and older): its ARP settings meant MODE (OFF UP DN UPDN RND ORD
+ * REPEAT), RATE (N_DIV: 1/4 1/8 1/16 1/32 8T 16T 1/2 1/1 2BAR 4BAR), OCT 1..4, GATE (1..127), PROB, ORD; now they are ARP
+ * (on), RATE (1/2 .. 1/32), DIR, GATE %, STEPS, BOUND. ON stays on, the rate and the gate keep what they were (the
+ * slowest rate for the bar-long ones), HOLD and SWING stay; DIR UP, STEPS 4, BOUND WRAP, and the pattern SHAYPE with
+ * ROOT OFF and OCT 0 */
+static void proj_arp_migrate(int16_t *p)
+{
+    static const uint8_t RATE[10] = {1, 3, 5, 7, 4, 6, 0, 0, 0, 0};
+    p[P_AMODE] = (int16_t)(p[P_AMODE] != 0);
+    p[P_ARATE] = (int16_t)(p[P_ARATE] >= 0 && p[P_ARATE] < 10 ? RATE[p[P_ARATE]] : 3);
+    p[P_AGATE] = (int16_t)clamp(p[P_AGATE] * 100 / 128, 10, 100);
+    p[P_AOCT] = AD_UP;
+    p[P_APROB] = 4;
+    p[P_AORDER] = AB_WRAP;
+}
+static void proj_arp_old(project_t *q)
+{
+    static const int16_t X[ARPX_N] = {1, 0, 0};
+    arp_pat_t p;
+    uint32_t t;
+    ash_load(&p, 0);
+    for (t = 0; t < NTRK; t++) {
+        proj_arp_migrate(q->t[t].p);
+        proj_arp_put(q->arp[t], &p, X);
+    }
+    q->sum = proj_sum(q);
+}
+
+/* a stored FUN9 (st = PROJ_STORE_SIZE), FUN8 (PROJ_STORE_V8: no SHAYPE blocks) or FUN7 (PROJ_STORE_V7: no patches
+ * either, the init one) */
 static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
 {
-    uint32_t pos = 68u, t, i, magic, size, sum, np = b[66], v7 = st == PROJ_STORE_V7;
-    uint32_t name_off = st - 4u - PROJ_NAME_LEN, end = v7 ? name_off : name_off - NTRK * FM6_PACKED;
+    uint32_t pos = 68u, t, i, magic, size, sum, np = b[66], v7 = st == PROJ_STORE_V7, v8 = st == PROJ_STORE_V8;
+    uint32_t name_off = st - 4u - PROJ_NAME_LEN, arp_off = name_off - (v7 || v8 ? 0u : NTRK * PROJ_ARP_BLK);
+    uint32_t end = v7 ? name_off : arp_off - NTRK * FM6_PACKED;
     memcpy(&magic, b, 4); memcpy(&size, b + 4, 4); memcpy(&sum, b + st - 4u, 4);
-    if (magic != (v7 ? PROJ_MAGIC_V7 : PROJ_MAGIC) || size != st || sum != proj_hash(b, st - 4u) ||
+    if (magic != (v7 ? PROJ_MAGIC_V7 : v8 ? PROJ_MAGIC_V8 : PROJ_MAGIC) || size != st || sum != proj_hash(b, st - 4u) ||
         np < 8u || np > P_COUNT || 68u + NTRK * (np + 2u + NSTEP * 9u) + sizeof q->chain + sizeof q->motion > end)
         return 0;
     memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC; q->size = sizeof *q;
@@ -623,6 +707,16 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
     {
         char n[PROJ_NAME_LEN + 1u];
         memcpy(q->name, n, proj_name_get(n, b + name_off));
+    }
+    if (v7 || v8) {
+        proj_arp_old(q);                        /* (before SHAYPE: its pattern, the old ARP settings mapped) */
+    } else {
+        for (t = 0; t < NTRK; t++) {            /* (a damaged block: SHAYPE on that track, the project still loads) */
+            arp_pat_t p;
+            int16_t x[ARPX_N];
+            proj_arp_get(b + arp_off + t * PROJ_ARP_BLK, &p, x);
+            proj_arp_put(q->arp[t], &p, x);
+        }
     }
     q->sum = proj_sum(q); proj_drums_to_part(q); proj_phys(q);
     return 1;
@@ -759,6 +853,7 @@ static void project_capture(project_t *p)
         memcpy(p->t[i].step, trk[i].step, sizeof trk[i].step);
         if (trk[i].eng_req==ENGI_DRUM) drum_controls_pack(&trk[i],p->fm6[i]);
         else fm6_pack(fm6_patch[i], p->fm6[i]);
+        proj_arp_put(p->arp[i], &arp_pat[i], arp_x[i]);   /* WaveLoop Kit: SHAYPE's pattern, PAT ROOT OCT */
     }
     p->motion = motion;
     motion_unguard(f);
@@ -896,6 +991,9 @@ static int project_restore_runtime(const project_t *input)
         proj_steps(t->step);
         if (e==ENGI_DRUM) drum_controls_unpack(t,p->fm6[k]);
         else drum_controls_reset(t);
+        proj_arp_get(p->arp[k], &arp_pat[k], arp_x[k]);   /* WaveLoop Kit: SHAYPE (the ISR is off) */
+        t->arp_n = 0;                                   /* (its notes ended: transport_req, panic_req) */
+        t->seq_n = t->seq_arp = 0;
         {   /* the project's own FM6 patch, never reloaded from SLOT: F n if it is that factory patch, else OWN */
             uint8_t v[FP_SIZE + 1u];
             fm6_unpack(p->fm6[k], v);

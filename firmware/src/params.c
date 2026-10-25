@@ -2,7 +2,15 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Parameter descriptors, formatting and the page table. */
 static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};
-static const char *const N_AMODE[] = {"OFF", "UP", "DN", "UPDN", "RND", "ORD", "REPEAT"};
+/* WaveLoop Kit: the ARP is SHAYPE, WaveLoop's Shape Arp (arp_shape.c); the ARP ids are its settings. RATE: steps as the
+ * toy's RATES (ARP_RATE2); DIR: how each pass moves the rows; BOUND: a row past the chord wraps round the held notes
+ * or goes up octaves. ROOT, PAT and OCT are not parameters: seq.c arp_x (ARP 3, page ids ARPX_*) */
+static const char *const N_ARATE[] = {"1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
+static const char *const N_ADIR[] = {"UP", "DOWN", "PEND", "RAND"};
+static const char *const N_ABOUND[] = {"WRAP", "OCT"};
+static const char *const N_AROOT[] = {"OFF", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+static const char *const N_APAT[] = {"USER", "SHAYPE", "UP 4", "UPDOWN", "STABS", "OCT RUN", "PEDAL", "DRONE"};
+static const char *const N_AXOCT[] = {"-3", "-2", "-1", "0", "+1", "+2", "+3", 0};   /* (F_INT: 0-terminated) */
 static const char *const N_DIV[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"};
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
@@ -17,7 +25,6 @@ static const char *const N_VOICE[] = {"POLY", "MONO", "LEG", "UNI"};   /* V_POLY
 static const char *const N_GLMODE[] = {"RATE", "TIME"};
 static const char *const N_PRIO[] = {"LAST", "LOW", "HIGH"};
 static const char *const N_ALLOC[] = {"ROT", "REUSE"};
-static const char *const N_ORDER[] = {"NOTE", "PLAY"};
 static const char *const N_CLOCK[] = {"INT", "USB", "TRS"};
 static const char *const N_MIDI_INPUT[] = {"USB", "TRS"};
 static const char *const N_ROUTE[] = {"CH1-4", "SEL"};   /* MIDI IN (seq.c): 1..4 -> parts, 5..16 ignored / all -> selected */
@@ -59,14 +66,14 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LD_FLT] = PD("FLT", F_BIPCT, -64, 63, 0),
     [P_LD_SHP] = PD("SHP", F_BIPCT, -64, 63, 0),
     [P_LD_AMP] = PD("AMP", F_PCT, 0, 127, 0),
-    [P_AMODE] = PE("MODE", N_AMODE, 0),
-    [P_ARATE] = PE("RATE", N_DIV, 2),
-    [P_AOCT] = PD("OCT", F_INT, 1, 4, 1),
-    [P_AGATE] = PD("GATE", F_PCT, 1, 127, 64),
+    [P_AMODE] = PE("ARP", N_ONOFF, 0),            /* SHAYPE (a project of before: its MODE, any but OFF, is ON) */
+    [P_ARATE] = PE("RATE", N_ARATE, 3),           /* 1/8, the toy's */
+    [P_AOCT] = PE("DIR", N_ADIR, 0),
+    [P_AGATE] = {"GATE", F_INT, 10, 100, 75, 0, "%"},
     [P_ASWING] = PD("SWG", F_PCT, 0, 100, 0),
-    [P_APROB] = PD("PROB", F_PCT, 0, 127, 127),
+    [P_APROB] = PD("STEPS", F_STEPS, 1, 64, 4),
     [P_AHOLD] = PE("HOLD", N_ONOFF, 0),
-    [P_AORDER] = PE("ORD", N_ORDER, 0),
+    [P_AORDER] = PE("BOUND", N_ABOUND, 0),
     [P_ROOT] = PD("ROOT", F_NOTE, 0, 11, 0),
     [P_SCALE] = PE("SCL", N_SCALE, 0),
     [P_QUANT] = PE("QNT", N_QUANT, 0),
@@ -110,6 +117,15 @@ static const param_desc_t TP[P_COUNT] = {
 };
 
 static const param_desc_t DRUM_LEVEL_DESC=PD("LVL",F_DB,0,112,112);
+/* ARP 3's PAT ROOT OCT (page ids ARPX_PAT..ARPX_OCT): the track's SHAYPE extras, seq.c arp_x, stored with its pattern */
+enum { ARPX_PAT, ARPX_ROOT, ARPX_OCT, ARPX_N };
+#define ARPX_ID0 0xF0u                           /* page id of ARPX_PAT (0xFF stays the empty slot) */
+static const param_desc_t ARPX_DESC[ARPX_N] = {
+    [ARPX_PAT] = PE("PAT", N_APAT, 1),            /* the factory pattern last loaded (turning loads one), USER once edited */
+    [ARPX_ROOT] = PE("ROOT", N_AROOT, 0),         /* the held note of that name is the lowest, the ones under it up octaves */
+    [ARPX_OCT] = {"OCT", F_INT, -3, 3, 0, N_AXOCT, 0},   /* the arp's notes up / down octaves (OP3 on the ARP pages) */
+};
+static int16_t arp_x[NTRK][ARPX_N];              /* per track: PAT, ROOT, OCT (main loop writes, the audio ISR reads) */
 
 static const param_desc_t GP[G_COUNT] = {
     [G_BPM] = PD("BPM", F_BPM, 40, 240, 120),
@@ -371,8 +387,9 @@ static const page_t PAGES[] = {
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},
     {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_TOOLS, {G_CLRSEQ, G_INITSND, 0xFF, 0xFF}},
-    {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
-    {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
+    /* WaveLoop Kit: the ARP is SHAYPE; its pattern's grid on every page (ui_graph.c graph_arp, ui_arp.c) */
+    {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_APROB, P_ARATE, P_AOCT}},
+    {"ARP 2", FAM_ARP, SC_TRACK, GR_ARP, {P_AORDER, P_AGATE, P_AHOLD, P_ASWING}},
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
     {"PHRASES", FAM_SEQ, SC_GLOBAL, GR_PATS, {0xFF, 0xFF, 0xFF, 0xFF}},    /* pattern loader: PAT LOAD (ui.c pat_load) */
@@ -382,6 +399,8 @@ static const page_t PAGES[] = {
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_MOTION, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"SETLIST", FAM_SEQ, SC_GLOBAL, GR_SETLIST, {0xFF,0xFF,0xFF,0xFF}},
     {"DRUM MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_LEVEL,P_PAN,P_CHOR,P_REV}},
+    /* WaveLoop Kit: SHAYPE's PAT ROOT OCT (seq.c arp_x), after the others so every stored page index stays */
+    {"ARP 3", FAM_ARP, SC_TRACK, GR_ARP, {ARPX_ID0 + ARPX_PAT, ARPX_ID0 + ARPX_ROOT, ARPX_ID0 + ARPX_OCT, 0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
@@ -400,6 +419,10 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     if (pg->scope == SC_GLOBAL) {
         *valp = &song.g[id];
         return &GP[id];
+    }
+    if (id >= ARPX_ID0) {                             /* ARP 3: the track's SHAYPE extras (seq.c arp_x) */
+        *valp = &arp_x[song.sel][id - ARPX_ID0];
+        return &ARPX_DESC[id - ARPX_ID0];
     }
     if (pg->graph == GR_MOD)                          /* SRC DST AMT of the slot shown */
         id += 3u * mod_ui_slot;

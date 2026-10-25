@@ -216,6 +216,55 @@ static void pr_bars(const step_t *st, int32_t x, int32_t w, uint16_t c, int acc_
             pr_split(x, y + 1, w, PR_RH - 2, c, hits);
     }
 }
+/* WaveLoop Kit: the ARP pages' grid (ui_arp.c): SHAYPE's pattern of the track, steps across (the cursor's 16; 8 or
+ * fewer twice as wide), rows up (row 1 at the bottom, the lowest held note's place). A note is a bar over its steps (its
+ * start a notch brighter); the cursor step framed, the step the arp plays a line with its notes lit; the beats' lines
+ * brighter. On the left a key per row, lit while its key is held. Under the grid, with more than 16 steps, a mark per
+ * 16 (the shown one lit) */
+#define AG_X0 36                                    /* the first step column (12 px each) */
+#define AG_CW 12
+#define AG_Y0 6                                     /* the top row (row 8) */
+#define AG_RH 13
+static void graph_arp(const track_t *t, uint16_t c)
+{
+    const arp_pat_t *p = &arp_pat[trk_index(t)];
+    uint32_t i, r, steps = arp_steps(t), cur = arp_cur(), base = cur / 16u * 16u, ncol, nb;
+    int32_t play = arp_playing(), ybot = AG_Y0 + (int32_t)ARP_ROWS * AG_RH, gw, cw;
+    ncol = steps - base < 16u ? steps - base : 16u;
+    cw = ncol <= 8u ? 2 * AG_CW : AG_CW;             /* (8 steps or fewer: twice as wide) */
+    gw = (int32_t)ncol * cw + 1;
+    for (r = 0; r < ARP_ROWS; r++) {                /* the rows' lanes and keys */
+        int32_t y = AG_Y0 + (int32_t)(ARP_ROWS - 1u - r) * AG_RH;
+        if (!(r & 1u))
+            cv_rect(AG_X0, y, gw, AG_RH, T_LANE);
+        cv_rect(22, y + 1, 10, AG_RH - 2, (ui.arp.down >> r) & 1u ? T_ACCENT : T_RAISE);
+    }
+    for (i = 0; i <= ncol; i++)                     /* step lines, the beats brighter */
+        cv_rect(AG_X0 + (int32_t)i * cw, AG_Y0, 1, ybot - AG_Y0, i % 4u ? T_GRID : T_RAISE);
+    for (i = 0; i < ncol; i++) {
+        int32_t x = AG_X0 + (int32_t)i * cw;
+        if (base + i == cur)
+            cv_frame(x, AG_Y0 - 3, cw + 1, ybot - AG_Y0 + 6, T_TEXT);
+        if ((int32_t)(base + i) == play)
+            cv_rect(x + cw / 2, AG_Y0, 1, ybot - AG_Y0, T_ACCENT);
+    }
+    for (i = 0; i < p->n; i++) {                     /* the notes */
+        uint32_t x = p->note[i], s0 = ARP_STEP(x), s1 = s0 + ARP_LEN(x), a, b;
+        int32_t y = AG_Y0 + (int32_t)(ARP_ROWS - 1u - ARP_ROW(x)) * AG_RH;
+        uint16_t col;
+        if (s1 <= base || s0 >= base + ncol)
+            continue;
+        a = s0 > base ? s0 - base : 0u;
+        b = (s1 < base + ncol ? s1 : base + ncol) - base;
+        col = play >= 0 && (uint32_t)play >= s0 && (uint32_t)play < s1 ? T_TEXT : s0 <= cur && cur < s1 ? T_ACCENT : c;
+        cv_rect(AG_X0 + (int32_t)a * cw + 2, y + 2, (int32_t)(b - a) * cw - 3, AG_RH - 4, col);
+        if (s0 >= base)                              /* its start */
+            cv_rect(AG_X0 + (int32_t)a * cw + 2, y + 2, 2, AG_RH - 4, T_TEXT);
+    }
+    nb = (steps + 15u) / 16u;
+    for (i = 0; nb > 1u && i < nb; i++)              /* the 16s */
+        cv_rect(AG_X0 + (int32_t)i * 18, ybot + 5, 14, 3, i == cur / 16u ? T_ACCENT : T_RAISE);
+}
 static void graph_roll(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, ncol, mask = scale_mask(t), held = pr_held();
@@ -893,7 +942,13 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
-    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->graph == GR_MOTION) h ^= ui.frame / 2u;
+    if (pg->graph == GR_NONE || pg->graph == GR_MOTION) h ^= ui.frame / 2u;
+    if (pg->graph == GR_ARP) {                       /* WaveLoop Kit: the pattern, the cursor, the row keys, the step playing */
+        h = fnv(h, &arp_pat[song.sel], sizeof arp_pat[song.sel]);
+        h = (h ^ (arp_cur() + 1u) * 7919u ^ (uint32_t)ui.arp.down << 20) * 16777619u;
+        h = (h ^ (uint32_t)(arp_playing() + 2)) * 2654435761u;
+        h = fnv(h, arp_x[song.sel], sizeof arp_x[song.sel]);
+    }
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
@@ -1503,6 +1558,10 @@ static void draw_graph(void)
             break;
         case GR_SCALE:
             graph_scale(t, c);
+            break;
+        case GR_ARP:                                  /* WaveLoop Kit: SHAYPE's grid */
+            cv_oy = 0;
+            graph_arp(t, c);
             break;
         case GR_CHORD:
             cv_oy = 0;

@@ -34,6 +34,12 @@
 #                   fades, shared-voice limits, deferred settings and retries, failed-save rollback,
 #                   malformed transfers, transport-stop timeouts, MIDI and UART recovery; the MENU settings over the
 #                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later).
+# ARP (tests/arp_shape_test.c, WaveLoop Kit): SHAYPE's core (src/arp_shape.c) against WaveLoop's Shape Arp: tests/arp_vectors.h,
+#                   written by tools/arp_vectors.mjs running the toy's sequence.mjs, played tick by tick as seq.c arp_fire
+#                   plays them; ZOOM, SHIFT against the toy's subdivide / shift (--zoom, --shift), MIRROR, MUTATE.
+# SEQ > ARP (tests/arp_seq_test.c, WaveLoop Kit): the sequencer's chords through the arp against shapeChords (--chords),
+#                   its edges, chords let go anywhere in a step (MIDI, keys, HOLD, the external clock, CC123), MIDI step
+#                   recording, a soak: every note the arp starts ends once, every voice released.
 # CHORD (tests/chord_test.c): the chord keys (src/chord.c): diatonic triads / sevenths of several scales and roots,
 #                   the fixed shapes and voicings (at most 4 notes), names, MONO plays the root, a release ends
 #                   exactly what its key / MIDI note started, recording, the ARP, MIDI IN, kits ignore CHRD.
@@ -147,7 +153,11 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/project_test" tests/project_test.c -lm
     run "project formats (FUN1..FUN5 -> FUN6, the grid and song chain; DIGITAL tracks -> FM6, SAMPLE PERC -> DRUM)" "$OUT/project_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/motion_test" tests/motion_test.c -lm
-    run "motion, whole-step chance, FUN7 migration, song restore and ARP repeat" "$OUT/motion_test"
+    run "motion, whole-step chance, FUN7 / FUN8 -> FUN9 migration, song restore, SHAYPE on a track" "$OUT/motion_test"
+    $CC -O1 -w -Ifirmware/src -Itests -o "$OUT/arp_shape_test" tests/arp_shape_test.c
+    run "ARP (SHAYPE): every case of tests/arp_vectors.h as WaveLoop's sequence.mjs plays it, ZOOM, SHIFT, MIRROR, MUTATE" "$OUT/arp_shape_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/arp_seq_test" tests/arp_seq_test.c -lm
+    run "SEQ > ARP: the sequence's chords through SHAYPE as shapeChords plays them, edges, releases, MIDI step recording, soak" "$OUT/arp_seq_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ratchet_test" tests/ratchet_test.c -lm
     run "RATCH: x1..x4 in a step (notes, chords, drum hits), gates, chance, swing, projects, user presets, CHANCE page" "$OUT/ratchet_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/midi_control_test" tests/midi_control_test.c -lm

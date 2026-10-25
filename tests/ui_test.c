@@ -617,28 +617,27 @@ static int test_rec(void)
     fm1_in.notes = 0;
     frame();
     bad += check("STEP, not armed: the key writes the cursor step (and moves on)", trk[0].step[0].n == 1 && ui.cursor == 1);
-    /* ARP: the arp's notes are recorded, not the key */
+    /* ARP (SHAYPE): the chord played is recorded, not what the arp plays from it */
     ui_power_on();
     {
         track_t *t = &trk[0];
         uint32_t i, n = 0, notes = 0;
         t->engine = t->eng_req;
         t->p[P_AMODE] = 1;
-        t->p[P_AOCT] = 2;
-        t->p[P_APROB] = 127;
         song.rec = 1;
         song.playing = 1;
         input_on(t, 60, 100);
-        for (i = 0; i < NSTEP; i++)
-            n += t->step[i].n;
-        bad += check("ARP on: the key held is not recorded", n == 0);
         arp_tick(t, 1);
         for (i = 0; i < NSTEP; i++)
-            if (t->step[i].n)
+            if (t->step[i].n) {
+                n += t->step[i].n;
                 notes = t->step[i].note[0];
-        bad += check("ARP on: the note the arp plays is recorded", notes == 60u);
+            }
+        bad += check("ARP on: the key held is recorded once, as played (the arp's notes are not)", n == 1u && notes == 60u);
         t->p[P_AMODE] = 0;
         input_off(t, 60);
+        song.rec = 0;
+        song.playing = 0;
     }
     return bad;
 }
@@ -2154,8 +2153,8 @@ static int test_rec_hold_clear(void)
  * 1; TOOLS: nothing; HOME, PRESETS and every other page: the next sound, the steps untouched, SAVE held undoes it */
 static int test_presets_knob(void)
 {
-    int bad = 0, cur_ok = 1, sel_ok = 1, snd_ok = 1, undo_ok = 1, tools_ok = 1, grid_ok;
-    uint32_t i, n_snd = 0, n_cur = 0;
+    int bad = 0, cur_ok = 1, sel_ok = 1, snd_ok = 1, undo_ok = 1, tools_ok = 1, arp_ok = 1, grid_ok;
+    uint32_t i, n_snd = 0, n_cur = 0, n_arp = 0;
     for (i = 0; i < NPAGES; i++) {
         track_t before;
         uint32_t g = PAGES[i].graph, uslot, ppick;
@@ -2177,6 +2176,9 @@ static int test_presets_knob(void)
             if (PAGES[i].fam == FAM_SEQ && (g == GR_ROLL || g == GR_STEPS || g == GR_CHANCE || g == GR_MOTION)) {
                 cur_ok &= ui.cursor == 1u && same_snd && same_steps && ui.page == i;
                 n_cur++;
+            } else if (g == GR_ARP) {                   /* (WaveLoop Kit: SHAYPE's grid cursor) */
+                arp_ok &= ui.arp.cur == 1u && same_snd && same_steps && ui.page == i;
+                n_arp++;
             } else if (g == GR_USER) {
                 sel_ok &= ui.uslot == uslot + 1u && same_snd && same_steps;
             } else if (g == GR_SLOTS) {
@@ -2200,8 +2202,9 @@ static int test_presets_knob(void)
                  cur_ok && n_cur == 4u);
     bad += check("#94 PRESETS on USER, PROJECT, PHRASES, SONG: the selection (KNOB 1's); nothing loaded", sel_ok);
     bad += check("#94 PRESETS on TOOLS does nothing", tools_ok);
-    bad += check("#94 PRESETS elsewhere (EDIT, ENV, LFO, FX, SCL, ARP, MIXER, GLOBAL, ...): the next sound, the steps stay",
-                 snd_ok && n_snd >= 15u);
+    bad += check("PRESETS on ARP, ARP 2, ARP 3: SHAYPE's grid cursor; the sound and the steps stay", arp_ok && n_arp == 3u);
+    bad += check("#94 PRESETS elsewhere (EDIT, ENV, LFO, FX, SCL, MIXER, GLOBAL, ...): the next sound, the steps stay",
+                 snd_ok && n_snd >= 13u);
     bad += check("#94   SAVE held undoes each of those loads", undo_ok);
     ui_power_on();
     set_engine_of(TSEL, ENGI_DRUM);
@@ -4216,9 +4219,10 @@ static int test_play_leds(void)
     ok = kb_map(t, 8) == 60u && play_leds() == (1u << 7 | 1u << 11);
     t->p[P_QUANT] = t->p[P_SCALE] = 0;
     bad += check("QNT SNAP: only the key of the note itself lights, not the keys rounding onto it", ok);
-    t->arp_note = 65;
-    bad += check("the ARP's note lights its key too", play_leds() == (1u << 7 | 1u << 11 | 1u << 12));
-    t->arp_note = 0;
+    arp_snd[song.sel].note[0] = 65; arp_snd[song.sel].note[1] = 67; t->arp_n = 2;
+    bad += check("the ARP's notes light their keys too (SHAYPE: several)",
+                 play_leds() == (1u << 7 | 1u << 11 | 1u << 12 | 1u << 14));
+    t->arp_n = 0;
     events_block(div_samples((uint32_t)t->p[P_SDIV]) + CTL);
     bad += check("a note above the keyboard (G#7) lights nothing", t->seq_n == 1u && t->seq_notes[0] == 100u &&
                  play_leds() == 0u);
@@ -4743,7 +4747,7 @@ static int test_layer_knob_leak(void)
 {
     static const uint8_t LB[4] = {B_FX, B_GLO, B_SCL, B_EDIT};
     static const uint8_t LL[4] = {LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT};
-    uint32_t b, sc, pg, fails = 0, arp_fx = 0;
+    uint32_t b, sc, pg, fails = 0, arp_fx = 0, narp = 0;
     int bad = 0, ok;
     for (b = 0; b < 4u; b++)
         for (sc = 0; sc < 4u; sc++)
@@ -4768,11 +4772,13 @@ static int test_layer_knob_leak(void)
                         printf("ui:   leak: %s scenario %u page %s\n", B_NAME[LB[b]], sc,
                                pg < NPAGES ? PAGES[pg].title : "HOME");
                 }
-                if (b == 0u && pg < NPAGES && PAGES[pg].graph == GR_ARP && trk[0].p[P_AMODE] == lk_p[0][P_AMODE])
-                    arp_fx++;
+                if (b == 0u && pg < NPAGES && PAGES[pg].graph == GR_ARP) {
+                    narp++;
+                    arp_fx += trk[0].p[P_AMODE] == lk_p[0][P_AMODE];
+                }
             }
     bad += check("#39 FX / GLO / SCL / EDIT + KNOB 1..4, let go while turning: no page under the layer changes",
-                 !fails && arp_fx == 4u);
+                 !fails && arp_fx == narp && narp == 12u);
     /* the quiet time is short: KNOB 1 edits the page again 0.3 s after FX */
     ui_power_on();
     go_page(GR_ARP);
@@ -4885,7 +4891,8 @@ static int test_layer_knob_race(void)
                     if (pg < NPAGES && !page_visible(pg))
                         continue;
                     if (mode == 2u && LB[l] == B_EDIT && pg < NPAGES &&   /* (EDIT's tap acts there: no lock) */
-                        (PAGES[pg].graph == GR_USER || PAGES[pg].graph == GR_SLOTS || PAGES[pg].graph == GR_SETLIST || PAGES[pg].graph == GR_ROLL))
+                        (PAGES[pg].graph == GR_USER || PAGES[pg].graph == GR_SLOTS || PAGES[pg].graph == GR_SETLIST || PAGES[pg].graph == GR_ROLL ||
+                         PAGES[pg].graph == GR_ARP))   /* (ARP: EDIT clears the cursor step) */
                         continue;
                     rc_run(LB[l], mode, k, pg, 0, &a0, &b0);
                     rc_run(LB[l], mode, k, pg, 1, &a1, &b1);
@@ -5260,7 +5267,8 @@ static int test_div_order(void)
         uint32_t prev = 0xFFFFFFFFu, len;
         for (n = 0; n < 40; n++) v = param_turn(d, v, -1);
         for (n = 0; n <= d->max - d->min; n++) {
-            len = d->names == N_SLDIV ? 1000000u / SL_DEN[v] : div_samples((uint32_t)v);
+            len = d->names == N_SLDIV ? 1000000u / SL_DEN[v] : d->names == N_ARATE ? beat_samples() * 2u / ARP_RATE2[v]
+                                                                         : div_samples((uint32_t)v);   /* (SHAYPE's RATE) */
             if (!(len < prev && enum_rank(d, v) == d->min + n && !((seen >> v) & 1))) {
                 printf("  %s: %s (value %d, place %d, length %u) after %u\n", d->label, d->names[v], (int)v,
                        (int)enum_rank(d, v), len, prev);
@@ -5293,7 +5301,7 @@ static int test_div_order(void)
             turn(EN_K1 + c, -2);
             ok &= *vp == (d->names == N_DIV ? 4 : 3);  /* 8T */
         }
-    bad += check("#48 the pages' knobs step the divisions by length (SEQ, ARP, DLY, SLICER)", ok && found >= 4u);
+    bad += check("#48 the pages' knobs step the divisions by length (SEQ, DLY, SLICER; ARP's RATE is in that order)", ok && found >= 3u);
     return bad;
 }
 
@@ -6072,6 +6080,347 @@ static int test_patch_position(void)
     return bad;
 }
 
+/* WaveLoop Kit (from the Switch Blade build): the ARP pages (ui_arp.c): SHAYPE's grid. PRESETS moves the cursor; the white keys F3..F4 are rows 1..8 at it
+ * (a tap writes a note or takes it away, silent), a row key held + a knob its length; EDIT clears the step; ARP 3's PAT
+ * loads a factory pattern (STEPS and BOUND too); STEPS cuts the pattern; a project keeps it */
+static int arp_note_at(uint32_t step, uint32_t row, uint32_t len)
+{
+    int32_t i = ash_find(&arp_pat[0], row, step);
+    return i >= 0 && ARP_STEP(arp_pat[0].note[i]) == step && ARP_LEN(arp_pat[0].note[i]) == len;
+}
+static int test_arp_page(void)
+{
+    int bad = 0, ok;
+    uint32_t i;
+    arp_pat_t keep;
+    ui_power_on();
+    song.sel = 0;
+    go_page(GR_ARP);
+    frame();
+    fm1_irq_off(); arp_pat[0].n = 0; fm1_irq_on();
+    bad += check("ARP page: the keys are the grid's (song.grid 4), the cursor on step 1", song.grid == 4u && arp_cur() == 0u);
+    turn(EN_PRESET, 1); turn(EN_PRESET, 1);
+    ok = arp_cur() == 2u;
+    turn(EN_PRESET, 3);                              /* round STEPS (4): 2 + 3 = step 2 again */
+    ok &= arp_cur() == 1u;
+    turn(EN_PRESET, 1);
+    bad += check("  PRESETS: the cursor, round the pattern's STEPS", ok && arp_cur() == 2u);
+    key_down(ARP_ROWKEY[1]); frame();
+    ok = arp_note_at(2, 1, 1) && !gates() && !TSEL->nheld && (key_leds(0) >> ARP_ROWKEY[1] & 1u);
+    key_up(ARP_ROWKEY[1]); frame();
+    ok &= arp_note_at(2, 1, 1) && arp_pat[0].n == 1u && arp_x[0][ARPX_PAT] == 0;
+    bad += check("  row 2's key (G3): a note on the cursor step, silent, its key lit; PAT USER", ok);
+    key_down(ARP_ROWKEY[1]); frame(); key_up(ARP_ROWKEY[1]); frame();
+    bad += check("  tapped again: the note goes", arp_pat[0].n == 0u);
+    turn(EN_PRESET, -1);
+    key_down(ARP_ROWKEY[3]); frame();
+    turn(EN_K2, 1);
+    ok = arp_note_at(1, 3, 2) && TSEL->p[P_APROB] == 4;
+    turn(EN_K1, 5);                                  /* (to the end of STEPS: 3 steps) */
+    ok &= arp_note_at(1, 3, 3) && TSEL->p[P_AMODE] == 0;
+    turn(EN_K1, -1);
+    ok &= arp_note_at(1, 3, 2);
+    key_up(ARP_ROWKEY[3]); frame();
+    bad += check("  row 4's key held + a knob: its length (to the end of STEPS), no knob's own value moved; let go it stays",
+                 ok && arp_note_at(1, 3, 2));
+    turn(EN_PRESET, 1);
+    key_down(ARP_ROWKEY[3]); frame(); key_up(ARP_ROWKEY[3]); frame();
+    bad += check("  a tap on a step a longer note lasts over takes it away", arp_pat[0].n == 0u);
+    key_down(white(12)); frame();
+    ok = gates() == 1u;
+    key_up(white(12)); frame();
+    key_down(1); frame();                            /* (F#3, between the row keys: silent here) */
+    ok &= !gates();
+    key_up(1); frame();
+    bad += check("  the keys above F4 play as everywhere; the black ones among the row keys are silent", ok);
+    turn(EN_PRESET, 1);
+    key_down(ARP_ROWKEY[0]); key_down(ARP_ROWKEY[2]); frame(); key_up(ARP_ROWKEY[0]); key_up(ARP_ROWKEY[2]); frame();
+    ok = arp_pat[0].n == 2u;
+    press(B_EDIT);
+    bad += check("  EDIT: the cursor step's notes go (STEP CLEARED), the page stays", ok && arp_pat[0].n == 0u &&
+                 str_eq(cur_page()->title, "ARP"));
+    for (i = 0; i < NPAGES && !str_eq(PAGES[i].title, "ARP 3"); i++)
+        ;
+    ui.page = (uint8_t)i; page_entered(); frame();
+    arp_x[0][ARPX_PAT] = 0;
+    turn(EN_K1, 1); turn(EN_K1, 1); turn(EN_K1, 1);
+    ash_load(&keep, 2);
+    ok = arp_x[0][ARPX_PAT] == 3 && !memcmp(&arp_pat[0], &keep, sizeof keep) && TSEL->p[P_APROB] == 6;
+    turn(EN_K1, 2);                                  /* OCT RUN: BOUND OCT too */
+    ok &= arp_x[0][ARPX_PAT] == 5 && TSEL->p[P_AORDER] == AB_OCT && TSEL->p[P_APROB] == 8;
+    bad += check("  ARP 3 PAT: each factory pattern as it is turned to, its STEPS and BOUND (UPDOWN 6, OCT RUN 8 OCT)", ok);
+    go_page(GR_ARP); frame();
+    turn(EN_K2, -1); turn(EN_K2, -1); turn(EN_K2, -1); turn(EN_K2, -1);
+    ok = TSEL->p[P_APROB] == 4 && arp_pat[0].n == 4u;
+    for (i = 0; i < arp_pat[0].n; i++)
+        ok &= ARP_STEP(arp_pat[0].note[i]) < 4u;
+    bad += check("  STEPS 8 -> 4: the notes past it go (the toy's rule)", ok);
+    keep = arp_pat[0];
+    arp_x[0][ARPX_ROOT] = 5; TSEL->p[P_AGATE] = 40;
+    ok = !project_save(0);
+    fm1_irq_off(); ash_load(&arp_pat[0], 6); fm1_irq_on();
+    arp_x[0][ARPX_ROOT] = 0; TSEL->p[P_AGATE] = 75; TSEL->p[P_APROB] = 9;
+    project_load(0);
+    bad += check("  a project keeps the pattern and the ARP's settings exactly (ROOT, GATE, STEPS, BOUND)",
+                 ok && !memcmp(&arp_pat[0], &keep, sizeof keep) && arp_x[0][ARPX_ROOT] == 5 && TSEL->p[P_AGATE] == 40 &&
+                 TSEL->p[P_APROB] == 4 && TSEL->p[P_AORDER] == AB_OCT);
+    go_home(); frame();
+    bad += check("  off the ARP pages the keys play again", song.grid == 0u);
+    return bad;
+}
+
+/* WaveLoop Kit (from the Switch Blade build): ZOOM on the ARP pages (ui_arp.c arp_zoom, ui_layer.c op_shift): the OP1 key (F#3) held + OCT+ / OCT- is the
+ * toy's x2 / /2: STEPS, RATE, every note's step and length, the cursor; OCT's octave does not happen; FX is FX again; the
+ * refusals say why and change nothing; a playing arp keeps its place; a project keeps the zoomed pattern */
+static int test_arp_zoom(void)
+{
+    int bad = 0, ok;
+    uint32_t i, per;
+    int32_t oct;
+    arp_pat_t keep, z;
+    track_t *t;
+    ui_power_on();
+    song.sel = 0;
+    t = TSEL;
+    go_page(GR_ARP);
+    frame();
+    ash_load(&keep, 0);
+    turn(EN_PRESET, 3);
+    oct = song.octave;
+    key_down(OP_KEY[0]); frame();
+    ok = msg_is("ZOOM: -OUT +IN") && !gates();
+    press(B_OCTUP);
+    ok &= t->p[P_APROB] == 8 && t->p[P_ARATE] == 5 && arp_cur() == 6u && msg_is("ZOOM 8 STEPS 1/16") &&
+         song.octave == oct && arp_x[0][ARPX_PAT] == 0 && arp_pat[0].n == keep.n;
+    for (i = 0; i < keep.n; i++)
+        ok &= arp_pat[0].note[i] == ARP_NOTE(ARP_STEP(keep.note[i]) * 2u, ARP_ROW(keep.note[i]), 2u);
+    key_up(OP_KEY[0]); frame(); frames(200);
+    bad += check("  OP1 (F#3) silent, says ZOOM: -OUT +IN; held + OCT+: 8 STEPS 1/16, every note x2, cursor 4 -> 7, no octave",
+                 ok && !gates());
+    bad += check("  .. and OP1 let go: the page stays, no layer", str_eq(cur_page()->title, "ARP") && !ui.layer && !ui.ly);
+    key_down(OP_KEY[0]); frames(800);               /* (held a while: nothing else happens) */
+    ok = !ui.layer && !gates();
+    press(B_OCTDN);
+    ok &= t->p[P_APROB] == 4 && t->p[P_ARATE] == 3 && arp_cur() == 3u && !memcmp(&arp_pat[0], &keep, sizeof keep) &&
+          song.octave == oct && !ui.layer && msg_is("ZOOM 4 STEPS 1/8");
+    press(B_OCTUP); press(B_OCTDN);                 /* (still held: again, and back) */
+    ok &= t->p[P_APROB] == 4 && !memcmp(&arp_pat[0], &keep, sizeof keep);
+    key_up(OP_KEY[0]); frames(200);
+    bad += check("  OP1 held a while + OCT-: back to SHAYPE exactly, cursor 7 -> 4; again while held",
+                 ok && str_eq(cur_page()->title, "ARP"));
+    t->p[P_ARATE] = 7;
+    key_down(OP_KEY[0]); frame(); press(B_OCTUP);
+    ok = msg_is("1/32 IS THE FASTEST") && t->p[P_APROB] == 4 && t->p[P_ARATE] == 7;
+    t->p[P_ARATE] = 0; press(B_OCTDN);
+    ok &= msg_is("1/2 IS THE SLOWEST");
+    t->p[P_ARATE] = 3; t->p[P_APROB] = 33; press(B_OCTUP);
+    ok &= msg_is("64 STEPS MAX");
+    press(B_OCTDN);
+    ok &= msg_is("STEPS ARE ODD") && t->p[P_APROB] == 33;
+    t->p[P_APROB] = 4; press(B_OCTDN);
+    ok &= msg_is("NOTE BETWEEN STEPS") && !memcmp(&arp_pat[0], &keep, sizeof keep) && t->p[P_ARATE] == 3;
+    t->p[P_ARATE] = 2; press(B_OCTDN);
+    ok &= msg_is("NO 1/2T RATE");
+    t->p[P_ARATE] = 6; press(B_OCTUP);
+    ok &= msg_is("NO 1/32T RATE") && song.octave == oct;
+    key_up(OP_KEY[0]); frames(200);
+    bad += check("  refusals: 1/32 FASTEST, 1/2 SLOWEST, 64 STEPS MAX, STEPS ARE ODD, NOTE BETWEEN STEPS, no 1/2T 1/32T; "
+                 "nothing changes", ok && str_eq(cur_page()->title, "ARP") && !memcmp(&arp_pat[0], &keep, sizeof keep));
+    t->p[P_ARATE] = 3;
+    fm1_irq_off();
+    per = arp_period(t);
+    t->arp_idx = 2u * 4u + 3u;                       /* (pass 3, step 4, three quarters in) */
+    t->arp_pos = per * 3u / 4u;
+    fm1_irq_on();
+    key_down(OP_KEY[0]); frame(); press(B_OCTUP);
+    ok = t->arp_idx == 2u * 8u + 7u && t->arp_pos == per * 3u / 4u - per / 2u;
+    press(B_OCTDN);
+    ok &= t->arp_idx == 2u * 4u + 3u && t->arp_pos == per * 3u / 4u;
+    key_up(OP_KEY[0]); frames(200);
+    bad += check("  playing: the arp keeps its pass, step and place in it, in and out", ok);
+    key_down(OP_KEY[0]); frame(); press(B_OCTUP); key_up(OP_KEY[0]); frames(200);
+    z = arp_pat[0];
+    ok = !project_save(0);
+    fm1_irq_off(); ash_load(&arp_pat[0], 6); fm1_irq_on();
+    t->p[P_APROB] = 4; t->p[P_ARATE] = 3;
+    project_load(0);
+    bad += check("  a project keeps the zoomed pattern, STEPS and RATE", ok && !memcmp(&arp_pat[0], &z, sizeof z) &&
+                 t->p[P_APROB] == 8 && t->p[P_ARATE] == 5);
+    go_home(); frame();
+    key_down(OP_KEY[0]); frame();
+    ok = gates() == 1u;
+    press(B_OCTUP); key_up(OP_KEY[0]); frames(200);
+    bad += check("  off the ARP pages F#3 plays and F#3 + OCT+ is as before (the octave), no zoom",
+                 ok && song.octave == oct + 1 && t->p[P_APROB] == 8 && !memcmp(&arp_pat[0], &z, sizeof z));
+    song.octave = oct;
+    return bad;
+}
+
+/* WaveLoop Kit (from the Switch Blade build): the OP keys on the ARP pages (ui_arp.c OP_KEY, arp_op, arp_op_leds, op_leds; ui_layer.c op_shift): F#3 G#3
+ * A#3 C#4 D#4 are OP1..OP5, silent and never recorded there, each held + OCT- / OCT+ its shift (OP2 SHIFT, OP3 OCT, OP4
+ * MIRROR, OP5 MUTATE; OP1 ZOOM: test_arp_zoom); their LEDs breathe, one held lit, OCT- / OCT+ lit only where its shift
+ * can go; F#4 (OP6) plays; off the ARP pages they are notes, recorded as ever */
+static uint32_t notes_in(const track_t *t)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < NSTEP; i++)
+        n += t->step[i].time == ST_NOTE ? t->step[i].n : 0u;
+    return n;
+}
+static int test_arp_ops(void)
+{
+    int bad = 0, ok;
+    uint32_t i, br, c, n;
+    int32_t oct;
+    arp_pat_t want, keep;
+    track_t *t;
+    ui_power_on();
+    song.sel = 0;
+    t = TSEL;
+    go_page(GR_ARP);
+    frame();
+    ash_load(&keep, 0);
+    oct = song.octave;
+    c = key_leds(&br);
+    bad += check("ARP OPs: the five OP keys breathe (can be pressed), none lit; no OP, no OCT override",
+                 (br & OP_KEYS) == OP_KEYS && !(c & OP_KEYS) && OP_KEYS == (1u << 1 | 1u << 3 | 1u << 5 | 1u << 8 | 1u << 10) &&
+                 !op_cur());
+    /* OP2 SHIFT */
+    key_down(OP_KEY[1]); frame();
+    c = key_leds(&br);
+    ok = msg_is("SHIFT: -LEFT +RIGHT") && !gates() && op_cur() == 2u && ((c >> 3) & 1u) && !((br >> 3) & 1u) &&
+         ((br & OP_KEYS) == (OP_KEYS & ~(1u << 3))) && arp_op_leds(2) == 3u;
+    want = arp_pat[0];
+    ash_shift(&want, 4, 1);
+    press(B_OCTUP);
+    ok &= !memcmp(&arp_pat[0], &want, sizeof want) && msg_is("SHIFT >") && song.octave == oct && arp_x[0][ARPX_PAT] == 0;
+    ash_shift(&want, 4, -1);
+    press(B_OCTDN);
+    ok &= !memcmp(&arp_pat[0], &want, sizeof want) && msg_is("SHIFT <") && song.octave == oct;
+    btn_down(B_OCTDN); btn_down(B_OCTUP); frame(); btn_up(B_OCTDN); btn_up(B_OCTUP); frame();
+    ok &= !memcmp(&arp_pat[0], &want, sizeof want) && song.octave == oct;
+    key_up(OP_KEY[1]); frame();
+    bad += check("  OP2 (G#3) SHIFT: silent, lit, OCTs lit; OCT+ / OCT- the toy's shift right / left; both OCTs: nothing", ok);
+    fm1_irq_off(); arp_pat[0].n = 0; fm1_irq_on();
+    key_down(OP_KEY[1]); frame();
+    ok = arp_op_leds(2) == 0u;
+    press(B_OCTUP);
+    ok &= msg_is("NO NOTES") && song.octave == oct;
+    key_up(OP_KEY[1]); frame();
+    bad += check("  SHIFT with no notes: OCTs dark, NO NOTES, no octave", ok);
+    fm1_irq_off(); arp_pat[0] = keep; fm1_irq_on();
+    /* OP3 OCT */
+    key_down(OP_KEY[2]); frame();
+    n = (uint32_t)arp_x[0][ARPX_PAT];
+    ok = msg_is("OCTAVE: -DOWN +UP") && arp_op_leds(3) == 3u && arp_x[0][ARPX_OCT] == 0;
+    press(B_OCTUP);
+    ok &= arp_x[0][ARPX_OCT] == 1 && msg_is("ARP OCT +1");
+    press(B_OCTUP); press(B_OCTUP);
+    ok &= arp_x[0][ARPX_OCT] == 3 && arp_op_leds(3) == 1u;
+    press(B_OCTUP);
+    ok &= arp_x[0][ARPX_OCT] == 3 && msg_is("+3 OCT IS THE HIGHEST");
+    for (i = 0; i < 6u; i++)
+        press(B_OCTDN);
+    ok &= arp_x[0][ARPX_OCT] == -3 && msg_is("ARP OCT -3") && arp_op_leds(3) == 2u;
+    press(B_OCTDN);
+    ok &= arp_x[0][ARPX_OCT] == -3 && msg_is("-3 OCT IS THE LOWEST") && song.octave == oct;
+    press(B_OCTUP); press(B_OCTUP); press(B_OCTUP); press(B_OCTUP);
+    ok &= arp_x[0][ARPX_OCT] == 1 && !memcmp(&arp_pat[0], &keep, sizeof keep) && arp_x[0][ARPX_PAT] == (int16_t)n;
+    key_up(OP_KEY[2]); frame();
+    bad += check("  OP3 (A#3) OCT: +1 .. +3, -3, the ends say so and light only the way back; the pattern, PAT stay", ok);
+    ok = !project_save(0);
+    arp_x[0][ARPX_OCT] = 0;
+    project_load(0);
+    ok &= arp_x[0][ARPX_OCT] == 1;
+    arp_x[0][ARPX_OCT] = 0;
+    bad += check("  a project keeps OCT", ok);
+    /* OP4 MIRROR */
+    key_down(OP_KEY[3]); frame();
+    ok = msg_is("MIRROR: -FLIP +REVERSE") && arp_op_leds(4) == 3u;
+    want = keep;
+    ash_reverse(&want, 4);
+    press(B_OCTUP);
+    ok &= !memcmp(&arp_pat[0], &want, sizeof want) && msg_is("REVERSED") && arp_x[0][ARPX_PAT] == 0;
+    press(B_OCTUP);
+    ok &= !memcmp(&arp_pat[0], &keep, sizeof keep);
+    want = keep;
+    ash_flip(&want);
+    press(B_OCTDN);
+    ok &= !memcmp(&arp_pat[0], &want, sizeof want) && msg_is("FLIPPED");
+    press(B_OCTDN);
+    ok &= !memcmp(&arp_pat[0], &keep, sizeof keep) && song.octave == oct;
+    fm1_irq_off(); arp_pat[0].n = 0; fm1_irq_on();
+    ok &= arp_op_leds(4) == 0u;
+    press(B_OCTDN);
+    ok &= msg_is("NO NOTES");
+    key_up(OP_KEY[3]); frame();
+    bad += check("  OP4 (C#4) MIRROR: OCT+ reversed, OCT- flipped, each twice is itself; no notes: dark, NO NOTES", ok);
+    /* OP5 MUTATE */
+    fm1_irq_off(); arp_pat[0] = keep; fm1_irq_on();
+    key_down(OP_KEY[4]); frame();
+    ok = msg_is("MUTATE: -NOTE +NOTE") && arp_op_leds(5) == 3u;
+    n = arp_pat[0].n;
+    press(B_OCTUP);
+    ok &= arp_pat[0].n == n + 1u && msg_is("+ NOTE") && ARP_LEN(arp_pat[0].note[n]) == 1u &&
+          ash_empty(&arp_pat[0], 4, -1) == 23u && arp_x[0][ARPX_PAT] == 0;
+    press(B_OCTDN); press(B_OCTDN);
+    ok &= arp_pat[0].n == n - 1u && msg_is("- NOTE") && song.octave == oct;
+    fm1_irq_off(); arp_pat[0].n = 0; fm1_irq_on();
+    ok &= arp_op_leds(5) == 2u;
+    press(B_OCTDN);
+    ok &= msg_is("NO NOTES") && arp_pat[0].n == 0u;
+    t->p[P_APROB] = 1;
+    for (i = 0; i < 8u; i++)
+        press(B_OCTUP);
+    ok &= arp_pat[0].n == 8u && arp_op_leds(5) == 1u;
+    press(B_OCTUP);
+    ok &= msg_is("NO EMPTY CELL") && arp_pat[0].n == 8u;
+    key_up(OP_KEY[4]); frame();
+    t->p[P_APROB] = 4;
+    bad += check("  OP5 (D#4) MUTATE: + a length-1 note on an empty cell, - a note; none: NO NOTES; every cell full: NO "
+                 "EMPTY CELL, OCT+ dark", ok);
+    /* the OCT LEDs while held, the held lowest of two */
+    fm1_irq_off(); arp_pat[0] = keep; fm1_irq_on();
+    key_down(OP_KEY[3]); key_down(OP_KEY[1]); frame();
+    ok = op_cur() == 2u;
+    key_up(OP_KEY[1]); key_up(OP_KEY[3]); frame();
+    t->p[P_ARATE] = 0;
+    key_down(OP_KEY[0]); frame();
+    ok &= arp_op_leds(1) == 2u;                      /* (1/2: in only) */
+    key_up(OP_KEY[0]); frame();
+    t->p[P_ARATE] = 3;
+    bad += check("  two OPs held: the lowest; ZOOM at 1/2 lights OCT+ only", ok);
+    /* never sound, never record on the ARP pages; on HOME they play and record */
+    song.rec = 1; song.playing = 1;
+    n = notes_in(t);
+    ok = 1;
+    for (i = 0; i < 5u; i++) {
+        key_down(OP_KEY[i]); frame();
+        ok &= !gates();
+        key_up(OP_KEY[i]); frame();
+    }
+    ok &= notes_in(t) == n && !memcmp(&arp_pat[0], &keep, sizeof keep);
+    key_down(13); frame();                           /* (F#4, OP6: a note) */
+    ok &= gates() == 1u;
+    key_up(13); frame();
+    bad += check("  on ARP the OP keys never sound or record, nor write a row; F#4 (OP6) plays", ok && notes_in(t) > n);
+    go_home(); frame();
+    for (i = 0; i < NSTEP; i++)                      /* (a MONO track rewrites the step it records into: start empty) */
+        t->step[i] = (step_t){{0}, 0, ST_REST, 0, 0};
+    n = notes_in(t);
+    key_down(OP_KEY[2]); frame();
+    ok = gates() == 1u && !op_cur();
+    c = key_leds(&br);
+    ok &= !(br & OP_KEYS);
+    press(B_OCTUP);
+    ok &= song.octave == oct + 1 && arp_x[0][ARPX_OCT] == 0;
+    key_up(OP_KEY[2]); frame();
+    song.octave = oct;
+    bad += check("  on HOME they are notes: A#3 sounds and records, no breathing, OCT+ the octave", ok && notes_in(t) > n);
+    song.rec = 0; song.playing = 0;
+    return bad;
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -6082,6 +6431,9 @@ int main(void)
     bad += test_patch_position();
     bad += test_patterns();
     bad += test_rec();
+    bad += test_arp_page();   /* WaveLoop Kit: SHAYPE */
+    bad += test_arp_zoom();
+    bad += test_arp_ops();
     bad += test_rec_hold_clear();
     bad += test_presets_knob();
     bad += test_midi();

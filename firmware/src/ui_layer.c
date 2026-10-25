@@ -135,6 +135,21 @@ static void layer_let_go(uint32_t quiet)
     ui.lock = 0;
 }
 
+/* WaveLoop Kit: the OP keys are SHIFT on the ARP pages: the black keys F#3 G#3 A#3 C#4 D#4 (OP1..OP5 printed on the
+ * FM-1's keys; ui_arp.c OP_KEY, op_held). Each pass, before the layers and OCT read the buttons: an OP key held + OCT- /
+ * OCT+ is that OP's function (ui_arp.c arp_op: ZOOM, SHIFT, OCT, MIRROR, MUTATE); the press is the shift's, OCT's
+ * octave does not happen; as often as pressed while the OP stays down; both OCTs at once: nothing. Two OPs held: the
+ * lowest. Not under the menu, a dialog, NAME, a layer or the UPDATE MODE countdown; off the ARP pages OCT is as ever */
+static uint32_t op_shift(uint32_t pressed)
+{
+    uint32_t dn = 1u << panel.btn[B_OCTDN], up = 1u << panel.btn[B_OCTUP], n;
+    if (!(pressed & (dn | up)) || !layer_allowed() || (n = op_cur()) == 0u)
+        return pressed;
+    if ((pressed & (dn | up)) != (dn | up))
+        arp_op(n, (pressed & up) != 0u);
+    return pressed & ~(dn | up);
+}
+
 /* #83, each pass before the layer's buttons are read: a locked layer closes. Its own button pressed: the lock goes,
  * the button held keeps it open (a peek: let go, it closes, no tap). Another button but PLAY, REC and OCT- / OCT+
  * (another page button, another layer's, HOME, SAVE, SEQ): closed now, and that button acts as always. Any other

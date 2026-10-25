@@ -1425,7 +1425,7 @@ async function capturePatch(rq, info, name) {
     grid: drum ? gridFromSteps(steps) : null, fm6 }), dump, steps };
 }
 
-/* the track's own parameters, which no sound load changes (ui.c param_kept): LEVEL, the ARP and ARP 2 pages,
+/* the track's own parameters, which no sound load changes (ui.c param_kept): LEVEL, the ARP and ARP 2 pages (SHAYPE),
    SCL, LEN DIV SWING GATE (17..32), PAN, MUTE, the SLICER (45..48); with P_E0 83 the chord keys CHRD VOIC (81, 82:
    E0 E1 of the 89-parameter firmware) */
 const TRACK_OWN = new Set([0, 39, 40, ...Array.from({ length: 16 }, (_, i) => 17 + i), 45, 46, 47, 48]);
@@ -1852,8 +1852,8 @@ function makeMockDevice(opt = {}) {
     D("FLT", F.BIPCT, -64, 63, 0), D("PIT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("FX", F.BIPCT, -64, 63, 0),
     D("RATE", F.LFOHZ, 0, 127, 60), E("WAVE", ["SIN", "TRI", "SAW", "SQR", "S&H"], 0), D("PHS", F.INT, 0, 127, 0), D("FADE", F.TIME, 0, 127, 0),
     D("PIT", F.BIPCT, -64, 63, 0), D("FLT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("AMP", F.PCT, 0, 127, 0),
-    E("MODE", ["OFF", "UP", "DN", "UPDN", "RND", "ORD", "REPEAT"], 0), E("RATE", NDIV, 2), D("OCT", F.INT, 1, 4, 1), D("GATE", F.PCT, 1, 127, 64),
-    D("SWG", F.PCT, 0, 100, 0), D("PROB", F.PCT, 0, 127, 127), E("HOLD", NONOFF, 0), E("ORD", ["NOTE", "PLAY"], 0),
+    E("ARP", NONOFF, 0), E("RATE", ["1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"], 3), E("DIR", ["UP", "DOWN", "PEND", "RAND"], 0), D("GATE", F.INT, 10, 100, 75, null, "%"),   /* SHAYPE */
+    D("SWG", F.PCT, 0, 100, 0), D("STEPS", F.STEPS, 1, 64, 4), E("HOLD", NONOFF, 0), E("BOUND", ["WRAP", "OCT"], 0),
     D("ROOT", F.NOTE, 0, 11, 0), E("SCL", ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"], 0), E("QNT", ["OFF", "SNAP", "WHITE", "SEQ"], 0), D("TRN", F.SEMI, -24, 24, 0),
     D("LEN", F.STEPS, 1, 64, 16), E("DIV", NDIV, 2), D("SWG", F.PCT, 0, 100, 0), D("GATE", F.PCT, 1, 127, 64),
     D("DST", F.PCT, 0, 127, 0), D("CHO", F.PCT, 0, 127, 0), D("DLY", F.PCT, 0, 127, 0), D("REV", F.PCT, 0, 127, 0),
@@ -3357,7 +3357,7 @@ const LAYOUT = (pe0) => [
   { t: "VOICE", pages: [["LEVEL", 0, [0]], ["VOICE", 0, [37, 38, 41, 42]], ["VOICE 2", 0, [43, 44, 39, 40]]] },
   { t: "FX", pages: [["FX", 0, [33, 34, 35, 36]], ["SLICER", 0, [45, 46, 47, 48]], ["DLY", 1, [4, 5, 6, 7]], ["REVERB", 1, [24, 8, 9]], ["CHORUS", 1, [10, 11]]] },   /* G_RTYPE 24: ROOM / SPRING */
   { t: "SCL", pages: [["SCL", 0, [25, 26, 27, 28]], ...(pe0 >= 83 ? [["CHORD", 0, P_CHORD]] : [])] },   /* CHRD VOIC 81, 82 */
-  { t: "ARP", pages: [["ARP", 0, [17, 18, 19, 20]], ["ARP 2", 0, [21, 22, 23, 24]]] },
+  { t: "ARP", pages: [["ARP", 0, [17, 22, 18, 19]], ["ARP 2", 0, [24, 20, 23, 21]]] },   /* SHAYPE: ARP STEPS RATE DIR, BOUND GATE HOLD SWG */
   { t: "SEQ PATTERN", tab: "seqgroups", pages: [["PATTERN", 0, [29, 30, 31, 32]]] },
   { t: "GLOBAL", tab: "setgroups", pages: [["GLOBAL", 1, [0, 1, 2, 3]], ["SYSTEM", 1, [14]]] },   /* G_ROUTE: MIDI IN */
 ];
@@ -3366,7 +3366,7 @@ const G_SKIP = new Set(["SLOT", "NAME", "LOAD", "SAVE", "ENG", "SET", "CLRSQ", "
 const key = (s, id) => s + ":" + id;
 const engName = () => (dev && dev.info && dev.dump ? dev.info.engines[dev.dump.engine] : "");
 const gEng = () => { const i = dev.gdesc.findIndex((d) => d && d.label === "ENG"); return i >= 0 ? i : 20; };
-const pSlen = () => { const i = dev.pdesc.findIndex((d) => d && d.fmt === F.STEPS); return i >= 0 ? i : P.SLEN; };
+const pSlen = () => { const i = dev.pdesc.findIndex((d) => d && d.fmt === F.STEPS && d.label !== "STEPS"); return i >= 0 ? i : P.SLEN; };   /* (not the ARP's STEPS, 22) */
 /* mixer ids by DESC label (core.h: P_PAN 39, P_MUTE 40) */
 const pById = (label, def) => { const i = dev.pdesc.findIndex((d, k) => d && k < dev.info.pe0 && d.label === label); return i >= 0 ? i : def; };
 const pPan = () => pById("PAN", 39), pMute = () => pById("MUTE", 40);

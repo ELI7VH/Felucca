@@ -103,7 +103,7 @@ static uint32_t arp_led(void)
 {
     uint32_t k, on = 0, b = beat_samples();
     for (k = 0; k < NPART; k++)
-        on |= trk[k].p[P_AMODE] && trk[k].nheld;
+        on |= trk[k].p[P_AMODE] && arp_fed(&trk[k]);   /* (keys, MIDI or the sequencer's chord) */
     return !on ? 2u : beat_pos < (beat_n ? b / 6u : b / 2u);
 }
 
@@ -129,16 +129,17 @@ static uint32_t midi_leds(const track_t *t)
 /* the keys of the notes the selected track's sequencer and ARP sound now (#38), bit k = key k: where the keys
  * play that note (kb_map: the octave, TRN, QNT, an engine's own map), the lowest key that gives it (QNT SNAP
  * rounds the keys above down onto it); a note no key plays is not shown. A snapshot of the ISR's seq_notes /
- * arp_note: no state of its own, nothing to do while nothing sounds */
+ * arp_snd: no state of its own, nothing to do while nothing sounds */
 static uint32_t play_leds(void)
 {
     const track_t *t = TSEL;
-    uint8_t s[4 + NLANE + 1];
-    uint32_t n = t->seq_n < 4u + NLANE ? t->seq_n : 4u + NLANE, i, k, note, used = 0, m = 0, hit;
+    uint8_t s[4 + NLANE + ARP_SND];
+    uint32_t n = t->seq_arp ? 0u : t->seq_n < 4u + NLANE ? t->seq_n : 4u + NLANE, i, k, note, used = 0, m = 0, hit;
+    uint32_t a = t->arp_n < ARP_SND ? t->arp_n : ARP_SND;   /* (the arp's chord sounds none of its own) */
     for (i = 0; i < n; i++)
         s[i] = t->seq_notes[i];
-    if (t->arp_note)
-        s[n++] = t->arp_note;
+    for (i = 0; i < a; i++)                             /* (the ARP's: SHAYPE sounds several at once) */
+        s[n++] = arp_snd[song.sel].note[i];
     for (k = 0; n && k < 27u; k++) {
         note = kb_map(t, k);
         for (i = 0, hit = 0; i < n; i++)
@@ -197,6 +198,7 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     if (br)
         *br = 0;
     c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds(br) : grid_on() ? grid_leds() :
+        arp_keys_on() ? (((fm1_in.notes & ~kb_layer) | play_leds()) & ~ARP_KEYS) | arp_leds() | op_leds(br) :   /* (ui_arp.c) */
                  (fm1_in.notes & ~kb_layer) | play_leds() | step_leds();
 #if FELUCCA_SLICE
     if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
@@ -238,6 +240,8 @@ static void ui_leds(void)
         led_put(nb, panel.btn[layer_btn()], 1);
     led_put(nl, panel.btn[B_REC], song.rec != 0u);
     k = oct_leds();
+    if ((c = op_cur()) != 0u)                           /* WaveLoop Kit: an OP key held on an ARP page: OCT- / OCT+ lit */
+        k = arp_op_leds(c);                             /* only where its shift can go (ui_arp.c; no breathing) */
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)((k >> 1) & 1u));
     led_put(nb, panel.btn[B_OCTUP], (int)(k & OCT_BREATH));
@@ -607,12 +611,19 @@ static void edit_param(uint32_t slot, int32_t steps)
     d = page_desc(pg, slot, &vp);
     if (!d || !vp || d->max == d->min)
         return;
-    if (pg->scope!=SC_GLOBAL) {
+    if (pg->scope!=SC_GLOBAL && pg->id[slot] < ARPX_ID0) {
         uint32_t id=pg->id[slot];
         if (pg->graph==GR_MOD) id+=3u*mod_ui_slot;
         if (id!=P_LEVEL || str_eq(pg->title,"DRUM MIX")) vp=drum_param_ref(TSEL,id,1);
     }
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
+    if (vp == &arp_x[song.sel][ARPX_PAT] && v != *vp) {   /* WaveLoop Kit: ARP 3's PAT loads the factory pattern */
+        *vp = (int16_t)v;
+        arp_factory(TSEL, (uint32_t)v);
+    } else if (vp == &TSEL->p[P_APROB] && v != *vp) {   /* .. STEPS: the pattern cut to it (the toy's rule) */
+        *vp = (int16_t)v;
+        arp_steps_set(TSEL);
+    }
     *vp = (int16_t)v;
     if (pg->scope != SC_GLOBAL && (uintptr_t)vp>=(uintptr_t)TSEL->p && (uintptr_t)vp<(uintptr_t)(TSEL->p+P_COUNT)) motion_capture(TSEL,(uint32_t)(vp-TSEL->p),*vp);
 }
@@ -731,42 +742,51 @@ static uint32_t oct_taps(uint32_t pressed, int here)
 
 /* SEQ step entry, acid style: the keys pressed together (POLY: up to 4 notes, MONO:
  * the last one) become the cursor step; releasing all keys moves on. With CHRD on a key
- * writes what it sounds, as live recording does: POLY its chord, MONO the chord's root */
-static void seq_entry(uint32_t pressed)
+ * writes what it sounds, as live recording does: POLY its chord, MONO the chord's root.
+ * WaveLoop Kit: MIDI IN notes that play the selected track (mn: seq.c mst_take; any channel ROUT gives it) write as
+ * the keys do, their note as it came (CHRD: its chord); the step stays open while a key or one of its MIDI notes is
+ * held (midi_owners), so a chord played on the MiniLab is one step and letting go of it moves on */
+static void entry_note(track_t *t, step_t *st, uint32_t note)
+{
+    uint8_t ch[CHORD_MAX];
+    int32_t r;
+    uint16_t mask;
+    uint32_t n, i, j;
+    if (!ui.entry_open) {
+        ui.entry_open = 1;
+        st->n = 0;
+        st->time = ST_NOTE;
+    }
+    n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root) */
+    if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* (drums: hits stack as a chord) */
+        st->note[0] = ch[0];
+        st->n = 1;
+    } else {
+        for (i = 0; i < n && st->n < 4u; i++) {
+            for (j = 0; j < st->n && st->note[j] != ch[i]; j++)
+                ;
+            if (j == st->n)
+                st->note[st->n++] = ch[i];
+        }
+    }
+    last_note = (uint8_t)note;
+}
+static void seq_entry(uint32_t pressed, const uint8_t *mn, uint32_t mk)
 {
     track_t *t = TSEL;
     step_t *st = &t->step[ui.cursor];
-    uint32_t k;
+    uint32_t k, note;
     for (k = 0; k < 27u; k++) {
-        uint8_t ch[CHORD_MAX];
-        int32_t r;
-        uint16_t mask;
-        uint32_t note, n, i, j;
         if (!((pressed >> k) & 1u))
             continue;
         note = kb_map(t, k);
         if (note == KB_SILENT)
             continue;
-        if (!ui.entry_open) {
-            ui.entry_open = 1;
-            st->n = 0;
-            st->time = ST_NOTE;
-        }
-        n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root) */
-        if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* (drums: hits stack as a chord) */
-            st->note[0] = ch[0];
-            st->n = 1;
-        } else {
-            for (i = 0; i < n && st->n < 4u; i++) {
-                for (j = 0; j < st->n && st->note[j] != ch[i]; j++)
-                    ;
-                if (j == st->n)
-                    st->note[st->n++] = ch[i];
-            }
-        }
-        last_note = (uint8_t)note;
+        entry_note(t, st, note);
     }
-    if (ui.entry_open && !(fm1_in.notes & ~kb_layer))
+    for (k = 0; k < mk; k++)
+        entry_note(t, st, mn[k]);
+    if (ui.entry_open && !(fm1_in.notes & ~kb_layer) && !midi_owners[song.sel])
         cursor_set(ui.cursor + 1);
 }
 
@@ -783,6 +803,9 @@ static void presets_turn(int32_t s)
     uint32_t g = pg->graph;
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
+    } else if (g == GR_ARP) {                             /* WaveLoop Kit: the ARP's grid, its cursor (ui_arp.c) */
+        arp_cursor_move(s);
+        ui.force = 1;
     } else if (g == GR_ROLL || g == GR_CHANCE || g == GR_USER || g == GR_SLOTS || g == GR_PATS || g == GR_SONG || g == GR_SETLIST) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
@@ -817,6 +840,7 @@ static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok
 /* the quick layers: ui_layer.c (included after this file) */
 static void layer_masks(void);
 static void layer_arm(uint32_t pressed, uint32_t now);
+static uint32_t op_shift(uint32_t pressed);           /* (WaveLoop Kit: the OP keys as SHIFT on the ARP pages, ui_layer.c) */
 static uint32_t layer_held(void);
 static int layer_knobs_quiet(void);
 static uint32_t layer_gesture(uint32_t now, uint32_t combo);
@@ -846,6 +870,10 @@ static int page_tap(uint32_t b)
         step_clear(&TSEL->step[ui.cursor]);
         cursor_set(ui.cursor + 1);
         ui_message("STEP CLEARED");
+        return 1;
+    }
+    if (b == B_EDIT && arp_keys_on()) {                 /* WaveLoop Kit: an ARP page, EDIT clears the cursor step's notes */
+        arp_clear_step();
         return 1;
     }
     if (b == B_EDIT && !ui.home && (cur_page()->graph == GR_USER || cur_page()->graph == GR_SLOTS || cur_page()->graph == GR_SETLIST)) {
@@ -915,6 +943,8 @@ static void ui_input(void)
     uint32_t oct;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
+    uint8_t mn[MST_N];
+    uint32_t mk = mst_take(mn);                         /* (WaveLoop Kit: MIDI IN's notes for step recording, every pass) */
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
 #if !FELUCCA_FM4
@@ -928,6 +958,7 @@ static void ui_input(void)
         usb_serial_apply();                             /* (MENU > USB SERIAL: when the menu has closed) */
     layer_lock_input(pressed);                          /* (#83: a button closes a locked layer) */
     layer_arm(pressed, now);
+    pressed = op_shift(pressed);                        /* WaveLoop Kit: an OP key held + OCT: SHIFT's (ui_layer.c) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
     oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open());
     oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
@@ -1148,18 +1179,22 @@ static void ui_input(void)
             go_home();
     }
     song.grid = (uint8_t)keys_mode();                 /* (seq.c: the keys are the grid's) */
+    if (song.grid != 4u)
+        ui.arp.down = ui.arp.made = ui.arp.moved = 0;   /* (not on an ARP page, no row key is held for it) */
 #if FELUCCA_SLICE
     if (notes && slice_page_on())                       /* SLICES: a key picks the slice it plays */
         slice_keys_pick(notes);
 #endif
-    if (song.grid) {
+    if (song.grid == 4u) {
+        arp_keys(notes);                                /* WaveLoop Kit: an ARP page, the row and OP keys (ui_arp.c) */
+    } else if (song.grid) {
         grid_keys(notes);
     } else if (song.seq_mode && cur_page()->graph == GR_ROLL) {   /* STEP (not CHANCE: its knobs only) */
         if (live_rec_sel())                             /* armed and playing: the keys record live, */
             ui.entry_open = 0;                          /* not into the cursor step too */
         else if (!chain_busy())
-            seq_entry(notes);
-        else if (notes)
+            seq_entry(notes, mn, mk);
+        else if (notes || mk)
             ui_message("STOP TO EDIT");
     }
 
@@ -1187,6 +1222,10 @@ static void ui_input(void)
         int16_t *hv;
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
+        if (!ui.home && arp_len_turn(s)) {              /* WaveLoop Kit: an ARP page's row key held: its note's length */
+            ui.hot_t = 0;
+            continue;
+        }
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
             ((pg->graph == GR_USER || pg->graph == GR_MOD || pg->graph == GR_PATS) && k == 0u)
             || pg->graph == GR_SONG || pg->graph == GR_SETLIST || (pg->graph == GR_SLICES && k < 2u)) {   /* (not an empty column) */

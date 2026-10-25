@@ -52,7 +52,8 @@ Multi-engine synthesizer firmware for the M-VAVE FM-1. Please report what you fi
 - **Songs:** chain patterns A–D
 - **Chord keys:** one finger plays an in-key chord (triads or sevenths of the scale, or fixed chord
   shapes), with voicings; on the keys, MIDI in, recording and the arpeggiator
-- **Arpeggiator** with REPEAT and a beat LED, 16 scales with a white-key mode, glide,
+- **Arpeggiator:** SHAYPE, WaveLoop's Shape Arp, in the WaveLoop Kit (a drawn pattern of rows over the
+  chord held; see FORK.md), and a beat LED; 16 scales with a white-key mode, glide,
   MONO / LEGATO / UNISON
 - **Modulation matrix:** 4 slots per track, MIDI controllers as sources
 - **Effects:** distortion and the SLICER per track; chorus, delay and reverb sends (the reverb as
