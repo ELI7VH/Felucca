@@ -6,8 +6,8 @@
  *
  * A pattern is notes {step, row, length} on STEPS steps (1..64) by ARP_ROWS rows. A row is a place in the held chord
  * (ash_voicing: low to high, each pitch once, a ROOT moving the notes under it up octaves). Every pass (one cycle of
- * STEPS) moves the rows by an offset (ash_pass_offset: UP, DOWN, PEND, RAND); a place past the chord wraps round the
- * held pitches (WRAP) or moves by octaves (OCT) (ash_resolve). The notes starting on a step sound together, one pitch
+ * STEPS) moves the rows by an offset (ash_pass_offset: UP, DOWN, PEND, RAND; ash_window: WYNDO, SHYFT); a place past
+ * the chord wraps round the held pitches (WRAP) or moves by octaves (OCT) (ash_resolve). The notes starting on a step sound together, one pitch
  * once (the longest of its lengths), for length x the step x GATE (ash_events). */
 #ifndef ARP_SHAPE_C
 #define ARP_SHAPE_C                      /* (project.c includes it on the Mac without seq.c) */
@@ -27,7 +27,10 @@ typedef struct {
     uint16_t note[ARP_NMAX];             /* in the order they were written (the JS core's array order) */
 } arp_pat_t;
 
-enum { AD_UP, AD_DOWN, AD_PEND, AD_RAND };   /* P_AOCT: DIR (sequence.mjs passOffset's directions) */
+/* P_AOCT: DIR (sequence.mjs passOffset's directions, then SHAYPE's WYNDO and SHYFT: WaveLoop windows/shaype/shaype_core.c
+ * SH_WINDOW / SH_SHYFT at c4e321fd, ahead of the toy's sequence.mjs; held to it by tests/arp_window_vectors.h). RAND is
+ * off the face (params.c enum_step steps over it); a stored RAND still plays and shows as RAND */
+enum { AD_UP, AD_DOWN, AD_PEND, AD_RAND, AD_WYNDO, AD_SHYFT, AD_N };
 enum { AB_WRAP, AB_OCT };                    /* P_AORDER: BOUND */
 /* RATE (P_ARATE), sequence.mjs RATES slow to fast, in steps per two beats: 1/2 1/4 1/4T 1/8 1/8T 1/16 1/16T 1/32 */
 static const uint8_t ARP_RATE2[8] = {1, 2, 3, 4, 6, 8, 12, 16};
@@ -77,7 +80,38 @@ static int32_t ash_pass_offset(uint32_t pass, uint32_t size, uint32_t dir, uint3
         p = pass % (2u * (size - 1u));
         return (int32_t)(p < size ? p : 2u * (size - 1u) - p);
     }
+    if (dir >= AD_WYNDO)                         /* (ash_window moves the rows itself) */
+        return 0;
     return (int32_t)(pass % size);
+}
+
+/* WYNDO and SHYFT (shaype_core.c sh_window_span, sh_build_table): the group is the pattern's rows from its lowest note's
+ * (the foot) to its highest's (h rows tall; the notes inside STEPS), over n held notes.
+ *   WYNDO: the group slides up through the held notes a note a pass, from the lowest until its top is the highest, then
+ *          starts again: pass p plays row r at chord place r - foot + p; n - h + 1 passes (1: a group as tall as the
+ *          chord, or taller, stays put). Holding F A C E under a 3-row group: F A C, then A C E.
+ *   SHYFT: the chord stays put; a window n rows high stands on the foot and climbs the group a row a pass: pass p plays
+ *          only rows foot + p .. foot + p + n - 1, row r at place r - foot - p; h - n + 1 passes (1: a group no taller).
+ * -> the pass's offset (a row's place is row + offset; SHYFT: only places 0..n-1 sound, ash_events win) */
+static int32_t ash_window(const arp_pat_t *p, uint32_t steps, uint32_t pass, uint32_t n, uint32_t dir)
+{
+    uint32_t i, lo = ARP_ROWS, top = 0, h, passes;
+    for (i = 0; i < p->n; i++) {
+        uint32_t r = ARP_ROW(p->note[i]);
+        if (ARP_STEP(p->note[i]) >= steps)
+            continue;
+        lo = r < lo ? r : lo;
+        top = r + 1u > top ? r + 1u : top;
+    }
+    if (lo > top)                                /* (no notes) */
+        lo = 0;
+    h = top - lo;
+    if (dir == AD_WYNDO) {
+        passes = n > h ? n - h + 1u : 1u;
+        return (int32_t)(pass % passes) - (int32_t)lo;
+    }
+    passes = n && h > n ? h - n + 1u : 1u;
+    return -(int32_t)(lo + pass % passes);
 }
 
 /* rootVoicing(notes, root): each note under root up octaves until it is not, then low to high, each pitch once, 0..127.
@@ -115,17 +149,20 @@ static int32_t ash_resolve(const uint8_t *held, uint32_t n, int32_t pos, uint32_
 }
 
 /* eventsAt(pattern, step, held, offset, boundary), merged as the hosts merge it (one pitch once, its longest length,
- * in the order its first note comes in the pattern). pitch / len: up to ARP_ROWS; their count */
+ * in the order its first note comes in the pattern). win (SHYFT): only places 0..n-1 sound. pitch / len: up to
+ * ARP_ROWS; their count */
 static uint32_t ash_events(const arp_pat_t *p, uint32_t step, const uint8_t *held, uint32_t n, int32_t offset,
-                           uint32_t bound, uint8_t *pitch, uint8_t *len)
+                           uint32_t bound, int win, uint8_t *pitch, uint8_t *len)
 {
     uint32_t i, j, k = 0;
     for (i = 0; i < p->n; i++) {
         uint32_t x = p->note[i], l;
-        int32_t v;
+        int32_t v, at = (int32_t)ARP_ROW(x) + offset;
         if (ARP_STEP(x) != step)
             continue;
-        if ((v = ash_resolve(held, n, (int32_t)ARP_ROW(x) + offset, bound)) < 0)
+        if (win && (at < 0 || at >= (int32_t)n))    /* (SHYFT: outside the window) */
+            continue;
+        if ((v = ash_resolve(held, n, at, bound)) < 0)
             continue;
         l = ARP_LEN(x);
         for (j = 0; j < k && pitch[j] != v; j++)
@@ -142,14 +179,17 @@ static uint32_t ash_events(const arp_pat_t *p, uint32_t step, const uint8_t *hel
 }
 
 /* one step of the hosts' loop (main.js schedule; seq.c arp_fire): step tick % steps of pass tick / steps over the held
- * chord (ash_voicing), the pass's offset worked out on its first step; the notes it starts (ash_events) */
+ * chord (ash_voicing), the pass's offset worked out on its first step; the notes it starts (ash_events). WYNDO and
+ * SHYFT work theirs out on every step (no draw: SHAYPE's table, rebuilt with the chord, read at its pass and step) */
 static uint32_t ash_tick(const arp_pat_t *p, uint32_t steps, uint32_t tick, const uint8_t *held, uint32_t n, uint32_t dir,
                          uint32_t bound, uint32_t (*rnd)(void), int32_t *offset, uint8_t *pitch, uint8_t *len)
 {
     uint32_t s = tick % steps;
-    if (!s)
+    if (dir == AD_WYNDO || dir == AD_SHYFT)
+        *offset = ash_window(p, steps, tick / steps, n, dir);
+    else if (!s)
         *offset = ash_pass_offset(tick / steps, n, dir, rnd);
-    return ash_events(p, s, held, n, *offset, bound, pitch, len);
+    return ash_events(p, s, held, n, *offset, bound, dir == AD_SHYFT, pitch, len);
 }
 
 /* the note of row r sounding on step s (it starts there or before and lasts over it): its index, -1 none */

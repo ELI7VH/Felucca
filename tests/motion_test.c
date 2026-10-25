@@ -132,12 +132,12 @@ static int compact_project(void)
             proj_arp_get(after.arp[0], &p, x);
             ok &= p.n == 8u && p.note[1] == ARP_NOTE(0, 2, 1) && x[ARPX_PAT] == 1 && x[ARPX_ROOT] == 0 && x[ARPX_OCT] == 0;
         }
-        ok &= after.t[1].p[P_AMODE] == 1 && after.t[1].p[P_ARATE] == 5 && after.t[1].p[P_AOCT] == AD_UP &&
+        ok &= after.t[1].p[P_AMODE] == 1 && after.t[1].p[P_ARATE] == 5 && after.t[1].p[P_AOCT] == AD_WYNDO &&
               after.t[1].p[P_AGATE] == 75 && after.t[1].p[P_APROB] == 4 && after.t[1].p[P_AORDER] == AB_WRAP &&
               after.t[1].p[P_AHOLD] == 1 && after.t[1].p[P_ASWING] == 30 && after.t[2].p[P_AMODE] == 0 &&
               after.t[2].p[P_ARATE] == 0 && !strcmp(after.name, before.name) && after.t[0].p[P_E0] == before.t[0].p[P_E0];
         bad += check("a FUN8 project (midi24) loads: SHAYPE on every track, MODE UPDN -> ON, 1/16 kept, GATE 96 -> 75 %, "
-                     "DIR UP, STEPS 4, WRAP; HOLD and SWING kept", ok);
+                     "DIR WYNDO, STEPS 4, WRAP; HOLD and SWING kept", ok);
         memcpy(&proj_slot[2], &v8, PROJ_STORE_V8);               /* (a retained slot of midi24: its own size inside) */
         memset(proj_slot[2].raw + PROJ_STORE_V8, 0, PROJ_STORE_SIZE - PROJ_STORE_V8);
         bad += check("  a retained FUN8 slot (midi24's RAM) loads too, and saves back as FUN9",

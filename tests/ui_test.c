@@ -6150,20 +6150,59 @@ static int test_arp_page(void)
     ok &= arp_x[0][ARPX_PAT] == 5 && TSEL->p[P_AORDER] == AB_OCT && TSEL->p[P_APROB] == 8;
     bad += check("  ARP 3 PAT: each factory pattern as it is turned to, its STEPS and BOUND (UPDOWN 6, OCT RUN 8 OCT)", ok);
     go_page(GR_ARP); frame();
+    {   /* DIR (KNOB 4): UP DOWN PEND WYNDO SHYFT; RAND is off the face: a stored RAND shows and stays until turned */
+        static const int16_t UPW[5] = {AD_DOWN, AD_PEND, AD_WYNDO, AD_SHYFT, AD_SHYFT};
+        char val[8];
+        const char *unit;
+        TSEL->p[P_AOCT] = AD_UP;
+        ok = 1;
+        for (i = 0; i < 5u; i++) {
+            turn(EN_K4, 1);
+            ok &= TSEL->p[P_AOCT] == UPW[i];
+        }
+        turn(EN_K4, -1);
+        ok &= TSEL->p[P_AOCT] == AD_WYNDO;
+        turn(EN_K4, -1);
+        ok &= TSEL->p[P_AOCT] == AD_PEND;
+        param_format(&TP[P_AOCT], AD_WYNDO, val, &unit);
+        ok &= str_eq(val, "WYNDO");
+        param_format(&TP[P_AOCT], AD_SHYFT, val, &unit);
+        ok &= str_eq(val, "SHYFT");
+        TSEL->p[P_AOCT] = AD_RAND;
+        frame();
+        param_format(&TP[P_AOCT], TSEL->p[P_AOCT], val, &unit);
+        ok &= str_eq(val, "RAND") && TSEL->p[P_AOCT] == AD_RAND;
+        turn(EN_K4, 1);
+        ok &= TSEL->p[P_AOCT] == AD_WYNDO;
+        TSEL->p[P_AOCT] = AD_RAND;
+        turn(EN_K4, -1);
+        ok &= TSEL->p[P_AOCT] == AD_PEND;
+        bad += check("  DIR: UP DOWN PEND WYNDO SHYFT; the knob steps over RAND, a stored RAND shows RAND till turned", ok);
+    }
     turn(EN_K2, -1); turn(EN_K2, -1); turn(EN_K2, -1); turn(EN_K2, -1);
     ok = TSEL->p[P_APROB] == 4 && arp_pat[0].n == 4u;
     for (i = 0; i < arp_pat[0].n; i++)
         ok &= ARP_STEP(arp_pat[0].note[i]) < 4u;
     bad += check("  STEPS 8 -> 4: the notes past it go (the toy's rule)", ok);
     keep = arp_pat[0];
-    arp_x[0][ARPX_ROOT] = 5; TSEL->p[P_AGATE] = 40;
+    arp_x[0][ARPX_ROOT] = 5; TSEL->p[P_AGATE] = 40; TSEL->p[P_AOCT] = AD_SHYFT;
     ok = !project_save(0);
     fm1_irq_off(); ash_load(&arp_pat[0], 6); fm1_irq_on();
-    arp_x[0][ARPX_ROOT] = 0; TSEL->p[P_AGATE] = 75; TSEL->p[P_APROB] = 9;
+    arp_x[0][ARPX_ROOT] = 0; TSEL->p[P_AGATE] = 75; TSEL->p[P_APROB] = 9; TSEL->p[P_AOCT] = AD_UP;
     project_load(0);
-    bad += check("  a project keeps the pattern and the ARP's settings exactly (ROOT, GATE, STEPS, BOUND)",
+    ok &= TSEL->p[P_AOCT] == AD_SHYFT;
+    TSEL->p[P_AOCT] = AD_UP;                         /* (a FUN9 project keeps UP: WYNDO is only the default) */
+    ok &= !project_save(0);
+    TSEL->p[P_AOCT] = AD_SHYFT;
+    project_load(0);
+    ok &= TSEL->p[P_AOCT] == AD_UP;
+    TSEL->p[P_AOCT] = AD_WYNDO;
+    ok &= !project_save(0);
+    TSEL->p[P_AOCT] = AD_UP;
+    project_load(0);
+    bad += check("  a project keeps the pattern and the ARP's settings exactly (ROOT, GATE, STEPS, BOUND, DIR SHYFT / UP / WYNDO)",
                  ok && !memcmp(&arp_pat[0], &keep, sizeof keep) && arp_x[0][ARPX_ROOT] == 5 && TSEL->p[P_AGATE] == 40 &&
-                 TSEL->p[P_APROB] == 4 && TSEL->p[P_AORDER] == AB_OCT);
+                 TSEL->p[P_APROB] == 4 && TSEL->p[P_AORDER] == AB_OCT && TSEL->p[P_AOCT] == AD_WYNDO);
     go_home(); frame();
     bad += check("  off the ARP pages the keys play again", song.grid == 0u);
     return bad;

@@ -363,7 +363,8 @@ static void ed_motion_reply(uint32_t k, uint32_t rc)
  * CHANGED push about the editor's own write) */
 enum { ED_ARP_OK, ED_ARP_ARGS, ED_ARP_MANY, ED_ARP_RANGE, ED_ARP_GRID, ED_ARP_OVERLAP };
 static const uint8_t ED_ARP_ID[8] = {P_AMODE, P_APROB, P_ARATE, P_AOCT, P_AORDER, P_AGATE, P_AHOLD, P_ASWING};
-static const uint8_t ED_ARP_LO[10] = {0, 1, 0, 0, 0, 10, 0, 0, 0, 0}, ED_ARP_HI[10] = {1, 64, 7, 3, 1, 100, 1, 100, 12, 6};
+/* (dir 0..5: UP DOWN PEND RAND WYNDO SHYFT; RAND is off the face but a host may still store it) */
+static const uint8_t ED_ARP_LO[10] = {0, 1, 0, 0, 0, 10, 0, 0, 0, 0}, ED_ARP_HI[10] = {1, 64, 7, AD_N - 1, 1, 100, 1, 100, 12, 6};
 static uint32_t ed_arp_set(uint32_t k, const uint8_t *a, uint32_t na)
 {
     track_t *t = &trk[k];

@@ -6,7 +6,9 @@ static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};
  * toy's RATES (ARP_RATE2); DIR: how each pass moves the rows; BOUND: a row past the chord wraps round the held notes
  * or goes up octaves. ROOT, PAT and OCT are not parameters: seq.c arp_x (ARP 3, page ids ARPX_*) */
 static const char *const N_ARATE[] = {"1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
-static const char *const N_ADIR[] = {"UP", "DOWN", "PEND", "RAND"};
+/* DIR: 3 RAND is off the face (enum_step steps over it), kept so a stored RAND still plays and shows; WYNDO and SHYFT
+ * appended (arp_shape.c AD_*) */
+static const char *const N_ADIR[] = {"UP", "DOWN", "PEND", "RAND", "WYNDO", "SHYFT"};
 static const char *const N_ABOUND[] = {"WRAP", "OCT"};
 static const char *const N_AROOT[] = {"OFF", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const N_APAT[] = {"USER", "SHAYPE", "UP 4", "UPDOWN", "STABS", "OCT RUN", "PEDAL", "DRONE"};
@@ -68,7 +70,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LD_AMP] = PD("AMP", F_PCT, 0, 127, 0),
     [P_AMODE] = PE("ARP", N_ONOFF, 0),            /* SHAYPE (a project of before: its MODE, any but OFF, is ON) */
     [P_ARATE] = PE("RATE", N_ARATE, 3),           /* 1/8, the toy's */
-    [P_AOCT] = PE("DIR", N_ADIR, 0),
+    [P_AOCT] = PE("DIR", N_ADIR, 4),             /* WYNDO (arp_shape.c AD_WYNDO), the default since midi26 */
     [P_AGATE] = {"GATE", F_INT, 10, 100, 75, 0, "%"},
     [P_ASWING] = PD("SWG", F_PCT, 0, 100, 0),
     [P_APROB] = PD("STEPS", F_STEPS, 1, 64, 4),
@@ -199,11 +201,15 @@ static int32_t param_fit(const param_desc_t *d, int32_t v)
     return d->names == N_DRUM_KIT ? enum_orig(d, v) : v;
 }
 
-/* a knob moved an F_ENUM from `from` to v: past any alias in that direction (back to `from` at the end) */
+/* a value the knobs step over though it stays valid and shows its name: ARP DIR's RAND (3), off SHAYPE's face */
+static int enum_off_face(const param_desc_t *d, int32_t v) { return d->names == N_ADIR && v == 3; }
+
+/* a knob moved an F_ENUM from `from` to v: past any alias or value off the face in that direction (back to `from` at
+ * the end) */
 static int32_t enum_step(const param_desc_t *d, int32_t from, int32_t v)
 {
     int32_t dir = v > from ? 1 : -1;
-    while (v != from && enum_orig(d, v) != v)
+    while (v != from && (enum_orig(d, v) != v || enum_off_face(d, v)))
         v = v + dir > d->max || v + dir < d->min ? from : v + dir;
     return v;
 }

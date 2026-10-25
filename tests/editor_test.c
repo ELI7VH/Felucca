@@ -364,7 +364,7 @@ static uint32_t arp_set(uint32_t k, const uint8_t *s10, const uint8_t (*nt)[3], 
 }
 static int arp_protocol(void)
 {
-    static const uint8_t FRESH[] = {0xF0, 0x7D, 0x46, 0x4C, 0x4C, 0x00, 0x00, 0x00, 0x04, 0x03, 0x00, 0x00, 0x4B, 0x00,
+    static const uint8_t FRESH[] = {0xF0, 0x7D, 0x46, 0x4C, 0x4C, 0x00, 0x00, 0x00, 0x04, 0x03, 0x04, 0x00, 0x4B, 0x00,
         0x00, 0x00, 0x03, 0x01, 0x1E, 0x08, 0x00, 0x00, 0x01, 0x00, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01, 0x03, 0x01, 0x02,
         0x02, 0x01, 0x02, 0x03, 0x01, 0x03, 0x00, 0x01, 0x03, 0x03, 0x01, 0xF7};
     static const uint8_t S[10] = {1, 8, 5, 2, 1, 50, 1, 20, 8, 4};   /* ON, 8 steps, 1/16, PEND, OCT, 50 %, HOLD, 20, G, +1 */
@@ -392,7 +392,7 @@ static int arp_protocol(void)
     keep = arp_pat[2];
     {
         static const struct { uint8_t i, v; const char *what; } BADS[] = {
-            {0, 2, "on 2"}, {1, 0, "steps 0"}, {1, 65, "steps 65"}, {2, 8, "rate 8"}, {3, 4, "dir 4"}, {4, 2, "bound 2"},
+            {0, 2, "on 2"}, {1, 0, "steps 0"}, {1, 65, "steps 65"}, {2, 8, "rate 8"}, {3, 6, "dir 6"}, {4, 2, "bound 2"},
             {5, 9, "gate 9"}, {5, 101, "gate 101"}, {6, 2, "hold 2"}, {7, 101, "swing 101"}, {8, 13, "root 13"},
             {9, 7, "oct 7"}};
         uint8_t s[10];
@@ -407,6 +407,15 @@ static int arp_protocol(void)
             }
         }
         bad += check("ARP_SET: every setting out of its range is rc 3, nothing changes", ok);
+        ok = 1;
+        for (i = 0; i < 6u; i++) {                     /* UP DOWN PEND RAND WYNDO SHYFT */
+            memcpy(s, S, 10);
+            s[3] = (uint8_t)i;
+            n = arp_set(2, s, N3, 3, 0);
+            ok &= n > 10u && !host_wire[6] && trk[2].p[P_AOCT] == (int16_t)i && host_wire[10] == i;
+        }
+        n = arp_set(2, S, N3, 3, 0);
+        bad += check("ARP_SET: DIR 0..5 (WYNDO 4, SHYFT 5; a stored RAND 3 too), ARP_GET says it back", ok && trk[2].p[P_AOCT] == AD_PEND);
     }
     {
         static const uint8_t PAST[1][3] = {{7, 0, 2}}, ROW[1][3] = {{0, 8, 1}}, LEN0[1][3] = {{0, 0, 0}},

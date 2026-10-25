@@ -1689,12 +1689,14 @@ return { DEFAULT_PATTERN, passOffset, resolvePosition, eventsAt, paintNote, root
 const ARP = {
   ROWS: 8, MAX: 30, STEPS: 64,
   RATES: ["1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"],   /* = ARPC.RATES[0..7] (0.5 .. 8 steps a beat) */
-  DIRS: ["UP", "DOWN", "PEND", "RAND"], BOUNDS: ["WRAP", "OCT"], ROOTS: ["OFF", ...NOTE_NAMES],
+  /* DIR as the device names it (params.c N_ADIR, append-only); RAND (3) is off the face: the picker shows it only while
+     the track holds it (FACE: the picker's order) */
+  DIRS: ["UP", "DOWN", "PEND", "RAND", "WYNDO", "SHYFT"], DIR_FACE: [0, 1, 2, 4, 5], DIR_RAND: 3, BOUNDS: ["WRAP", "OCT"], ROOTS: ["OFF", ...NOTE_NAMES],
   PATS: ["USER", "SHAYPE", "UP 4", "UPDOWN", "STABS", "OCT RUN", "PEDAL", "DRONE"],
   /* the ARP parameters (DESC 17..24) and the field each one is */
   PARAM: { 17: "on", 18: "rate", 19: "dir", 20: "gate", 21: "swing", 22: "steps", 23: "hold", 24: "bound" },
-  /* a fresh track: ARP OFF, 4 steps of 1/8, UP, WRAP, gate 75, HOLD OFF, ROOT OFF, OCT 0, PAT SHAYPE (the toy's pattern) */
-  fresh: () => ({ on: false, steps: 4, rate: 3, dir: 0, bound: 0, gate: 75, hold: false, swing: 0, root: 0, oct: 0, pat: 1,
+  /* a fresh track: ARP OFF, 4 steps of 1/8, WYNDO (the default since midi26), WRAP, gate 75, HOLD OFF, ROOT OFF, OCT 0, PAT SHAYPE (the toy's pattern) */
+  fresh: () => ({ on: false, steps: 4, rate: 3, dir: 4, bound: 0, gate: 75, hold: false, swing: 0, root: 0, oct: 0, pat: 1,
     notes: ARPC.DEFAULT_PATTERN.map((n) => ({ ...n })) }),
 };
 /* the ARP_SET rc a state would get (0 ok): 2 too many notes, 3 a setting out of range, 4 a note outside the grid,
@@ -1702,7 +1704,7 @@ const ARP = {
 function arpCheck(s, max = ARP.MAX) {
   const inr = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
   if (s.notes.length > max) return 2;
-  if (!(inr(+s.on, 0, 1) && inr(s.steps, 1, ARP.STEPS) && inr(s.rate, 0, 7) && inr(s.dir, 0, 3) && inr(s.bound, 0, 1) && inr(s.gate, 10, 100)
+  if (!(inr(+s.on, 0, 1) && inr(s.steps, 1, ARP.STEPS) && inr(s.rate, 0, 7) && inr(s.dir, 0, 5) && inr(s.bound, 0, 1) && inr(s.gate, 10, 100)
     && inr(+s.hold, 0, 1) && inr(s.swing, 0, 100) && inr(s.root, 0, 12) && inr(s.oct, -3, 3))) return 3;
   if (s.notes.some((n) => !(inr(n.step, 0, s.steps - 1) && inr(n.row, 0, ARP.ROWS - 1) && inr(n.length, 1, s.steps - n.step)))) return 4;
   if (s.notes.some((n, i) => s.notes.some((m, k) => k > i && m.row === n.row && m.step < n.step + n.length && n.step < m.step + m.length))) return 5;
@@ -2117,7 +2119,7 @@ function makeMockDevice(opt = {}) {
     D("FLT", F.BIPCT, -64, 63, 0), D("PIT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("FX", F.BIPCT, -64, 63, 0),
     D("RATE", F.LFOHZ, 0, 127, 60), E("WAVE", ["SIN", "TRI", "SAW", "SQR", "S&H"], 0), D("PHS", F.INT, 0, 127, 0), D("FADE", F.TIME, 0, 127, 0),
     D("PIT", F.BIPCT, -64, 63, 0), D("FLT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("AMP", F.PCT, 0, 127, 0),
-    E("ARP", NONOFF, 0), E("RATE", ARP.RATES, 3), E("DIR", ARP.DIRS, 0), D("GATE", F.INT, 10, 100, 75, null, "%"),   /* SHAYPE */
+    E("ARP", NONOFF, 0), E("RATE", ARP.RATES, 3), E("DIR", ARP.DIRS, 4), D("GATE", F.INT, 10, 100, 75, null, "%"),   /* SHAYPE */
     D("SWG", F.PCT, 0, 100, 0), D("STEPS", F.STEPS, 1, 64, 4), E("HOLD", NONOFF, 0), E("BOUND", ARP.BOUNDS, 0),
     D("ROOT", F.NOTE, 0, 11, 0), E("SCL", ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"], 0), E("QNT", ["OFF", "SNAP", "WHITE", "SEQ"], 0), D("TRN", F.SEMI, -24, 24, 0),
     D("LEN", F.STEPS, 1, 64, 16), E("DIV", NDIV, 2), D("SWG", F.PCT, 0, 100, 0), D("GATE", F.PCT, 1, 127, 64),
@@ -3160,6 +3162,9 @@ function aliasOf(names, i) {
   const k = names[0] === names[i] ? 0 : names.lastIndexOf(names[i]);
   return k >= 0 ? k : i;
 }
+/* a value the device's knobs step over though it stays valid and shows its name when set (src/params.c enum_off_face):
+   SHAYPE DIR's RAND (3), off the face since WYNDO and SHYFT. -> true: shown when set, not offered */
+function offFace(names, i) { return !!names && names[i] === "RAND" && names[4] === "WYNDO"; }
 
 /* #48: note divisions (1/4, 8T, 2BAR, ...) are listed by length, longest first, as the device's knobs step them
    (src/params.c enum_order); the values stay. Any other list: in value order. -> d's values in the order shown */
@@ -3359,7 +3364,7 @@ const TEXT = {
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
     tabShaype: "SHAYPE", arpLive: "編集しながら送る", arpWrite: "SHAYPE を書き込む", arpRead: "トラックから読む", arpClear: "消去",
-    arpHelp: "ARP が弾くパターンを描きます。行は押さえた和音の音で、いちばん下が最低音。空いたマスをドラッグするとノートを置いて長さを決めます。ノートはドラッグで移動、最後のマスの右半分からドラッグで伸ばし、クリックで消去。右クリック・右ドラッグでも消せます。×2 ÷2 でステップを分割・結合、◀ ▶ でパターンをずらします。",
+    arpHelp: "ARP が弾くパターンを描きます。行は押さえた和音の音で、いちばん下が最低音。空いたマスをドラッグするとノートを置いて長さを決めます。ノートはドラッグで移動、最後のマスの右半分からドラッグで伸ばし、クリックで消去。右クリック・右ドラッグでも消せます。×2 ÷2 でステップを分割・結合、◀ ▶ でパターンをずらします。DIR は1周ごとの動き(初期値は WYNDO): UP・DOWN・PEND、WYNDO はパターンを押さえた音の上へ1音ずつずらし、SHYFT は和音はそのままで、和音と同じ高さの窓がパターンを1行ずつ上がります(窓の外の行は休み)。",
     arpNoFw: "このファームウェアには SHAYPE がありません。FM-1 のファームウェアを更新してください。",
     arpSending: "送信中…", arpSentOk: "送信済み", arpUnsent: "未送信", arpFromDevice: "FM-1 から読み込みました", arpNoAnswer: "応答がありません",
     arpRc1: "受け付けられませんでした: トラックかデータが不正です", arpRc2: "受け付けられませんでした: ノートが多すぎます",
@@ -3474,7 +3479,7 @@ const TEXT = {
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
     tabShaype: "SHAYPE", arpLive: "Send while editing", arpWrite: "Write SHAYPE", arpRead: "Read from track", arpClear: "Clear",
-    arpHelp: "Draw the pattern the ARP plays. Rows are the notes of the chord you hold, lowest at the bottom. Drag on an empty cell to place a note and set its length. Drag a note to move it; drag from the right half of its last cell to stretch it; click it to remove it. Right-click or right-drag erases. ×2 and ÷2 split or join steps; ◀ ▶ shift the pattern.",
+    arpHelp: "Draw the pattern the ARP plays. Rows are the notes of the chord you hold, lowest at the bottom. Drag on an empty cell to place a note and set its length. Drag a note to move it; drag from the right half of its last cell to stretch it; click it to remove it. Right-click or right-drag erases. ×2 and ÷2 split or join steps; ◀ ▶ shift the pattern. DIR is how each pass moves (WYNDO unless you change it): UP, DOWN, PEND; WYNDO slides the pattern up the notes you hold, a note a pass; SHYFT keeps the chord and plays a chord-high window of the pattern that climbs a row a pass (rows outside it rest).",
     arpNoFw: "This firmware has no SHAYPE. Update your FM-1 firmware to draw ARP patterns.",
     arpSending: "SENDING…", arpSentOk: "SENT", arpUnsent: "NOT SENT", arpFromDevice: "READ FROM THE FM-1", arpNoAnswer: "NO ANSWER",
     arpRc1: "REFUSED: wrong track or message", arpRc2: "REFUSED: too many notes", arpRc3: "REFUSED: a setting is out of range",
@@ -4050,7 +4055,7 @@ function paramRow(s, id) {
     for (const v of enumShown(d)) {                 /* (note divisions longest first: #48) */
       const [txt] = fmtValue(d, v);
       const name = d.fmt === F.ENUM && d.names[v - d.min] == null ? String(v) : modDst(d, txt);
-      const alias = d.fmt === F.ENUM && aliasOf(d.names, v - d.min) !== v - d.min;   /* shown when set, not offered */
+      const alias = d.fmt === F.ENUM && (aliasOf(d.names, v - d.min) !== v - d.min || offFace(d.names, v - d.min));   /* shown when set, not offered */
       input.append(el("option", { value: v, ic: wave && WAVE_IC[name], hidden: alias }, name));
     }
     input.addEventListener("change", () => userSet(s, id, +input.value, true));
@@ -5908,8 +5913,8 @@ function arpNotes(notes) {
 const arpCtl = {};
 function arpBuild() {
   const set = (f, v) => arpS && arpEdited({ ...arpS, [f]: v });
-  const seg = (f, names) => el("span", { class: "seg", role: "group" }, ...names.map((n, i) =>
-    el("button", { type: "button", "data-v": i, onclick: () => set(f, i) }, n)));
+  const seg = (f, names, order = names.map((_, i) => i)) => el("span", { class: "seg", role: "group" }, ...order.map((i) =>
+    el("button", { type: "button", "data-v": i, onclick: () => set(f, i) }, names[i])));
   const sel = (f, names, base = 0) => el("select", { onchange: (e) => set(f, +e.target.value) },
     ...names.map((n, i) => el("option", { value: i + base, text: n })));
   const range = (f, min, max) => el("input", { type: "range", min, max, oninput: (e) => set(f, +e.target.value) });
@@ -5920,7 +5925,7 @@ function arpBuild() {
       if (!arpS || !(v >= 1 && v <= ARP.STEPS)) { renderArp(); return; }
       arpEdited({ ...arpS, steps: v, notes: arpFit(arpS.notes, v) });
     } }),
-    rate: sel("rate", ARP.RATES), dir: seg("dir", ARP.DIRS), bound: seg("bound", ARP.BOUNDS),
+    rate: sel("rate", ARP.RATES), dir: seg("dir", ARP.DIRS, [...ARP.DIR_FACE.slice(0, 3), ARP.DIR_RAND, ...ARP.DIR_FACE.slice(3)]), bound: seg("bound", ARP.BOUNDS),
     gate: range("gate", 10, 100), gateV: el("span"), hold: el("button", { type: "button", class: "tog", onclick: () => arpS && set("hold", !arpS.hold) }, "HOLD"),
     swing: range("swing", 0, 100), swingV: el("span"), root: sel("root", ARP.ROOTS),
     oct: sel("oct", ["-3", "-2", "-1", "0", "+1", "+2", "+3"], -3),
@@ -5951,6 +5956,7 @@ function renderArp() {
   arpCtl.gateV.textContent = arpS.gate + " %";
   arpCtl.swingV.textContent = String(arpS.swing);
   for (const f of ["dir", "bound"]) for (const b of arpCtl[f].children) b.setAttribute("aria-pressed", +b.dataset.v === arpS[f] ? "true" : "false");
+  for (const b of arpCtl.dir.children) b.hidden = +b.dataset.v === ARP.DIR_RAND && arpS.dir !== ARP.DIR_RAND;   /* RAND: only as held */
   $("arpfiner").disabled = !arpZoom(arpS, 2);
   $("arpcoarser").disabled = !arpZoom(arpS, 0.5);
   $("arpleft").disabled = $("arpright").disabled = !arpS.notes.length;

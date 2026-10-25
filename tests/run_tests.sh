@@ -36,7 +36,9 @@
 #                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later).
 # ARP (tests/arp_shape_test.c, WaveLoop Kit): SHAYPE's core (src/arp_shape.c) against WaveLoop's Shape Arp: tests/arp_vectors.h,
 #                   written by tools/arp_vectors.mjs running the toy's sequence.mjs, played tick by tick as seq.c arp_fire
-#                   plays them; ZOOM, SHIFT against the toy's subdivide / shift (--zoom, --shift), MIRROR, MUTATE.
+#                   plays them; ZOOM, SHIFT against the toy's subdivide / shift (--zoom, --shift), MIRROR, MUTATE; DIR
+#                   (UP DOWN PEND and SHAYPE's WYNDO SHYFT) against SHAYPE's Windows core: tests/arp_window_vectors.h,
+#                   written by tools/arp_windows_vectors.c running shaype_core.c's table (two cycles a case).
 # SEQ > ARP (tests/arp_seq_test.c, WaveLoop Kit): the sequencer's chords through the arp against shapeChords (--chords),
 #                   its edges, chords let go anywhere in a step (MIDI, keys, HOLD, the external clock, CC123), MIDI step
 #                   recording, a soak: every note the arp starts ends once, every voice released.
@@ -155,7 +157,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/motion_test" tests/motion_test.c -lm
     run "motion, whole-step chance, FUN7 / FUN8 -> FUN9 migration, song restore, SHAYPE on a track" "$OUT/motion_test"
     $CC -O1 -w -Ifirmware/src -Itests -o "$OUT/arp_shape_test" tests/arp_shape_test.c
-    run "ARP (SHAYPE): every case of tests/arp_vectors.h as WaveLoop's sequence.mjs plays it, ZOOM, SHIFT, MIRROR, MUTATE" "$OUT/arp_shape_test"
+    run "ARP (SHAYPE): tests/arp_vectors.h as sequence.mjs plays it, DIR as SHAYPE's core, ZOOM, SHIFT, MIRROR, MUTATE" "$OUT/arp_shape_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/arp_seq_test" tests/arp_seq_test.c -lm
     run "SEQ > ARP: the sequence's chords through SHAYPE as shapeChords plays them, edges, releases, MIDI step recording, soak" "$OUT/arp_seq_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ratchet_test" tests/ratchet_test.c -lm

@@ -634,7 +634,7 @@ static void proj_arp_get(const uint8_t *a, arp_pat_t *p, int16_t *x)   /* (damag
 /* a project saved before the ARP was SHAYPE (FUN8 and older): its ARP settings meant MODE (OFF UP DN UPDN RND ORD
  * REPEAT), RATE (N_DIV: 1/4 1/8 1/16 1/32 8T 16T 1/2 1/1 2BAR 4BAR), OCT 1..4, GATE (1..127), PROB, ORD; now they are ARP
  * (on), RATE (1/2 .. 1/32), DIR, GATE %, STEPS, BOUND. ON stays on, the rate and the gate keep what they were (the
- * slowest rate for the bar-long ones), HOLD and SWING stay; DIR UP, STEPS 4, BOUND WRAP, and the pattern SHAYPE with
+ * slowest rate for the bar-long ones), HOLD and SWING stay; DIR WYNDO (the default), STEPS 4, BOUND WRAP, and the pattern SHAYPE with
  * ROOT OFF and OCT 0 */
 static void proj_arp_migrate(int16_t *p)
 {
@@ -642,7 +642,7 @@ static void proj_arp_migrate(int16_t *p)
     p[P_AMODE] = (int16_t)(p[P_AMODE] != 0);
     p[P_ARATE] = (int16_t)(p[P_ARATE] >= 0 && p[P_ARATE] < 10 ? RATE[p[P_ARATE]] : 3);
     p[P_AGATE] = (int16_t)clamp(p[P_AGATE] * 100 / 128, 10, 100);
-    p[P_AOCT] = AD_UP;
+    p[P_AOCT] = AD_WYNDO;                    /* (the default since midi26) */
     p[P_APROB] = 4;
     p[P_AORDER] = AB_WRAP;
 }

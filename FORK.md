@@ -66,7 +66,10 @@ The ARP is **SHAYPE**, WaveLoop's Shape Arp. A pattern is up to 30 notes on 1–
 Row 1 is the lowest note you hold, row 2 the next, and so on. Each pass moves the rows (DIR), and
 rows past the chord wrap round it or go up octaves (BOUND).
 
-- **ARP:** ARP on/off, STEPS, RATE (1/2 to 1/32 with triplets), DIR (UP, DOWN, PEND, RAND).
+- **ARP:** ARP on/off, STEPS, RATE (1/2 to 1/32 with triplets), DIR (UP, DOWN, PEND, WYNDO, SHYFT; WYNDO by default).
+  - **WYNDO:** the pattern's rows slide up through the notes you hold, one note a pass. Hold F A C E under a 3-row pattern: F A C, then A C E.
+  - **SHYFT:** the chord stays put. A window as tall as the chord climbs the pattern a row a pass; only the rows inside it play.
+  - RAND is off the knob. A song saved with RAND (or any DIR) keeps it until you turn DIR.
 - **ARP 2:** BOUND (WRAP, OCT), GATE, HOLD, SWING.
 - **ARP 3:** PAT (load SHAYPE, UP 4, UPDOWN, STABS, OCT RUN, PEDAL, DRONE), ROOT, OCT.
 - On every ARP page the grid shows the pattern. PRESETS moves the cursor step.

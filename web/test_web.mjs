@@ -40,7 +40,7 @@ const proto = html.slice(html.indexOf("/*PROTO-BEGIN*/"), html.indexOf("/*PROTO-
 const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
-   mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
+   mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, offFace, fmtValue, FM6, enumShown, F,
    FM4, fromDigital, fromPerc, DRUM_KIT_E, ARPC, ARP, arpCheck, arpFit, arpZoom, arpShift, Coalescer,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
    readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu })`,
@@ -387,7 +387,8 @@ function mockTables() {
   ok(fw.PCT && fw.PCT.length && !pd.length, `editor: percent values == firmware (${fw.PCT ? fw.PCT.length : 0} values)`);
   /* #48: every list's order in the editor == the order the device's knobs step it (descdump SHOWN: param_turn);
      the note divisions longest first, with the triplets by their length */
-  const shown = (d) => E.enumShown(d).filter((v) => E.aliasOf(d.names, v - d.min) === v - d.min).map((v) => d.names[v - d.min]);
+  const shown = (d) => E.enumShown(d).filter((v) => E.aliasOf(d.names, v - d.min) === v - d.min && !E.offFace(d.names, v - d.min))
+    .map((v) => d.names[v - d.min]);
   const sd = (fw.SHOWN || []).filter(([sc, i, names]) => JSON.stringify(shown((sc ? T.GP : T.TP)[i])) !== JSON.stringify(names));
   sd.slice(0, 5).forEach((x) => console.log("  SHOWN " + JSON.stringify(x) + " editor " + JSON.stringify(shown((x[0] ? T.GP : T.TP)[x[1]]))));
   ok(fw.SHOWN && fw.SHOWN.length > 20 && !sd.length, `editor: enum lists in the device's knob order (${fw.SHOWN ? fw.SHOWN.length : 0} lists)`);
@@ -1389,11 +1390,11 @@ async function editorShaype() {
   /* ARP_GET of a fresh track: EDITOR_PROTOCOL.md's example, byte for byte, and what it means */
   sent.length = got.length = 0;
   const g0 = E.parse[C.ARP_GET](await rq(E.req.arpGet(0)));
-  ok(eq(sent[0], hex("F0 7D 46 4C 4C 00 F7")) && eq(got[0], hex("F0 7D 46 4C 4C 00 00 00 04 03 00 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7")),
+  ok(eq(sent[0], hex("F0 7D 46 4C 4C 00 F7")) && eq(got[0], hex("F0 7D 46 4C 4C 00 00 00 04 03 04 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7")),
     "shaype: ARP_GET track 1 == the protocol's example (request and reply bytes)");
-  ok(g0.track === 0 && g0.rc === 0 && g0.on === false && g0.steps === 4 && g0.rate === 3 && g0.dir === 0 && g0.bound === 0 && g0.gate === 75
+  ok(g0.track === 0 && g0.rc === 0 && g0.on === false && g0.steps === 4 && g0.rate === 3 && g0.dir === 4 && g0.bound === 0 && g0.gate === 75
     && g0.hold === false && g0.swing === 0 && g0.root === 0 && g0.oct === 0 && g0.pat === 1 && g0.max === 30 && js(g0.notes) === js(notesOf(seq.DEFAULT_PATTERN)),
-    "shaype: ARP_GET parsed: ARP OFF, 4 steps of 1/8, UP, WRAP, gate 75, OCT 0, PAT SHAYPE, the toy's 8 notes");
+    "shaype: ARP_GET parsed: ARP OFF, 4 steps of 1/8, WYNDO, WRAP, gate 75, OCT 0, PAT SHAYPE, the toy's 8 notes");
   let bad = 0;
   for (const a of [[0, 0, 0, 4, 3, 0, 0, 75, 0, 0, 0, 3, 1, 30, 1, 0, 0], [0, 0, 0, 4, 3, 0, 0, 75, 0, 0, 0, 3, 1, 2, 3, 0, 0, 1, 1, 0, 1, 2, 0, 1]])
     try { E.parse[C.ARP_GET](a); } catch { bad++; }
@@ -1421,7 +1422,7 @@ async function editorShaype() {
   live.push({ track: 0, s: st({ notes: drawn }) });
   await settle();
   ok(js(drawn.at(-1)) === js({ step: 0, row: 4, length: 3 }) && sent.length === 1
-    && eq(sent[0], hex(`F0 7D 46 4C 4D 00 00 04 03 00 00 4B 00 00 00 03 09 ${D8} 00 04 03 F7`)),
+    && eq(sent[0], hex(`F0 7D 46 4C 4D 00 00 04 03 04 00 4B 00 00 00 03 09 ${D8} 00 04 03 F7`)),
     "shaype: draw + drag across -> ARP_SET bytes (9 notes, the new one last)");
   let g = E.parse[C.ARP_GET](await rq(E.req.arpGet(0)));
   ok(g.pat === 0 && js(g.notes) === js(drawn), "shaype: the device keeps it; other notes make PAT USER");
@@ -1443,13 +1444,13 @@ async function editorShaype() {
   g = E.parse[C.ARP_GET](await rq(E.req.arpGet(1)));
   const d0 = E.parse[C.DUMP](await rq(E.req.dump()), info), t1 = E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(1)), info);
   ok(g.on && g.rate === 5 && g.dir === 2 && g.bound === 1 && g.gate === 50 && g.hold && g.swing === 20 && g.root === 1 && g.oct === -2
-    && eq(t1.p.slice(17, 25), [1, 5, 2, 50, 20, 4, 1, 1]) && eq(d0.p.slice(17, 25), [0, 3, 0, 75, 0, 4, 0, 0]),
+    && eq(t1.p.slice(17, 25), [1, 5, 2, 50, 20, 4, 1, 1]) && eq(d0.p.slice(17, 25), [0, 3, 4, 75, 0, 4, 0, 0]),
     "shaype: ARP_SET moves that track's ARP parameters (17..24) only");
   const desc = [];
   for (let i = 17; i < 25; i++) desc.push(E.parse[C.DESC](await rq(E.req.desc(0, i))));
   ok(desc.map((d) => d.label).join() === "ARP,RATE,DIR,GATE,SWG,STEPS,HOLD,BOUND" && desc[1].names.join() === E.ARP.RATES.join()
-    && desc[2].names.join() === "UP,DOWN,PEND,RAND" && desc[7].names.join() === "WRAP,OCT" && desc[3].min === 10 && desc[3].max === 100 && desc[3].unit === "%"
-    && desc[5].fmt === E.F.STEPS && desc.map((d) => d.def).join() === "0,3,0,75,0,4,0,0"
+    && desc[2].names.join() === "UP,DOWN,PEND,RAND,WYNDO,SHYFT" && desc[7].names.join() === "WRAP,OCT" && desc[3].min === 10 && desc[3].max === 100 && desc[3].unit === "%"
+    && desc[5].fmt === E.F.STEPS && desc.map((d) => d.def).join() === "0,3,4,75,0,4,0,0"
     && /\{ t: "ARP", pages: \[\["ARP", 0, \[17, 22, 18, 19\]\], \["ARP 2", 0, \[24, 20, 23, 21\]\]\] \}/.test(html),
     "shaype: the ARP ids over DESC (ARP RATE DIR GATE SWG STEPS HOLD BOUND); pages ARP, ARP 2");
 
@@ -1467,13 +1468,25 @@ async function editorShaype() {
   ok(r4.rc === 1 && r4.track === 4 && r4.notes === undefined, "shaype: mock ARP_SET rc 1: track 5 (track, 1 only)");
   const many = Array.from({ length: 31 }, (_, i) => ({ step: i, row: i % 8, length: 1 }));
   await refuse("31 notes", 2, st({ steps: 64, notes: many }));
-  for (const [f, v] of [["on", 2], ["steps", 0], ["steps", 65], ["rate", 8], ["dir", 4], ["bound", 2], ["gate", 9], ["gate", 101],
+  for (const [f, v] of [["on", 2], ["steps", 0], ["steps", 65], ["rate", 8], ["dir", 6], ["bound", 2], ["gate", 9], ["gate", 101],
     ["hold", 2], ["swing", 101], ["root", 13], ["oct", 4]])
     await refuse(`${f} ${v}`, 3, st({ [f]: v, notes: f === "steps" ? [] : base.notes }));
   for (const [what, n] of [["step past STEPS", { step: 4, row: 0, length: 1 }], ["row 9", { step: 0, row: 8, length: 1 }],
     ["length 0", { step: 1, row: 7, length: 0 }], ["past the end", { step: 3, row: 7, length: 2 }]])
     await refuse(what, 4, st({ notes: [...base.notes, n] }));
   await refuse("two notes overlap in a row", 5, st({ notes: [{ step: 0, row: 6, length: 3 }, { step: 2, row: 6, length: 1 }] }));
+  {   /* DIR 0..5: WYNDO and SHYFT, and a stored RAND; the SHAYPE tab's picker: UP DOWN PEND WYNDO SHYFT, RAND only as held */
+    let dirs = true;
+    for (let d = 0; d <= 5; d++) {
+      const r = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st({ dir: d }))));
+      dirs = dirs && r.rc === 0 && r.dir === d && E.arpCheck(st({ dir: d })) === 0;
+    }
+    ok(dirs && E.arpCheck(st({ dir: 6 })) === 3, "shaype: ARP_SET takes DIR 0..5 (UP DOWN PEND RAND WYNDO SHYFT), 6 is rc 3");
+    ok(E.ARP.DIR_FACE.map((i) => E.ARP.DIRS[i]).join() === "UP,DOWN,PEND,WYNDO,SHYFT" && E.ARP.DIRS[E.ARP.DIR_RAND] === "RAND"
+      && /dir: seg\("dir", ARP\.DIRS, \[\.\.\.ARP\.DIR_FACE\.slice\(0, 3\), ARP\.DIR_RAND/.test(html)
+      && /b\.hidden = \+b\.dataset\.v === ARP\.DIR_RAND && arpS\.dir !== ARP\.DIR_RAND/.test(html),
+      "shaype: the DIR picker is UP DOWN PEND WYNDO SHYFT; RAND shows only while the track holds it");
+  }
   const same = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st({ gate: 60 }))));
   ok(same.rc === 0 && same.pat === 1 && same.gate === 60, "shaype: a SET with the same notes keeps PAT");
 

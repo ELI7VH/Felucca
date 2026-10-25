@@ -309,7 +309,7 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period, int 
     n = ash_voicing(raw, n, root, held);
     if (adv && ++t->arp_idx == 0u && t->arp_n)       /* a fresh chord (arp_restart): the notes of the one before end */
         arp_silence(t);
-    j = ash_tick(&arp_pat[k], arp_steps(t), t->arp_idx, held, n, (uint32_t)clamp(t->p[P_AOCT], 0, 3),
+    j = ash_tick(&arp_pat[k], arp_steps(t), t->arp_idx, held, n, (uint32_t)clamp(t->p[P_AOCT], 0, AD_N - 1),
                  (uint32_t)clamp(t->p[P_AORDER], 0, 1), rng, &ofs, pitch, len);
     t->arp_ofs = (int8_t)ofs;
     ofs = 12 * clamp(arp_x[k][ARPX_OCT], -3, 3);

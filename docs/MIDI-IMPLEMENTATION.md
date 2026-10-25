@@ -348,12 +348,34 @@ No DSP, controller preset assignments or storage formats change.
 Validation: firmware build, MIDI integration, editor web checks and target instruction budgets pass. MIDI checks cover all five shapes, channel routing, WAVE popups, normal-knob restoration, project persistence and motion recording. All 369 sound regression renders remain unchanged. Image size is 450684 bytes; main RAM remains 94384 / 98304 bytes and the audio/display pool 330208 / 344064 bytes. These are host/build results; installation on the physical FM-1 is pending.
 
 
+### midi26 SHAYPE: WYNDO and SHYFT
+
+DIR gains SHAYPE's two window directions (WaveLoop `windows/shaype/shaype_core.c` SH_WINDOW / SH_SHYFT at
+c4e321fd; the web toy's `sequence.mjs` does not have them yet). The group is the pattern's rows from its lowest
+note's to its highest's (h rows, the notes inside STEPS), over n held notes.
+
+- **WYNDO** (DIR 4): the group slides up through the held notes a note a pass: pass p plays row r at chord place
+  r − foot + p; n − h + 1 passes, then again (one pass, standing still, when the group is as tall as the chord or
+  taller). Holding F A C E under a 3-row group: F A C, then A C E.
+- **SHYFT** (DIR 5): the chord stays put; a window n rows high stands on the group's lowest row and climbs it a row a
+  pass: only rows foot + p … foot + p + n − 1 sound, row r at place r − foot − p; h − n + 1 passes.
+- **RAND off the face.** DIR's knob steps UP DOWN PEND WYNDO SHYFT; a stored RAND (3) still plays and shows RAND
+  until DIR is turned. The editor offers RAND only while a track holds it. ARP_SET takes DIR 0..5.
+- **WYNDO is the default** (Elijah, midi26): a new track, INIT, and a FUN8 / FUN7 project or song migrating to
+  SHAYPE get WYNDO; loading a factory pattern leaves DIR alone. A FUN9 project or song keeps the DIR it was saved
+  with (a midi25 save with UP stays UP).
+- Stored as DIR's value in FUN9 (no format change). midi25 clamps 4 and 5 to RAND.
+- Parity: `tools/arp_windows_vectors.c` builds the Windows core natively and writes `tests/arp_window_vectors.h`;
+  `tests/arp_shape_test.c` plays its 790 cases (UP, DOWN, PEND, WYNDO, SHYFT, 158 each, WRAP and OCT) through
+  `ash_tick` for two cycles: every note matches. Cost: image 462736 bytes (+208); main RAM 94928 / 98304 and pool
+  334744 / 344064 unchanged.
+
 ### midi25 SHAYPE, WaveLoop's Shape Arp
 
 The ARP is SHAYPE (`firmware/src/arp_shape.c`), a C port of the Shape Arp toy's core
 (`web/src/arp/core/sequence.mjs` in the WaveLoop repo), ported from WaveLoop's Switch Blade build. A pattern
 is up to 30 notes `{step, row, length}` on 1–64 steps by 8 rows; a row is a place in the held chord, lowest
-first. Each pass moves the rows (DIR: UP, DOWN, PEND, RAND); a place past the chord wraps round the held
+first. Each pass moves the rows (DIR: UP, DOWN, PEND, RAND; WYNDO and SHYFT from midi26); a place past the chord wraps round the held
 notes or moves by octaves (BOUND: WRAP, OCT). The notes starting on a step sound together, up to 8 at once,
 each for length × step × GATE.
 
@@ -377,7 +399,7 @@ each for length × step × GATE.
 - **Storage.** Projects and setlist songs are **FUN9**: FUN8's 3584 bytes up to its name, then four 64-byte
   SHAYPE blocks (n, PAT, ROOT, OCT + 3, 30 notes), the name and the hash: 3840 bytes, the storage object's
   whole payload. No flash object moved or grew past its sector payload. FUN8/FUN7 and older load with SHAYPE's
-  default pattern on every track and their old ARP mapped (ON stays on; rate, gate, HOLD and SWING kept; DIR UP,
+  default pattern on every track and their old ARP mapped (ON stays on; rate, gate, HOLD and SWING kept; DIR UP (WYNDO from midi26),
   STEPS 4, BOUND WRAP, ROOT OFF, OCT 0). The retained RAM cache (`.noinit`) and backups accept FUN8 records; the
   midi24 resume journal restores on first boot. Firmware before midi25 cannot read FUN9: keep a backup before
   installing an older build.

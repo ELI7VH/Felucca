@@ -4,14 +4,16 @@
  * must give exactly the notes, steps and lengths the JS core gave, in its order. Then the toy's own unit tests
  * (sequence.test.mjs) as C, and the editing helpers. ZOOM (ash_subdivide) against the toy's subdivide on every case of
  * tests/arp_zoom_vectors.h (tools/arp_vectors.mjs --zoom), its refusals included; SHIFT (ash_shift) against the toy's
- * shift on every case of tests/arp_shift_vectors.h (--shift), in its order; MIRROR and MUTATE's helpers. Run by
- * tests/run_tests.sh. */
+ * shift on every case of tests/arp_shift_vectors.h (--shift), in its order; MIRROR and MUTATE's helpers. DIR against
+ * SHAYPE's Windows core (WYNDO and SHYFT are its own; UP DOWN PEND again): every case of tests/arp_window_vectors.h
+ * (tools/arp_windows_vectors.c ran shaype_core.c sh_build_table on them) for two cycles. Run by tests/run_tests.sh. */
 #include <stdio.h>
 #include <string.h>
 #include "arp_shape.c"
 #include "arp_vectors.h"
 #include "arp_zoom_vectors.h"
 #include "arp_shift_vectors.h"
+#include "arp_window_vectors.h"
 
 static uint32_t xs;
 static uint32_t xs_next(void)
@@ -56,6 +58,43 @@ static int play_vec(uint32_t k, int verbose)
     if (e != v->nev && verbose)
         printf("arp:   case %u: C played %u notes, JS %u\n", (unsigned)k, (unsigned)e, (unsigned)v->nev);
     return e == v->nev;
+}
+
+/* DIR case k (tests/arp_window_vectors.h) through ash_tick for two of SHAYPE's cycles: tick t plays row t % cycle of the
+ * Windows core's table, the same notes in the same order */
+static int window_vec(uint32_t k, int verbose)
+{
+    const arp_wvec_t *v = &ARP_WVEC[k];
+    arp_pat_t p;
+    uint8_t pitch[ARP_ROWS], len[ARP_ROWS];
+    uint32_t tick, e, i, j, round;
+    int32_t offset = 0;
+    memset(&p, 0, sizeof p);
+    p.n = v->npat;
+    memcpy(p.note, v->pat, sizeof p.note);
+    for (round = 0; round < 2u; round++)
+        for (tick = 0, e = 0; tick < v->cycle; tick++) {
+            j = ash_tick(&p, v->steps, round * v->cycle + tick, v->chord, v->nchord, v->dir, v->bound, xs_next, &offset,
+                         pitch, len);
+            for (i = 0; i < j; i++, e++) {
+                const uint16_t *w = v->ev + 3u * e;
+                if (e >= v->nev || w[0] != tick || w[1] != pitch[i] || w[2] != len[i]) {
+                    if (verbose)
+                        printf("arp:   window case %u (dir %u) tick %u: C plays %u x%u, SHAYPE %u %u x%u\n", (unsigned)k,
+                               (unsigned)v->dir, (unsigned)(round * v->cycle + tick), (unsigned)pitch[i], (unsigned)len[i],
+                               e < v->nev ? (unsigned)w[0] : 0u, e < v->nev ? (unsigned)w[1] : 0u,
+                               e < v->nev ? (unsigned)w[2] : 0u);
+                    return 0;
+                }
+            }
+            if (tick + 1u == v->cycle && e != v->nev) {
+                if (verbose)
+                    printf("arp:   window case %u: C played %u notes a cycle, SHAYPE %u\n", (unsigned)k, (unsigned)e,
+                           (unsigned)v->nev);
+                return 0;
+            }
+        }
+    return 1;
 }
 
 /* ZOOM case k through ash_subdivide: the toy's pattern, STEPS and RATE, or its refusal (and nothing changed). The toy's
@@ -128,6 +167,54 @@ int main(void)
     snprintf(line, sizeof line, "JS parity: %u cases, %u notes, every one as sequence.mjs plays it", (unsigned)ARP_NVEC,
              (unsigned)events);
     check(line, !bad);
+    {
+        uint32_t wbad = 0, wev = 0, nd[AD_N] = {0}, bd[AD_N] = {0};
+        for (k = 0; k < ARP_NWVEC; k++) {
+            wev += ARP_WVEC[k].nev;
+            nd[ARP_WVEC[k].dir]++;
+            if (!window_vec(k, wbad < 5u)) {
+                wbad++;
+                bd[ARP_WVEC[k].dir]++;
+            }
+        }
+        snprintf(line, sizeof line, "SHAYPE parity: %u cases, %u notes a cycle, two cycles each", (unsigned)ARP_NWVEC,
+                 (unsigned)wev);
+        check(line, !wbad);
+        printf("arp:   UP %u DOWN %u PEND %u WYNDO %u SHYFT %u cases; failed %u %u %u %u %u\n", (unsigned)nd[AD_UP],
+               (unsigned)nd[AD_DOWN], (unsigned)nd[AD_PEND], (unsigned)nd[AD_WYNDO], (unsigned)nd[AD_SHYFT],
+               (unsigned)bd[AD_UP], (unsigned)bd[AD_DOWN], (unsigned)bd[AD_PEND], (unsigned)bd[AD_WYNDO],
+               (unsigned)bd[AD_SHYFT]);
+    }
+    {   /* SHAYPE's README: F A C E held under a 3-row group, WYNDO plays F A C, then A C E, then again; on rows 3..5 the
+         * same; SHYFT over it (a group no taller than the chord) stays put, as UP's first pass */
+        static const uint8_t FACE[4] = {53, 57, 60, 64}, W[9] = {53, 57, 60, 57, 60, 64, 53, 57, 60};
+        arp_pat_t p = {3, {0}, {ARP_NOTE(0, 0, 1), ARP_NOTE(1, 1, 1), ARP_NOTE(2, 2, 1)}};
+        arp_pat_t q = {3, {0}, {ARP_NOTE(0, 2, 1), ARP_NOTE(1, 3, 1), ARP_NOTE(2, 4, 1)}};
+        uint8_t pitch[ARP_ROWS], len[ARP_ROWS];
+        uint32_t t, ok = 1;
+        int32_t o = 0;
+        for (t = 0; t < 9u; t++) {
+            ok &= ash_tick(&p, 3, t, FACE, 4, AD_WYNDO, AB_WRAP, xs_next, &o, pitch, len) == 1u && pitch[0] == W[t];
+            ok &= ash_tick(&q, 3, t, FACE, 4, AD_WYNDO, AB_OCT, xs_next, &o, pitch, len) == 1u && pitch[0] == W[t];
+            ok &= ash_tick(&q, 3, t, FACE, 4, AD_SHYFT, AB_WRAP, xs_next, &o, pitch, len) == 1u && pitch[0] == W[t % 3u];
+        }
+        check("WYNDO: F A C E under a 3-row group plays F A C, then A C E (off row 0 too); SHYFT stays put", ok);
+    }
+    {   /* SHYFT: a 6-row group (rows 1..6) over C E G climbs it: rows 1-3, 2-4, 3-5, 4-6, the rest silent */
+        static const uint8_t CEG[3] = {60, 64, 67};
+        arp_pat_t p = {6, {0}, {ARP_NOTE(0, 1, 1), ARP_NOTE(1, 2, 1), ARP_NOTE(2, 3, 1), ARP_NOTE(3, 4, 1), ARP_NOTE(4, 5, 1),
+                                ARP_NOTE(5, 6, 1)}};
+        static const int16_t W[4][6] = {{60, 64, 67, -1, -1, -1}, {-1, 60, 64, 67, -1, -1}, {-1, -1, 60, 64, 67, -1},
+                                        {-1, -1, -1, 60, 64, 67}};
+        uint8_t pitch[ARP_ROWS], len[ARP_ROWS];
+        uint32_t t, j, ok = 1;
+        int32_t o = 0;
+        for (t = 0; t < 30u; t++) {
+            j = ash_tick(&p, 6, t, CEG, 3, AD_SHYFT, AB_OCT, xs_next, &o, pitch, len);
+            ok &= W[(t / 6u) % 4u][t % 6u] < 0 ? j == 0u : j == 1u && pitch[0] == W[(t / 6u) % 4u][t % 6u];
+        }
+        check("SHYFT: a chord-high window climbs a 6-row group a row a pass (4 passes), the rows outside it rest", ok);
+    }
 
     {   /* sequence.test.mjs: requested chord shapes move through C E G B D */
         static const uint8_t C[5] = {60, 64, 67, 71, 74};
@@ -138,7 +225,7 @@ int main(void)
         ash_load(&p, 0);
         for (o = 0; o < 2u; o++)
             for (s = 0; s < 4u; s++) {
-                ok &= ash_events(&p, s, C, 5, (int32_t)o, AB_WRAP, pitch, len) == 2u;
+                ok &= ash_events(&p, s, C, 5, (int32_t)o, AB_WRAP, 0, pitch, len) == 2u;
                 got[o][2 * s] = pitch[0];
                 got[o][2 * s + 1] = pitch[1];
             }

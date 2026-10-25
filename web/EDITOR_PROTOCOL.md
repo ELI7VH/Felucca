@@ -764,7 +764,8 @@ RAM values describe linker allocations, not dynamic heap or stack high-water mea
 
 The ARP is SHAYPE, WaveLoop's Shape Arp (`firmware/src/arp_shape.c`, a port of the toy's `sequence.mjs`). Its
 settings keep the ARP ids, with new meanings (DESC names them): 17 `ARP` OFF / ON (was MODE), 18 `RATE` 1/2 1/4
-1/4T 1/8 1/8T 1/16 1/16T 1/32 (default 1/8), 19 `DIR` UP DOWN PEND RAND (was OCT), 20 `GATE` 10..100 % (default 75),
+1/4T 1/8 1/8T 1/16 1/16T 1/32 (default 1/8), 19 `DIR` UP DOWN PEND RAND WYNDO SHYFT (was OCT; 4 and 5 from midi26, default WYNDO;
+RAND is off the device's knob, still valid and shown when set), 20 `GATE` 10..100 % (default 75),
 21 `SWG` as before, 22 `STEPS` 1..64 (default 4; was PROB), 23 `HOLD` as before, 24 `BOUND` WRAP / OCT (was ORD). The
 pattern and three extras (PAT, ROOT, OCT) are not parameters: these two commands carry them. INFO advertises
 `41 01 30` at its end: commands 76 and 77, at most 30 notes a pattern. Firmware without the tag answers neither.
@@ -781,7 +782,7 @@ the held chord, low to high), in the order they were written (the toy's array or
   `oct + 3`: 0..6 = −3..+3 octaves on everything the arp plays. `pat`: 0 USER, 1..7 the factory pattern last loaded
   on the device (SHAYPE, UP 4, UPDOWN, STABS, OCT RUN, PEDAL, DRONE); a SET with other notes makes it USER.
 - rc: 0 ok; 1 a track past 3 or the wrong length (12 + 3n bytes); 2 n past 30; 3 a setting out of its range
-  (on 0..1, steps 1..64, rate 0..7, dir 0..3, bound 0..1, gate 10..100, hold 0..1, swing 0..100, root 0..12,
+  (on 0..1, steps 1..64, rate 0..7, dir 0..5 (midi25: 0..3), bound 0..1, gate 10..100, hold 0..1, swing 0..100, root 0..12,
   oct 0..6); 4 a note outside the grid (step ≥ steps, row > 7, length 0, step + length > steps); 5 two notes of a
   row overlap. A refused SET changes nothing. A bad track answers `track & 0x7F, 1` only.
 - A SET writes with the audio ISR held off for a moment (the arp reads the pattern), lands like a device edit:
@@ -790,8 +791,8 @@ the held chord, low to high), in the order they were written (the toy's array or
 - Stored per track in the project (FUN9, below) and in every setlist song.
 
 Example: `F0 7D 46 4C 4C 00 F7` (ARP_GET track 1) on a fresh track answers
-`F0 7D 46 4C 4C 00 00 00 04 03 00 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7`:
-track 0, rc 0, ARP OFF, 4 steps, 1/8, UP, WRAP, gate 75, HOLD OFF, swing 0, ROOT OFF, OCT 0, PAT SHAYPE, max 30,
+`F0 7D 46 4C 4C 00 00 00 04 03 04 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7`:
+track 0, rc 0, ARP OFF, 4 steps, 1/8, WYNDO (the default from midi26; midi25 answered UP, `00`), WRAP, gate 75, HOLD OFF, swing 0, ROOT OFF, OCT 0, PAT SHAYPE, max 30,
 8 notes (the toy's DEFAULT_PATTERN).
 
 **Projects (FUN9).** `46 55 4E 39` ("FUN9"), 3840 bytes (the storage object's whole payload): FUN8's bytes 0..3567
@@ -799,5 +800,5 @@ as they were (the parameters, steps, chain, motion, the FM6 patches at 3056..356
 blocks at 3568..3823 (64 bytes each: n 0..30, pat, root, oct + 3, then 30 notes, two bytes each, little endian:
 step | row << 6 | (length − 1) << 9), the name at 3824..3835, the hash last. FUN8 (3584) and FUN7 (3388) load: each
 track gets SHAYPE's pattern and its old ARP settings mapped (ON stays on; the rate, gate, HOLD and SWING kept; DIR
-UP, STEPS 4, BOUND WRAP, ROOT OFF, OCT 0). Backups, `PROJECT` and setlist songs carry 3840 bytes; a backup of
+WYNDO from midi26, UP before; STEPS 4, BOUND WRAP, ROOT OFF, OCT 0). Backups, `PROJECT` and setlist songs carry 3840 bytes; a backup of
 FUN8 projects or songs (3584) still restores. Firmware before midi25 does not read FUN9.

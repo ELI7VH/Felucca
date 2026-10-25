@@ -342,6 +342,38 @@ static void edges(void)
     blks(2);
     arp_x[0][ARPX_OCT] = 0;
     bad += check("SEQ > ARP: OCT +1 moves what the arp plays an octave up; past 127: silent", ok);
+    /* DIR WYNDO (SHAYPE's, 4) through the host: the sequence's F A C E under a 3-row group plays F A C, then A C E;
+     * SHYFT (5) over a 4-row group (rows 1..4) and the three notes F A C: rows 1-3, then 2-4 */
+    {
+        static const uint8_t FACE[4] = {53, 57, 60, 64}, FAC[3] = {53, 57, 60};
+        static const uint8_t WW[9] = {53, 57, 60, 57, 60, 64, 53, 57, 60}, WS[8] = {53, 57, 60, 0, 0, 53, 57, 60};
+        static const arp_pat_t G3 = {3, {0}, {ARP_NOTE(0, 0, 1), ARP_NOTE(1, 1, 1), ARP_NOTE(2, 2, 1)}};
+        static const arp_pat_t G4 = {4, {0}, {ARP_NOTE(0, 1, 1), ARP_NOTE(1, 2, 1), ARP_NOTE(2, 3, 1), ARP_NOTE(3, 4, 1)}};
+        t = setup(0, AD_WYNDO, 5, 75, 16);
+        arp_pat[0] = G3;
+        t->p[P_APROB] = 3;
+        chord_steps(t, FACE, 4, 0, 16, 90);
+        transport_req = 1;
+        blks(9u * arp_period(t) / CTL + 1u);
+        ok = ncap >= 9u;
+        for (k = 0; k < 9u && k < ncap; k++)
+            ok &= cap[k].pitch == WW[k];
+        transport_req = 2;
+        blks(2);
+        t = setup(0, AD_SHYFT, 5, 75, 16);
+        arp_pat[0] = G4;
+        chord_steps(t, FAC, 3, 0, 16, 90);
+        transport_req = 1;
+        blks(8u * arp_period(t) / CTL + 1u);
+        ok &= ncap >= 6u;
+        for (k = 0, n = 0; k < 8u; k++)               /* (pass 1: steps 1-3 sound, step 4 rests; pass 2: step 1 rests) */
+            if (WS[k])
+                ok &= n < ncap && cap[n++].pitch == WS[k];
+        transport_req = 2;
+        blks(2);
+        bad += check("SEQ > ARP: DIR WYNDO plays F A C then A C E; SHYFT climbs a 4-row group over F A C, outside rests",
+                     ok && !cap_hanging() && !track_gates(t, 128));
+    }
 }
 
 /* ------------------------------------------------------------- releases --- */
