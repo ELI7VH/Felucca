@@ -163,6 +163,23 @@
   .grid button.tie { border-style: dashed; border-color: var(--fg); }
   .grid button.beat { border-left-color: var(--fg); }
   #steps tr.hl td { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); }
+  /* SHAYPE: the toy's grid, 8 rows (row 1 at the bottom) by STEPS columns; a note reads as one bar */
+  .arpwrap { overflow-x: auto; margin: 8px 0 12px; }
+  .arpgrid { display: grid; grid-template-columns: repeat(var(--steps, 4), minmax(0, 1fr)); grid-template-rows: repeat(8, 32px); gap: 2px;
+             min-width: calc(var(--steps, 4) * 14px); background: var(--well); touch-action: none; user-select: none; }
+  .arpgrid .cell { background: var(--control); border: 0; padding: 0; min-width: 0; cursor: crosshair; }
+  .arpgrid .cell.beat { background: color-mix(in srgb, var(--accent) 12%, var(--control)); }
+  .arpgrid .cell.on { --l: 0px; --r: 0px; background: var(--accent); cursor: grab;
+    box-shadow: inset 0 6px 0 var(--well), inset 0 -6px 0 var(--well), inset var(--l) 0 0 var(--well), inset calc(-1 * var(--r)) 0 0 var(--well); }
+  .arpgrid .cell.on.start { --l: 4px; }
+  .arpgrid .cell.on.end { --r: 4px; position: relative; }
+  .arpgrid .cell.on:not(.end) { margin-right: -2px; }
+  .arpgrid .cell.on.end::after { content: ""; position: absolute; inset: 0 0 0 50%; cursor: ew-resize; }
+  .arpctl { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; margin: 12px 0; }
+  .arpctl > label, .arpctl > div { display: grid; gap: 4px; align-content: start; font: 12px/1.4 var(--uk-font-mono); color: var(--dim); }
+  .arpctl .seg button { padding: 5px 8px; }
+  .arpsend { font: 13px/1.5 var(--uk-font-mono); color: var(--dim); }
+  .arpsend.bad { color: var(--uk-record); }
   /* mixer: four channel strips as on the device's TRACKS page */
   .mixer { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 640px; margin: 6px 0; }
   .strip { background: var(--panel); padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
@@ -253,6 +270,7 @@
       <button role="tab" data-tab="sound" data-t="sound" data-ic="symbol_audio"></button>
       <button role="tab" data-tab="fm6" data-t="tabFm6" data-ic="ui_knob"></button>
       <button role="tab" data-tab="sequencer" data-t="tabSeq" data-ic="symbol_grid"></button>
+      <button role="tab" data-tab="shaype" data-t="tabShaype" data-ic="control_arrow_up_down"></button>
       <button role="tab" data-tab="tracks" data-t="tabTracks" data-ic="ui_slider_vertical"></button>
       <button role="tab" data-tab="library" data-t="library" data-ic="symbol_books"></button>
       <button role="tab" data-tab="samples" data-t="samples" data-ic="symbol_waves"></button>
@@ -322,6 +340,25 @@
       <p class="bar"><label><input id="motion-on" type="checkbox"> <span data-t="motionOn"></span></label>
         <button id="motion-clear" data-t="motionClear"></button><span id="motion-count" class="dim"></span></p>
       <table id="motion-rows"></table>
+    </div>
+  </section>
+
+  <!-- SHAYPE, the ARP's pattern (cmds 76, 77): the Shape Arp toy's grid on a track -->
+  <section class="panel" id="p-shaype" data-tab="shaype" data-dev hidden>
+    <div class="group">
+      <p class="bar"><span class="dim" data-t="track"></span><span class="seg" id="arptrk" role="group"></span>
+        <button type="button" class="tog" id="arpon" aria-pressed="false">ARP</button>
+        <label><input type="checkbox" id="arplive" checked> <span data-t="arpLive"></span></label>
+        <button type="button" id="arpwrite" data-t="arpWrite" data-ic="symbol_upload"></button>
+        <button type="button" id="arpread" data-t="arpRead" data-ic="control_arrow_loop"></button>
+        <span class="arpsend" id="arpsend" role="status" aria-live="polite"></span></p>
+      <div class="arpwrap"><div class="arpgrid" id="arpgrid" role="grid"></div></div>
+      <p class="bar"><span class="seg"><button type="button" id="arpcoarser">÷2</button><button type="button" id="arpfiner">×2</button></span>
+        <span class="seg"><button type="button" id="arpleft">◀</button><button type="button" id="arpright">▶</button></span>
+        <button type="button" id="arpclear" data-t="arpClear" data-ic="symbol_trash"></button>
+        <span class="dim" id="arpcount"></span></p>
+      <div class="arpctl" id="arpctl"></div>
+      <p class="dim" data-t="arpHelp"></p>
     </div>
   </section>
 
@@ -527,7 +564,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   TRACK_PARAM: 31, TRACK_CHANGED: 32, SONG: 33,
   UI_STATE: 34, UI_SET: 35, UI_PALETTES: 36, FAV_GET: 37, FAV_SET: 38,
   SETLIST: 74, DIAG: 75, MOTION: 64, BACKUP_LIST: 65, BACKUP_GET: 66, BACKUP_PUT: 67,
-  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71 };
+  FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71, ARP_GET: 76, ARP_SET: 77 };
 /* frames the device sends on its own (while WATCH is on); never replies */
 const PUSH = new Set([CMD.CHANGED, CMD.RELOAD, CMD.STEP_CHANGED, CMD.TRACK_CHANGED]);
 /* user preset bank: name 1..12 printable ASCII, a 16-step pattern of (note, flags 1 acc 2 slide 4 tie) */
@@ -621,8 +658,12 @@ const parse = {
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
-    o.diagVersion = [trailer.slice(-3), trailer.slice(-6,-3)].some(a => a.join(",") === "68,1,1") ? 1 : 0;
-    o.setlistCount = trailer.slice(-3).join(",") === "76,1,12" ? 12 : 0;
+    /* SHAYPE (cmds 76, 77): the last tag, 41 01 max notes; the setlist and diagnostics tags come before it */
+    const shaype = trailer.length >= 3 && trailer.at(-3) === 0x41 && trailer.at(-2) === 1 && trailer.at(-1) > 0;
+    o.arpMax = shaype ? trailer.at(-1) : 0;
+    const tags = shaype ? trailer.slice(0, -3) : trailer;
+    o.diagVersion = [tags.slice(-3), tags.slice(-6,-3)].some(a => a.join(",") === "68,1,1") ? 1 : 0;
+    o.setlistCount = tags.slice(-3).join(",") === "76,1,12" ? 12 : 0;
     return o;
   },
   [CMD.DIAG](a) {
@@ -685,6 +726,18 @@ const parse = {
     for (let i = 0; i < o.count; i++) o.rows.push({ slot: r.b(), repeat: r.b() });
     return o;
   },
+  /* -> {track, rc} for a bad track, else the settings, pat, max and the notes {step, row, length} in their order */
+  [CMD.ARP_GET](a) {
+    const r = new Reader(a), o = { track: r.b(), rc: r.b() };
+    if (a.length === 2) return o;
+    Object.assign(o, { on: !!r.b(), steps: r.b(), rate: r.b(), dir: r.b(), bound: r.b(), gate: r.b(), hold: !!r.b(), swing: r.b(),
+      root: r.b(), oct: r.b() - 3, pat: r.b(), max: r.b() });
+    const n = r.b();
+    if (n > o.max || a.length !== 15 + 3 * n) throw new Error("Invalid SHAYPE reply");
+    o.notes = Array.from({ length: n }, () => ({ step: r.b(), row: r.b(), length: r.b() }));
+    return o;
+  },
+  [CMD.ARP_SET](a) { return parse[CMD.ARP_GET](a); },
   [CMD.MOTION](a) {
     const r = new Reader(a), o = { track: r.b(), rc: r.b(), on: !!r.b(), count: r.b(), max: r.b(), events: [] };
     if (o.count > o.max || o.max !== 64 || a.length !== 5 + o.count * 4) throw new Error("Invalid motion reply");
@@ -837,12 +890,16 @@ const req = {
   fm6Put: (target, i, packed) => [CMD.FM6_PUT, [target & 0x7F, i & 0x7F, ...packed.map((x) => x & 0x7F)]],
   fm6List: () => [CMD.FM6_LIST, []],
   fm6Erase: (i) => [CMD.FM6_ERASE, [i & 0x7F]],
+  /* SHAYPE (INFO 41 01): a track's ARP pattern and settings; s as arpState (oct -3..+3, sent + 3) */
+  arpGet: (tr) => [CMD.ARP_GET, [tr & 0x7F]],
+  arpSet: (tr, s) => [CMD.ARP_SET, [tr & 0x7F, +s.on, s.steps, s.rate, s.dir, s.bound, s.gate, +s.hold, s.swing, s.root,
+    s.oct + 3, s.notes.length, ...s.notes.flatMap((n) => [n.step, n.row, n.length])]],
 };
 
 /* which reply belongs to which request (the device echoes these) */
 function replyMatches(cmd, args, a) {
   switch (cmd) {
-    case CMD.MOTION: return a[0] === args[0];
+    case CMD.MOTION: case CMD.ARP_GET: case CMD.ARP_SET: return a[0] === args[0];
     case CMD.BACKUP_GET: return a[0] === args[0] && a.slice(2, 7).every((v, i) => v === args[i + 1]);
     case CMD.BACKUP_PUT: return a[0] === args[0] && a[1] === args[1];
     case CMD.UI_SET: return a[1] === args[0] && a[2] === args[1];
@@ -1484,6 +1541,214 @@ const mixer = {
   },
 };
 
+/* ------------------------------------------------------- SHAYPE (ARP) --- */
+/* The ARP is SHAYPE, WaveLoop's Shape Arp (EDITOR_PROTOCOL.md "SHAYPE", cmds 76, 77, INFO 41 01 max): a track's pattern
+   of up to max notes {step, row, length} on STEPS steps by 8 rows (row 0 = the lowest held note), and its settings.
+   ARPC is the toy's own core, web/arp/*.mjs (vendored unchanged from WaveLoop web/src/arp/core) with the exports
+   dropped, inline so the page works from a file too: test_web.mjs checks it against web/arp/, byte for byte. */
+const ARPC = (() => {
+/*ARP-CORE-BEGIN sequence.mjs*/
+// Host-independent pattern interpretation. Positions are zero-based internally.
+const DEFAULT_PATTERN = [
+  { step: 0, row: 0, length: 1 }, { step: 0, row: 2, length: 1 },
+  { step: 1, row: 1, length: 1 }, { step: 1, row: 3, length: 1 },
+  { step: 2, row: 2, length: 1 }, { step: 2, row: 3, length: 1 },
+  { step: 3, row: 0, length: 1 }, { step: 3, row: 3, length: 1 },
+];
+function passOffset(pass, size, direction = 'up', random = Math.random) {
+  if (size < 2) return 0;
+  if (direction === 'down') return -(pass % size);
+  if (direction === 'random') return Math.floor(random() * size);
+  if (direction === 'pendulum') { const p = pass % (2 * (size - 1)); return p < size ? p : 2 * (size - 1) - p; }
+  return pass % size;
+}
+function resolvePosition(notes, position, boundary = 'wrap') {
+  const held = [...new Set(notes)].sort((a, b) => a - b);
+  if (!held.length) return null;
+  const index = ((position % held.length) + held.length) % held.length;
+  const pitch = held[index] + (boundary === 'octave' ? Math.floor(position / held.length) * 12 : 0);
+  return pitch >= 0 && pitch <= 127 ? pitch : null;
+}
+function eventsAt(pattern, step, notes, offset, boundary) {
+  return pattern.filter(n => n.step === step).map(n => ({
+    note: resolvePosition(notes, n.row + offset, boundary), length: n.length,
+  })).filter(n => n.note !== null);
+}
+function paintNote(pattern, row, step, length) {
+  const end = step + length;
+  return [...pattern.filter(n => n.row !== row || n.step + n.length <= step || n.step >= end), { row, step, length }];
+}
+
+// Invert a held voicing so the chosen root is its lowest pitch.
+function rootVoicing(notes, root = null) {
+  const pitches = notes.map(note => root !== null && note < root
+    ? note + 12 * Math.ceil((root - note) / 12) : note);
+  return [...new Set(pitches)].filter(note => note >= 0 && note <= 127).sort((a,b)=>a-b);
+}
+
+// Offline: recorded chords in, the arp's notes out, on a fixed step grid from `from`.
+// A note holds a step when its start and stop, rounded to the nearest step, cover it, so a chord
+// played a little late or released a little early still lands on the beat it meant.
+// notes: [{ pitch, start, stop, velocity }] in ticks. Returns the same shape.
+function shapeChords(notes, { pattern, steps, stepTicks, gate = 0.75, direction = 'up', boundary = 'wrap', from, to, random = Math.random }) {
+  if (!notes.length || !pattern.length || stepTicks <= 0) return [];
+  const begin = from ?? Math.min(...notes.map(n => n.start));
+  const end = to ?? Math.max(...notes.map(n => n.stop));
+  const grid = t => Math.round((t - begin) / stepTicks);
+  const held = notes.map(n => ({ ...n, a: grid(n.start), b: grid(n.stop) })).filter(n => n.b > n.a);
+  const out = [];
+  let offset = 0;
+  for (let tick = 0; begin + tick * stepTicks < end; tick++) {
+    const t = begin + tick * stepTicks, s = tick % steps, pass = Math.floor(tick / steps);
+    const sounding = held.filter(n => n.a <= tick && tick < n.b);
+    const chord = rootVoicing(sounding.map(n => n.pitch));
+    if (s === 0) offset = passOffset(pass, chord.length, direction, random);
+    if (!chord.length) continue;
+    const velocity = Math.max(...sounding.map(n => n.velocity ?? 90));
+    const merged = new Map();
+    for (const e of eventsAt(pattern, s, chord, offset, boundary)) merged.set(e.note, Math.max(merged.get(e.note) || 0, e.length));
+    for (const [pitch, length] of merged) {
+      const stop = Math.min(end, t + Math.max(1, Math.round(stepTicks * length * gate)));
+      if (stop > t) out.push({ pitch, start: t, stop, velocity });
+    }
+  }
+  return out;
+}
+
+// Steps per beat, slow to fast: the rate knob, and what subdividing steps through.
+const RATES = [
+  { value: 0.5, short: '1/2', label: 'Half' }, { value: 1, short: '1/4', label: 'Quarter' },
+  { value: 1.5, short: '1/4T', label: 'Quarter triplet' }, { value: 2, short: '1/8', label: 'Eighth' },
+  { value: 3, short: '1/8T', label: 'Eighth triplet' }, { value: 4, short: '1/16', label: 'Sixteenth' },
+  { value: 6, short: '1/16T', label: 'Sixteenth triplet' }, { value: 8, short: '1/32', label: 'Thirty-second' }, { value: 16, short: '1/64', label: 'Sixty-fourth' },
+];
+
+// Split every step in two (factor 2) or join pairs (factor 0.5) at twice / half the rate, so every note
+// stays exactly where it sounds. Null when it can't: no such rate, past 64 steps, or (joining) a note that
+// starts or ends inside a pair.
+function subdivide(pattern, steps, rate, factor) {
+  const next = rate * factor;
+  if (!RATES.some(r => r.value === next)) return null;
+  if (factor === 2) {
+    if (steps * 2 > 64) return null;
+    return { pattern: pattern.map(n => ({ ...n, step: n.step * 2, length: n.length * 2 })), steps: steps * 2, rate: next };
+  }
+  if (factor !== 0.5 || steps % 2 || pattern.some(n => n.step % 2 || n.length % 2)) return null;
+  return { pattern: pattern.map(n => ({ ...n, step: n.step / 2, length: n.length / 2 })), steps: steps / 2, rate: next };
+}
+// Rotate the pattern one step left (-1) or right (+1); a note over the end carries on from step 0.
+// The two halves of a note split at the end are joined first, so shifting back and forth loses nothing.
+function shift(pattern, steps, by) {
+  const notes = pattern.map(n => ({ ...n })), heads = new Set(), out = [];
+  for (const n of notes) {
+    if (n.step + n.length !== steps) continue;
+    const head = notes.find(m => m !== n && m.row === n.row && m.step === 0 && !heads.has(m));
+    if (head && n.length + head.length <= steps) { heads.add(head); n.length += head.length; }
+  }
+  for (const n of notes) {
+    if (heads.has(n)) continue;
+    const step = ((n.step + by) % steps + steps) % steps;
+    if (step + n.length <= steps) out.push({ ...n, step });
+    else out.push({ ...n, step, length: steps - step }, { ...n, step: 0, length: step + n.length - steps });
+  }
+  return out;
+}
+/*ARP-CORE-END*/
+/*ARP-CORE-BEGIN gesture.mjs*/
+// Editing the grid by pointer, in cells. On an empty cell a press starts a note and dragging across sets its
+// length. On a note a drag carries it (any row, any step), a drag from the right half of its last cell
+// stretches it, and a press that never moves removes it. Erase (the right button) takes every note it crosses.
+
+const noteAt = (pattern, row, step) => pattern.find(n => n.row === row && step >= n.step && step < n.step + n.length);
+const eraseAt = (pattern, row, step) => pattern.filter(n => !(n.row === row && step >= n.step && step < n.step + n.length));
+
+// -> { drag, pattern }: keep drag for the moves and the release.
+function gridPress(pattern, { row, step, rightHalf = false, erase = false }) {
+  if (erase) return { drag: { mode: 'erase' }, pattern: eraseAt(pattern, row, step) };
+  const hit = noteAt(pattern, row, step), base = pattern.filter(n => n !== hit).map(n => ({ ...n }));
+  if (!hit) return { drag: { mode: 'draw', from: step, base }, pattern: paintNote(base, row, step, 1) };
+  if (step === hit.step + hit.length - 1 && rightHalf) return { drag: { mode: 'draw', from: hit.step, base, hit, at: { step, row } }, pattern };
+  return { drag: { mode: 'move', grab: step - hit.step, length: hit.length, base, hit, at: { step, row } }, pattern };
+}
+
+function gridDrag(drag, pattern, { row, step }, steps) {
+  if (drag.mode === 'erase') return eraseAt(pattern, row, step);
+  if (drag.at && drag.at.step === step && drag.at.row === row) return pattern;
+  drag.at = null;
+  // Across sets the length from the origin step; up and down carries the whole note to that row.
+  if (drag.mode === 'draw') return paintNote(drag.base, row, Math.min(drag.from, step), Math.abs(step - drag.from) + 1);
+  return paintNote(drag.base, row, Math.max(0, Math.min(steps - drag.length, step - drag.grab)), drag.length);
+}
+
+// A note pressed and let go where it was is gone.
+const gridRelease = (drag, pattern) => (drag.hit && drag.at ? drag.base : pattern);
+/*ARP-CORE-END*/
+return { DEFAULT_PATTERN, passOffset, resolvePosition, eventsAt, paintNote, rootVoicing, shapeChords, RATES, subdivide, shift,
+  noteAt, eraseAt, gridPress, gridDrag, gridRelease };
+})();
+const ARP = {
+  ROWS: 8, MAX: 30, STEPS: 64,
+  RATES: ["1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"],   /* = ARPC.RATES[0..7] (0.5 .. 8 steps a beat) */
+  DIRS: ["UP", "DOWN", "PEND", "RAND"], BOUNDS: ["WRAP", "OCT"], ROOTS: ["OFF", ...NOTE_NAMES],
+  PATS: ["USER", "SHAYPE", "UP 4", "UPDOWN", "STABS", "OCT RUN", "PEDAL", "DRONE"],
+  /* the ARP parameters (DESC 17..24) and the field each one is */
+  PARAM: { 17: "on", 18: "rate", 19: "dir", 20: "gate", 21: "swing", 22: "steps", 23: "hold", 24: "bound" },
+  /* a fresh track: ARP OFF, 4 steps of 1/8, UP, WRAP, gate 75, HOLD OFF, ROOT OFF, OCT 0, PAT SHAYPE (the toy's pattern) */
+  fresh: () => ({ on: false, steps: 4, rate: 3, dir: 0, bound: 0, gate: 75, hold: false, swing: 0, root: 0, oct: 0, pat: 1,
+    notes: ARPC.DEFAULT_PATTERN.map((n) => ({ ...n })) }),
+};
+/* the ARP_SET rc a state would get (0 ok): 2 too many notes, 3 a setting out of range, 4 a note outside the grid,
+   5 two notes of a row overlap (1, a bad track or length, is the framing's) */
+function arpCheck(s, max = ARP.MAX) {
+  const inr = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
+  if (s.notes.length > max) return 2;
+  if (!(inr(+s.on, 0, 1) && inr(s.steps, 1, ARP.STEPS) && inr(s.rate, 0, 7) && inr(s.dir, 0, 3) && inr(s.bound, 0, 1) && inr(s.gate, 10, 100)
+    && inr(+s.hold, 0, 1) && inr(s.swing, 0, 100) && inr(s.root, 0, 12) && inr(s.oct, -3, 3))) return 3;
+  if (s.notes.some((n) => !(inr(n.step, 0, s.steps - 1) && inr(n.row, 0, ARP.ROWS - 1) && inr(n.length, 1, s.steps - n.step)))) return 4;
+  if (s.notes.some((n, i) => s.notes.some((m, k) => k > i && m.row === n.row && m.step < n.step + n.length && n.step < m.step + m.length))) return 5;
+  return 0;
+}
+/* the notes on fewer steps: those past the end go, the rest end there at the latest (the toy's STEPS change) */
+const arpFit = (notes, steps) => notes.filter((n) => n.step < steps).map((n) => ({ ...n, length: Math.min(n.length, steps - n.step) }));
+/* x2 (factor 2) splits every step at twice the rate, /2 (0.5) joins pairs at half: ARPC.subdivide, within the FM-1's
+   rates (1/2 .. 1/32). -> the new state, or null when it can't */
+function arpZoom(s, factor) {
+  const r = ARPC.subdivide(s.notes, s.steps, ARPC.RATES[s.rate].value, factor);
+  const rate = r ? ARPC.RATES.findIndex((x) => x.value === r.rate) : -1;
+  return rate >= 0 && rate < ARP.RATES.length ? { ...s, notes: r.pattern, steps: r.steps, rate } : null;
+}
+/* the pattern a step left (-1) or right (+1): ARPC.shift. -> the new state, or null when a split note would pass max */
+function arpShift(s, by, max = ARP.MAX) {
+  const notes = s.notes.length ? ARPC.shift(s.notes, s.steps, by) : [];
+  return notes.length > max ? null : { ...s, notes };
+}
+/* the latest of a stream of writes, at most one in flight: push(x) sends x delay ms after the last push (a newer push
+   replaces it), now(x) at once; one that comes while another is on its way goes when that has answered.
+   send(x) -> Promise; onDone(reply, x), onError(err, x) */
+class Coalescer {
+  constructor(send, opt = {}) {
+    this.send = send; this.delay = opt.delay ?? 50;
+    this.onDone = opt.onDone || (() => {}); this.onError = opt.onError || (() => {});
+    this.next = undefined; this.flight = null; this.timer = null;
+  }
+  get busy() { return !!this.flight || this.next !== undefined; }
+  push(x) { this.next = x; clearTimeout(this.timer); this.timer = setTimeout(() => this.kick(), this.delay); }
+  now(x) { this.next = x; clearTimeout(this.timer); this.kick(); }
+  cancel() { this.next = undefined; clearTimeout(this.timer); this.timer = null; }
+  async kick() {
+    this.timer = null;
+    if (this.flight || this.next === undefined) return;
+    const x = this.next;
+    this.next = undefined;
+    this.flight = Promise.resolve().then(() => this.send(x));
+    let r, err = null;
+    try { r = await this.flight; } catch (e) { err = e; }
+    this.flight = null;                             /* (busy, in onDone: only a newer edit is still to go) */
+    try { if (err) this.onError(err, x); else this.onDone(r, x); }
+    finally { if (this.next !== undefined && !this.timer) this.kick(); }
+  }
+}
+
 /* ------------------------------------------------------------ mock device --- */
 /* Implements the protocol like firmware/src/editor.c, with tables copied from params.c
    and the engine sources (test_web.mjs checks them against the firmware's, tests/descdump.c). Used with ?mock=1 (add &legacy=1 for a firmware without cmds 16..26).
@@ -1852,8 +2117,8 @@ function makeMockDevice(opt = {}) {
     D("FLT", F.BIPCT, -64, 63, 0), D("PIT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("FX", F.BIPCT, -64, 63, 0),
     D("RATE", F.LFOHZ, 0, 127, 60), E("WAVE", ["SIN", "TRI", "SAW", "SQR", "S&H"], 0), D("PHS", F.INT, 0, 127, 0), D("FADE", F.TIME, 0, 127, 0),
     D("PIT", F.BIPCT, -64, 63, 0), D("FLT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("AMP", F.PCT, 0, 127, 0),
-    E("ARP", NONOFF, 0), E("RATE", ["1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"], 3), E("DIR", ["UP", "DOWN", "PEND", "RAND"], 0), D("GATE", F.INT, 10, 100, 75, null, "%"),   /* SHAYPE */
-    D("SWG", F.PCT, 0, 100, 0), D("STEPS", F.STEPS, 1, 64, 4), E("HOLD", NONOFF, 0), E("BOUND", ["WRAP", "OCT"], 0),
+    E("ARP", NONOFF, 0), E("RATE", ARP.RATES, 3), E("DIR", ARP.DIRS, 0), D("GATE", F.INT, 10, 100, 75, null, "%"),   /* SHAYPE */
+    D("SWG", F.PCT, 0, 100, 0), D("STEPS", F.STEPS, 1, 64, 4), E("HOLD", NONOFF, 0), E("BOUND", ARP.BOUNDS, 0),
     D("ROOT", F.NOTE, 0, 11, 0), E("SCL", ["CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM", "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"], 0), E("QNT", ["OFF", "SNAP", "WHITE", "SEQ"], 0), D("TRN", F.SEMI, -24, 24, 0),
     D("LEN", F.STEPS, 1, 64, 16), E("DIV", NDIV, 2), D("SWG", F.PCT, 0, 100, 0), D("GATE", F.PCT, 1, 127, 64),
     D("DST", F.PCT, 0, 127, 0), D("CHO", F.PCT, 0, 127, 0), D("DLY", F.PCT, 0, 127, 0), D("REV", F.PCT, 0, 127, 0),
@@ -2252,6 +2517,7 @@ function makeMockDevice(opt = {}) {
   const newTrack = () => ({ engine: 0, preset: 0, fm6: FM6.INIT_PK.slice(),
     p: TP.map((d) => d.def).concat(new Array(8).fill(0)),
     motion: {on: true, events: []},
+    arp: (({ pat, root, oct, notes }) => ({ pat, root, oct, notes }))(ARP.fresh()),   /* SHAYPE's extras (the settings: p[17..24]) */
     step: Array.from({ length: NSTEP }, () => ({ chance: 100, ratchet: 1, n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0, hit: 0, acc: 0 })) });
   const st = {
     tracks: [0, 1, 2, 3].map(newTrack), sel: 0, rec: 0,
@@ -2518,7 +2784,33 @@ function makeMockDevice(opt = {}) {
         }
         if(!opt.legacy && opt.diagnostics !== false) {b(0x44);b(1);b(1);}
         if(opt.setlist) {b(0x4C);b(1);b(12);}
+        if (!opt.legacy && opt.shaype !== false) { b(0x41); b(1); b(ARP.MAX); }   /* SHAYPE, last */
         break;
+      case CMD.ARP_GET: case CMD.ARP_SET: {          /* SHAYPE (editor.c, EDITOR_PROTOCOL.md): p[17..24] + tr.arp */
+        if (opt.legacy || opt.shaype === false || !a.length) return null;
+        const tr = st.tracks[a[0]];
+        if (!tr) { b(a[0]); b(1); break; }
+        let rc = 0;
+        if (cmd === CMD.ARP_SET) {
+          const n = a[11];
+          if (a.length < 12 || a.length !== 12 + 3 * n) rc = 1;
+          else if (n > ARP.MAX) rc = 2;
+          else {
+            const x = { on: a[1], steps: a[2], rate: a[3], dir: a[4], bound: a[5], gate: a[6], hold: a[7], swing: a[8], root: a[9], oct: a[10] - 3,
+              notes: Array.from({ length: n }, (_, k) => ({ step: a[12 + 3 * k], row: a[13 + 3 * k], length: a[14 + 3 * k] })) };
+            rc = arpCheck(x);
+            if (!rc) {
+              Object.entries(ARP.PARAM).forEach(([id, f]) => { tr.p[id] = +x[f]; });
+              if (JSON.stringify(x.notes) !== JSON.stringify(tr.arp.notes.map(({ step, row, length }) => ({ step, row, length })))) tr.arp.pat = 0;
+              Object.assign(tr.arp, { root: x.root, oct: x.oct, notes: x.notes });
+            }
+          }
+        }
+        const p = tr.p, x = tr.arp;
+        [a[0], rc, p[17], p[22], p[18], p[19], p[24], p[20], p[23], p[21], x.root, x.oct + 3, x.pat, ARP.MAX, x.notes.length].forEach(b);
+        x.notes.forEach((n) => { b(n.step); b(n.row); b(n.length); });
+        break;
+      }
       case CMD.DIAG: {
         if (opt.legacy || opt.diagnostics === false || a.length) return null;
         const fields = {1:1234567,2:22,3:622,4:st.playing?1:0,5:0,6:0,7:0,8:st.sel+1,9:120,10:1,11:0,12:1,13:1442,14:2501,15:0,16:0,17:2,18:0,19:162816,20:3,21:12,22:0,23:32,24:1,25:0,26:0,27:5,28:0,29:0,30:94500,31:98304,32:330208,33:344064,34:450000,35:581564,36:1400,37:24576,38:1048576,39:311296,40:1250,41:0,42:1,43:0};
@@ -3066,6 +3358,14 @@ const TEXT = {
     slot: "スロット", songTitle: "ソング", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
+    tabShaype: "SHAYPE", arpLive: "編集しながら送る", arpWrite: "SHAYPE を書き込む", arpRead: "トラックから読む", arpClear: "消去",
+    arpHelp: "ARP が弾くパターンを描きます。行は押さえた和音の音で、いちばん下が最低音。空いたマスをドラッグするとノートを置いて長さを決めます。ノートはドラッグで移動、最後のマスの右半分からドラッグで伸ばし、クリックで消去。右クリック・右ドラッグでも消せます。×2 ÷2 でステップを分割・結合、◀ ▶ でパターンをずらします。",
+    arpNoFw: "このファームウェアには SHAYPE がありません。FM-1 のファームウェアを更新してください。",
+    arpSending: "送信中…", arpSentOk: "送信済み", arpUnsent: "未送信", arpFromDevice: "FM-1 から読み込みました", arpNoAnswer: "応答がありません",
+    arpRc1: "受け付けられませんでした: トラックかデータが不正です", arpRc2: "受け付けられませんでした: ノートが多すぎます",
+    arpRc3: "受け付けられませんでした: 範囲外の設定があります", arpRc4: "受け付けられませんでした: グリッドの外にノートがあります",
+    arpRc5: "受け付けられませんでした: 同じ行でノートが重なっています", arpFull: "ノートは {n} 個までです",
+    arpNotes: "ノート", arpRow: "行", arpStep: "ステップ", arpSplit: "ステップを分割", arpJoin: "ステップを結合", arpLeft: "左へずらす", arpRight: "右へずらす",
   },
   en: {
     tabFm6: "6-OP FM", fm6Help: "Edit the whole patch of the FM6 engine (six operators). The device's knobs are macros on top of it. Import a SysEx file, pick a voice, edit it and send it to a track: it plays at once. A track has one patch: whatever you load becomes it (SLOT shows OWN).",
@@ -3173,6 +3473,13 @@ const TEXT = {
     slot: "Slot", songTitle: "Song", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
+    tabShaype: "SHAYPE", arpLive: "Send while editing", arpWrite: "Write SHAYPE", arpRead: "Read from track", arpClear: "Clear",
+    arpHelp: "Draw the pattern the ARP plays. Rows are the notes of the chord you hold, lowest at the bottom. Drag on an empty cell to place a note and set its length. Drag a note to move it; drag from the right half of its last cell to stretch it; click it to remove it. Right-click or right-drag erases. ×2 and ÷2 split or join steps; ◀ ▶ shift the pattern.",
+    arpNoFw: "This firmware has no SHAYPE. Update your FM-1 firmware to draw ARP patterns.",
+    arpSending: "SENDING…", arpSentOk: "SENT", arpUnsent: "NOT SENT", arpFromDevice: "READ FROM THE FM-1", arpNoAnswer: "NO ANSWER",
+    arpRc1: "REFUSED: wrong track or message", arpRc2: "REFUSED: too many notes", arpRc3: "REFUSED: a setting is out of range",
+    arpRc4: "REFUSED: a note is outside the grid", arpRc5: "REFUSED: two notes overlap in a row", arpFull: "{n} NOTES AT MOST",
+    arpNotes: "notes", arpRow: "Row", arpStep: "step", arpSplit: "Split steps", arpJoin: "Join steps", arpLeft: "Shift left", arpRight: "Shift right",
   },
 };
 // Browser appearance only: never changes the FM-1 screen or stored music.
@@ -3202,12 +3509,14 @@ function applyLang() {
   renderPreferences(true);
   renderPanels();
   if (dev) { renderSlots(); renderStepHead(); renderSamples(); renderTrackbar(); renderMixer(); renderSysinfo(); renderFm6(); }
+  renderArp();
+  arpSay(arpSaid);
 }
 $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; applyLang(); });
 
 /* ---------------------------------------------------------------- tabs --- */
 /* one panel at a time; the last one is remembered (localStorage) and in the URL hash (#sound ...) */
-const TABS = ["sound", "fm6", "sequencer", "tracks", "library", "samples", "projects", "settings", "minilab", "dev"];
+const TABS = ["sound", "fm6", "sequencer", "shaype", "tracks", "library", "samples", "projects", "settings", "minilab", "dev"];
 const TAB_KEY = "felucca-editor-tab";
 const TRACK_TABS = new Set(["sound", "sequencer", "tracks"]);
 let tab = (() => {
@@ -3251,6 +3560,7 @@ function showTab(name) {
   if (name === "dev") op(refreshDiagnostics);
   if (name === "tracks" && prev !== "tracks" && hasTracks() && dev.dump) op(readMixer);
   if (name === "fm6" && prev !== "fm6" && dev && dev.dump && dev.info.fm6 && !fm6Listing) op(fm6Refresh);
+  if (name === "shaype" && prev !== "shaype" && arpOk() && dev.dump && !arpSender.busy) op(() => arpRead(dev, arpTrack, true));   /* what the knobs did meanwhile */
 }
 function renderPanels() {
   /* the Tracks tab only with a four-track firmware */
@@ -3270,6 +3580,7 @@ function renderPanels() {
     let show = mine && (!("dev" in p.dataset) || ready);
     if (mine && "dev" in p.dataset && !dev) hint = want === "fm6" ? "fm6NeedDevice" : "needDevice";   /* (while connecting the status line says it) */
     if (show && want === "fm6" && fm6Off) { show = false; hint = "fm6NoFw"; }
+    if (show && want === "shaype" && !arpOk()) { show = false; hint = "arpNoFw"; }
     if (show && want === "samples" && !dev.smp) { show = false; hint = "smpNone"; }
     p.hidden = !show;
   }
@@ -3422,7 +3733,8 @@ async function connect() {
 }
 
 function disconnect(reasonKey = "disconnected") {
-  samplesLeave();                                   /* the Samples tab goes: so do the input and the preview */
+  samplesLeave();
+  arpSender.cancel();                                   /* the Samples tab goes: so do the input and the preview */
   if (dev) {
     dev.link.close();
     dev.input.onmidimessage = null;
@@ -3500,6 +3812,9 @@ async function load(d) {
     if (tab === "dev") await refreshDiagnostics(d);
     await loadSteps(d);
     if (d.info.ntrk) await readMixer(d);
+    if (d.info.arpMax) {                            /* SHAYPE: the selected track's pattern */
+      try { await arpRead(d, d.sel || 0); } catch (e) { if (e.message === "closed") throw e; console.warn(e); }
+    }
     /* protocol v2: live pushes and the user bank; older firmware: DUMP polling, no bank */
     const rqd = (r, o) => sessionRequest(d, r, o);
     d.watch = await startWatch(rqd);
@@ -3550,6 +3865,9 @@ function buildUI() {
   renderSlots();
   renderSamples();
   renderSysinfo();
+  arpS = null;
+  arpSender.cancel();
+  renderArp();
   fm6List = null;
   fm6Asked = false;
   fm6Picked = -1;
@@ -4876,6 +5194,7 @@ function onPush(f) {
       else return;
       updateStrip(c.track);
     }
+    arpOnPush(f);
   } catch (e) { console.warn("bad push", f, e); }
 }
 function blink(k) {
@@ -5527,6 +5846,200 @@ $("bkexport").addEventListener("click", () => libOp(async (d, rqf) => {
   download(`WaveLoop-Kit-bank-${today()}.json`, libraryFile("bank", out, libCtx()));
   sayK("ready");
 }));
+
+/* --------------------------------------------------------------- SHAYPE --- */
+/* The SHAYPE tab (INFO 41 01): draw a track's ARP pattern with the Shape Arp toy's gestures (ARPC, its own core) and
+   set the ARP's settings. LIVE sends every edit (ARP_SET through a Coalescer: one in flight, the latest wins);
+   WRITE SHAYPE sends the whole pattern now. Read on connect, on a track change and when the tab opens. */
+let arpS = null;                       /* the pattern being edited: ARP_GET's fields (on, steps, rate .. oct, notes) */
+let arpTrack = 0;                      /* the track it is for (0..3) */
+let arpPat = 1;                        /* PAT the device last named (0 USER, 1.. a factory pattern) */
+let arpDrag = null;                    /* a grid gesture under way (ARPC.gridPress) */
+let arpSaid = "";                      /* the send state's words (TEXT key) */
+const arpOk = () => !!dev && !!dev.info && !!dev.info.arpMax;
+const arpMax = () => (dev && dev.info && dev.info.arpMax) || ARP.MAX;
+const arpSnap = () => ({ ...arpS, notes: arpS.notes.map(({ step, row, length }) => ({ step, row, length })) });
+const arpSender = new Coalescer((x) => sessionRequest(x.d, req.arpSet(x.track, x.s)).then((a) => parse[CMD.ARP_SET](a)), {
+  delay: 50,
+  onDone: (r, x) => arpAnswered(r, x),
+  onError: (e) => { if (e.message !== "closed") { console.warn(e); arpSay("arpNoAnswer"); } },
+});
+function arpSay(k) {
+  arpSaid = k;
+  const box = $("arpsend");
+  box.textContent = !k ? "" : k === "arpFull" ? t(k).replace("{n}", arpMax()) : t(k);
+  box.classList.toggle("bad", /^arp(Rc|Full|NoAnswer)/.test(k));
+}
+function arpAnswered(r, x) {
+  if (x.d !== dev) return;
+  if (r.rc) { arpSay("arpRc" + r.rc); return; }
+  if (x.track === arpTrack) { arpPat = r.pat; renderArpCount(); }
+  if (x.track === (dev.sel || 0) && dev.dump)    /* the Sound tab's ARP pages show what the device has now */
+    for (const [id, f] of Object.entries(ARP.PARAM)) { dev.dump.p[id] = +r[f]; showValue(key(0, +id), +r[f], false); }
+  if (!arpSender.busy) arpSay("arpSentOk");
+}
+async function arpRead(d = dev, track = arpTrack, quiet = false) {
+  if (!d || !d.info || !d.info.arpMax) return;
+  const r = parse[CMD.ARP_GET](await sessionRequest(d, req.arpGet(track)));
+  if (d !== dev) return;
+  if (r.rc) { arpSay("arpRc" + r.rc); return; }
+  arpTrack = track;
+  arpPat = r.pat;
+  arpS = { on: r.on, steps: r.steps, rate: r.rate, dir: r.dir, bound: r.bound, gate: r.gate, hold: r.hold, swing: r.swing,
+    root: r.root, oct: r.oct, notes: arpFit(r.notes, r.steps) };
+  renderArp();
+  if (!quiet) arpSay("arpFromDevice");
+}
+/* an edit: draw it, and with LIVE send it */
+function arpEdited(next) {
+  arpS = next;
+  renderArp();
+  if (!arpOk()) return;
+  if (!$("arplive").checked) { arpSay("arpUnsent"); return; }
+  arpSay("arpSending");
+  arpSender.push({ d: dev, track: arpTrack, s: arpSnap() });
+}
+function arpNotes(notes) {
+  if (JSON.stringify(notes) === JSON.stringify(arpS.notes)) return;
+  arpPat = 0;                                      /* other notes: USER */
+  arpEdited({ ...arpS, notes });
+}
+/* the controls: built once, kept in step with arpS by renderArp */
+const arpCtl = {};
+function arpBuild() {
+  const set = (f, v) => arpS && arpEdited({ ...arpS, [f]: v });
+  const seg = (f, names) => el("span", { class: "seg", role: "group" }, ...names.map((n, i) =>
+    el("button", { type: "button", "data-v": i, onclick: () => set(f, i) }, n)));
+  const sel = (f, names, base = 0) => el("select", { onchange: (e) => set(f, +e.target.value) },
+    ...names.map((n, i) => el("option", { value: i + base, text: n })));
+  const range = (f, min, max) => el("input", { type: "range", min, max, oninput: (e) => set(f, +e.target.value) });
+  const box = (label, ...kids) => el("div", {}, el("span", { text: label }), ...kids);
+  Object.assign(arpCtl, {
+    steps: el("input", { type: "number", min: 1, max: ARP.STEPS, onchange: (e) => {
+      const v = Math.round(+e.target.value);
+      if (!arpS || !(v >= 1 && v <= ARP.STEPS)) { renderArp(); return; }
+      arpEdited({ ...arpS, steps: v, notes: arpFit(arpS.notes, v) });
+    } }),
+    rate: sel("rate", ARP.RATES), dir: seg("dir", ARP.DIRS), bound: seg("bound", ARP.BOUNDS),
+    gate: range("gate", 10, 100), gateV: el("span"), hold: el("button", { type: "button", class: "tog", onclick: () => arpS && set("hold", !arpS.hold) }, "HOLD"),
+    swing: range("swing", 0, 100), swingV: el("span"), root: sel("root", ARP.ROOTS),
+    oct: sel("oct", ["-3", "-2", "-1", "0", "+1", "+2", "+3"], -3),
+  });
+  $("arpctl").replaceChildren(box("STEPS", arpCtl.steps), box("RATE", arpCtl.rate), box("DIR", arpCtl.dir), box("BOUND", arpCtl.bound),
+    box("GATE", arpCtl.gate, arpCtl.gateV), box("SWING", arpCtl.swing, arpCtl.swingV), box("ROOT", arpCtl.root), box("OCT", arpCtl.oct),
+    box("HOLD", arpCtl.hold));
+}
+arpBuild();
+function renderArpCount() {
+  $("arpcount").textContent = arpS ? `${arpS.notes.length} / ${arpMax()} ${t("arpNotes")} · PAT ${ARP.PATS[arpPat] ?? arpPat}` : "";
+}
+function renderArp() {
+  const ntrk = (dev && dev.info && dev.info.ntrk) || 1, tb = $("arptrk");
+  if (tb.children.length !== ntrk)
+    tb.replaceChildren(...Array.from({ length: ntrk }, (_, i) => el("button", { type: "button", "data-i": i,
+      onclick: () => { if (arpOk() && i !== arpTrack) op(() => arpRead(dev, i)); } }, String(i + 1))));
+  for (const b of tb.children) b.setAttribute("aria-pressed", +b.dataset.i === arpTrack ? "true" : "false");
+  for (const [id, k] of [["arpcoarser", "arpJoin"], ["arpfiner", "arpSplit"], ["arpleft", "arpLeft"], ["arpright", "arpRight"]]) {
+    $(id).title = t(k); $(id).setAttribute("aria-label", t(k));
+  }
+  $("arpgrid").setAttribute("aria-label", t("tabShaype"));
+  if (!arpS) { $("arpgrid").replaceChildren(); renderArpCount(); return; }
+  $("arpon").setAttribute("aria-pressed", arpS.on ? "true" : "false");
+  arpCtl.hold.setAttribute("aria-pressed", arpS.hold ? "true" : "false");
+  if (document.activeElement !== arpCtl.steps) arpCtl.steps.value = arpS.steps;
+  for (const f of ["rate", "root", "oct", "gate", "swing"]) arpCtl[f].value = arpS[f];
+  arpCtl.gateV.textContent = arpS.gate + " %";
+  arpCtl.swingV.textContent = String(arpS.swing);
+  for (const f of ["dir", "bound"]) for (const b of arpCtl[f].children) b.setAttribute("aria-pressed", +b.dataset.v === arpS[f] ? "true" : "false");
+  $("arpfiner").disabled = !arpZoom(arpS, 2);
+  $("arpcoarser").disabled = !arpZoom(arpS, 0.5);
+  $("arpleft").disabled = $("arpright").disabled = !arpS.notes.length;
+  $("arpclear").disabled = !arpS.notes.length;
+  renderArpCount();
+  const g = $("arpgrid"), steps = arpS.steps, cells = [];
+  g.style.setProperty("--steps", steps);
+  for (let row = ARP.ROWS - 1; row >= 0; row--) for (let step = 0; step < steps; step++) {
+    const n = ARPC.noteAt(arpS.notes, row, step);
+    const c = el("button", { type: "button", tabindex: row === ARP.ROWS - 1 && step === 0 ? 0 : -1, role: "gridcell",
+      class: "cell" + (step % 4 ? "" : " beat") + (n ? " on" : "") + (n && n.step === step ? " start" : "") + (n && step === n.step + n.length - 1 ? " end" : ""),
+      "data-row": row, "data-step": step, "aria-selected": n ? "true" : "false", "aria-label": `${t("arpRow")} ${row + 1}, ${t("arpStep")} ${step + 1}` });
+    cells.push(c);
+  }
+  g.replaceChildren(...cells);
+}
+/* the toy's pointer rules (core/gesture.mjs): left draws, carries, stretches, a still click removes; right erases */
+function arpCell(e) {
+  const r = $("arpgrid").getBoundingClientRect(), steps = arpS.steps, x = (e.clientX - r.left) / r.width * steps;
+  return { step: Math.max(0, Math.min(steps - 1, Math.floor(x))), rightHalf: x - Math.floor(x) >= 0.5,
+    row: ARP.ROWS - 1 - Math.max(0, Math.min(ARP.ROWS - 1, Math.floor((e.clientY - r.top) / r.height * ARP.ROWS))) };
+}
+$("arpgrid").addEventListener("contextmenu", (e) => e.preventDefault());
+$("arpgrid").addEventListener("mousedown", (e) => e.preventDefault());   /* a press leaves no focus on a cell */
+$("arpgrid").addEventListener("pointerdown", (e) => {
+  if (!arpS || (e.button !== 0 && e.button !== 2)) return;
+  e.preventDefault();
+  const r = ARPC.gridPress(arpS.notes, { ...arpCell(e), erase: e.button === 2 });
+  if (r.pattern.length > arpMax()) { arpSay("arpFull"); return; }   /* the cap: no 31st note */
+  arpDrag = r.drag;
+  $("arpgrid").setPointerCapture(e.pointerId);
+  arpNotes(r.pattern);
+});
+$("arpgrid").addEventListener("pointermove", (e) => {
+  if (!arpDrag || !arpS) return;
+  const next = ARPC.gridDrag(arpDrag, arpS.notes, arpCell(e), arpS.steps);
+  if (next !== arpS.notes && next.length <= arpMax()) arpNotes(next);
+});
+$("arpgrid").addEventListener("pointerup", () => {
+  if (!arpDrag || !arpS) return;
+  const next = ARPC.gridRelease(arpDrag, arpS.notes);
+  arpDrag = null;
+  arpNotes(next);
+});
+$("arpgrid").addEventListener("pointercancel", () => { arpDrag = null; });
+$("arpgrid").addEventListener("keydown", (e) => {   /* keys: Enter / Space toggle a note, Delete removes it */
+  const c = e.target.closest(".cell");
+  if (!c || !arpS || !["Enter", " ", "Delete", "Backspace"].includes(e.key)) return;
+  e.preventDefault();
+  const row = +c.dataset.row, step = +c.dataset.step, n = ARPC.noteAt(arpS.notes, row, step);
+  if (n) arpNotes(arpS.notes.filter((x) => x !== n));
+  else if (e.key === "Enter" || e.key === " ") {
+    if (arpS.notes.length >= arpMax()) { arpSay("arpFull"); return; }
+    arpNotes(ARPC.paintNote(arpS.notes, row, step, 1));
+  }
+  const f = $("arpgrid").querySelector(`[data-row="${row}"][data-step="${step}"]`);
+  if (f) f.focus();
+});
+$("arpon").addEventListener("click", () => arpS && arpEdited({ ...arpS, on: !arpS.on }));
+$("arpfiner").addEventListener("click", () => { const n = arpS && arpZoom(arpS, 2); if (n) arpEdited(n); });
+$("arpcoarser").addEventListener("click", () => { const n = arpS && arpZoom(arpS, 0.5); if (n) arpEdited(n); });
+for (const [id, by] of [["arpleft", -1], ["arpright", 1]]) $(id).addEventListener("click", () => {
+  if (!arpS) return;
+  const n = arpShift(arpS, by, arpMax());
+  if (!n) arpSay("arpFull"); else arpNotes(n.notes);
+});
+$("arpclear").addEventListener("click", () => arpS && arpNotes([]));
+$("arplive").addEventListener("change", () => { if (!$("arplive").checked) arpSender.cancel(); });
+$("arpwrite").addEventListener("click", () => {
+  if (!arpS || !arpOk()) return;
+  arpSay("arpSending");
+  arpSender.now({ d: dev, track: arpTrack, s: arpSnap() });
+});
+$("arpread").addEventListener("click", () => { if (arpOk()) { arpSender.cancel(); op(() => arpRead()); } });
+/* the knobs on the device: a CHANGED of an ARP id (the selected track's) moves the tab when it shows that track and
+   has nothing of its own on the way; a RELOAD (another track, a project) reads again while the tab is open */
+function arpOnPush(f) {
+  if (!arpS || !arpOk() || arpSender.busy || arpDrag) return;
+  if (f.cmd === CMD.CHANGED) {
+    const c = parse[CMD.CHANGED](f.a), fld = !c.scope && ARP.PARAM[c.id];
+    if (!fld || arpTrack !== (dev.sel || 0)) return;
+    const v = fld === "on" || fld === "hold" ? !!c.value : c.value;
+    arpS = { ...arpS, [fld]: v, notes: fld === "steps" ? arpFit(arpS.notes, v) : arpS.notes };
+    renderArp();
+  } else if (f.cmd === CMD.RELOAD && tab === "shaype") {
+    clearTimeout(arpOnPush.tm);
+    arpOnPush.tm = setTimeout(() => { if (arpOk() && !arpSender.busy && !arpDrag) op(() => arpRead(dev, arpTrack, true)); }, 200);
+  }
+}
 
 /* ------------------------------------------------------------------ FM6 --- */
 /* The 6-OP FM tab (firmware with FM6: INFO's fm6 tag): the whole patch of an FM6 track, which the device

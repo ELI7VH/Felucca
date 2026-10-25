@@ -7,10 +7,13 @@
 //   the user preset bank / librarian, library files, live pushes, older-firmware fallback, the v3 tracks
 //   and the mixer, the v5 drum grid in steps and user presets), its tab layout and ja/en strings,
 //   and the user-sample pipeline byte for byte against tools/sampleio.py
+// - editor.html SHAYPE (cmds 76, 77): the vendored Shape Arp core (web/arp/) and its inline copy, the grid edits as
+//   bytes, the replies, the mock's refusals, the coalesced LIVE sends, zoom and shift
 // - fm1pkg.js: productOf and logicalImage on build/felucca.fwsc (skipped without a build)
 // - fm1ota.js: a full install and an unplug during the write against a simulated FM-1
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,7 +41,7 @@ const E = vm.runInNewContext(proto + `
 ;({ frame, unframe, parse, req, Link, parseWav, resample, normalize, takeSample, autoTrim, zoomView, rootFromName, buildSlot, makeMockDevice, CMD, SMP,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, parseNotes, parseHits, hitsText, gridFromSteps, LANE_NOTE, LANE_OF, readDevicePreferences, devicePresetRows, engineOrder, ENGINE_ORDER, aliasOf, fmtValue, FM6, enumShown, F,
-   FM4, fromDigital, fromPerc, DRUM_KIT_E,
+   FM4, fromDigital, fromPerc, DRUM_KIT_E, ARPC, ARP, arpCheck, arpFit, arpZoom, arpShift, Coalescer,
    MENU: typeof MENU === "undefined" ? null : MENU, MENU_TABS: typeof MENU_TABS === "undefined" ? null : MENU_TABS,
    readDeviceMenu: typeof readDeviceMenu === "undefined" ? null : readDeviceMenu })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console });
@@ -1308,7 +1311,7 @@ function editorTabs() {
   const tabs = [...html.matchAll(/<button role="tab" data-tab="(\w+)"/g)].map((x) => x[1]);
   const panels = [...html.matchAll(/<section class="panel" id="p-(\w+)" data-tab="(\w+)"/g)].map((x) => [x[1], x[2]]);
   const TABS = JSON.parse((/const TABS = (\[[^\]]*\]);/.exec(html) || [])[1] || "[]");
-  ok(tabs.length === 10 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
+  ok(tabs.length === 11 && js(tabs) === js(TABS) && js(panels.map((x) => x[1])) === js(TABS) && panels.every(([a, b]) => a === b),
     `editor: ${tabs.length} tabs, one panel each (${tabs.join(" ")})`);
   ok(/localStorage\.setItem\(TAB_KEY/.test(html) && /try \{ localStorage/.test(html) && /history\.replaceState\([^)]*"#" \+ name\)/.test(html)
     && /addEventListener\("hashchange"/.test(html), "editor: last tab in localStorage (try/catch) and in the URL hash");
@@ -1347,6 +1350,178 @@ function editorTabs() {
     .concat([...script.matchAll(/\bimport\s*\(\s*["']([^"']+)["']/g)].map((m) => m[1]));
   ok(scripts.every((url) => local(url) && existsSync(join(HERE, url))) && !/@import\b/i.test(css),
     "editor: UI scripts stay local and CSS has no external imports");
+}
+
+/* ------------------------------------------------- SHAYPE (cmds 76, 77) --- */
+async function editorShaype() {
+  const C = E.CMD, sha = (b) => createHash("sha256").update(b).digest("hex");
+  /* the toy's core: web/arp/*.mjs unchanged from WaveLoop (the sha256 in their header), editor.html's ARPC the same text */
+  for (const f of ["sequence.mjs", "gesture.mjs"]) {
+    const lines = readFileSync(join(HERE, "arp", f), "utf8").split("\n"), src = lines.slice(3).join("\n");
+    const want = (/sha256 of the source[^:]*: ([0-9a-f]{64})/.exec(lines[1]) || [])[1];
+    const inline = (new RegExp(`/\\*ARP-CORE-BEGIN ${f.replace(".", "\\.")}\\*/\\n([\\s\\S]*?)/\\*ARP-CORE-END\\*/`).exec(html) || [])[1];
+    ok(sha(src) === want, `shaype: web/arp/${f} is the toy's file unchanged (sha256)`);
+    ok(inline === src.replace(/^export\s+/gm, "").replace(/^import .*?;\n/gm, ""),
+      `shaype: editor.html carries web/arp/${f} inline (exports dropped)`);
+  }
+  const seq = await import("./arp/sequence.mjs");
+  const notesOf = (p) => p.map(({ step, row, length }) => ({ step, row, length }));
+  ok(js(notesOf(E.ARPC.DEFAULT_PATTERN)) === js(notesOf(seq.DEFAULT_PATTERN)) && E.ARPC.RATES.slice(0, 8).map((r) => r.short).join() === E.ARP.RATES.join(),
+    "shaype: the inline core == the module; RATE 0..7 == the toy's RATES 1/2 .. 1/32");
+
+  /* INFO: 41 01 30 last, after the setlist and diagnostics tags */
+  const tail = [16, 0x55, 1, 9, 0x4d, 1, 64, 1, 0x44, 1, 1, 0x4C, 1, 12];
+  const head = [70, 0, 1, 91, 27, 64, 83, 70, 77, 54, 0, 4];   /* "F", 1 engine, P_COUNT 91, G_COUNT 27, NSTEP 64, P_E0 83, "FM6", 4 tracks */
+  const info0 = E.parse[C.INFO]([...head, ...tail]), info1 = E.parse[C.INFO]([...head, ...tail, 0x41, 1, 30]);
+  ok(info0.arpMax === 0 && info1.arpMax === 30 && info1.setlistCount === 12 && info1.diagVersion === 1 && info0.setlistCount === 12,
+    "shaype: INFO 41 01 30 -> 30 notes; setlist and diagnostics still read before it");
+
+  const m = E.makeMockDevice({ auto: false, setlist: true });
+  const inp = [...m.access.inputs.values()][0], out = [...m.access.outputs.values()][0];
+  const sent = [], got = [];
+  const link = new E.Link((d) => { sent.push([...d]); out.send(d); }, { timeout: 300 });
+  inp.onmidimessage = (e) => { got.push([...e.data]); link.receive(e.data); };
+  const rq = (r) => link.request(r);
+  const info = E.parse[C.INFO](await rq(E.req.info()));
+  ok(info.arpMax === 30 && info.setlistCount === 12, "shaype: the mock advertises SHAYPE (30 notes) after its setlist tag");
+  const hex = (s) => s.trim().split(/\s+/).map((x) => parseInt(x, 16));
+
+  /* ARP_GET of a fresh track: EDITOR_PROTOCOL.md's example, byte for byte, and what it means */
+  sent.length = got.length = 0;
+  const g0 = E.parse[C.ARP_GET](await rq(E.req.arpGet(0)));
+  ok(eq(sent[0], hex("F0 7D 46 4C 4C 00 F7")) && eq(got[0], hex("F0 7D 46 4C 4C 00 00 00 04 03 00 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7")),
+    "shaype: ARP_GET track 1 == the protocol's example (request and reply bytes)");
+  ok(g0.track === 0 && g0.rc === 0 && g0.on === false && g0.steps === 4 && g0.rate === 3 && g0.dir === 0 && g0.bound === 0 && g0.gate === 75
+    && g0.hold === false && g0.swing === 0 && g0.root === 0 && g0.oct === 0 && g0.pat === 1 && g0.max === 30 && js(g0.notes) === js(notesOf(seq.DEFAULT_PATTERN)),
+    "shaype: ARP_GET parsed: ARP OFF, 4 steps of 1/8, UP, WRAP, gate 75, OCT 0, PAT SHAYPE, the toy's 8 notes");
+  let bad = 0;
+  for (const a of [[0, 0, 0, 4, 3, 0, 0, 75, 0, 0, 0, 3, 1, 30, 1, 0, 0], [0, 0, 0, 4, 3, 0, 0, 75, 0, 0, 0, 3, 1, 2, 3, 0, 0, 1, 1, 0, 1, 2, 0, 1]])
+    try { E.parse[C.ARP_GET](a); } catch { bad++; }
+  const bt = E.parse[C.ARP_GET](await rq(E.req.arpGet(4)));
+  ok(bad === 2 && bt.track === 4 && bt.rc === 1 && Object.keys(bt).length === 2 && eq(got.at(-1), [0xF0, 0x7D, 0x46, 0x4C, 76, 4, 1, 0xF7]),
+    "shaype: a short or over-full reply is refused; a bad track answers track, 1 only");
+
+  /* the toy's gestures (ARPC = core/gesture.mjs) -> ARP_SET bytes, through the LIVE sender */
+  const st = (o = {}) => ({ on: g0.on, steps: g0.steps, rate: g0.rate, dir: g0.dir, bound: g0.bound, gate: g0.gate, hold: g0.hold,
+    swing: g0.swing, root: g0.root, oct: g0.oct, notes: notesOf(g0.notes), ...o });
+  const A = E.ARPC, live = new E.Coalescer((x) => rq(E.req.arpSet(x.track, x.s)).then((a) => E.parse[C.ARP_SET](a)), { delay: 20 });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const settle = async () => { await wait(30); while (live.busy) await wait(5); };
+  const gesture = (notes, press, moves = [], steps = 4) => {
+    let { drag, pattern } = A.gridPress(notes, press);
+    for (const at of moves) pattern = A.gridDrag(drag, pattern, at, steps);
+    return notesOf(A.gridRelease(drag, pattern));
+  };
+  const setFrame = (tr, s) => [0xF0, 0x7D, 0x46, 0x4C, 77, tr, +s.on, s.steps, s.rate, s.dir, s.bound, s.gate, +s.hold, s.swing, s.root, s.oct + 3,
+    s.notes.length, ...s.notes.flatMap((n) => [n.step, n.row, n.length]), 0xF7];
+  const D8 = "00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01";
+  /* draw on an empty cell (row 5, step 1) and drag across to step 4: one note, 3 steps long, after the others */
+  const drawn = gesture(g0.notes, { row: 4, step: 0 }, [{ row: 4, step: 1 }, { row: 4, step: 2 }]);
+  sent.length = 0;
+  live.push({ track: 0, s: st({ notes: drawn }) });
+  await settle();
+  ok(js(drawn.at(-1)) === js({ step: 0, row: 4, length: 3 }) && sent.length === 1
+    && eq(sent[0], hex(`F0 7D 46 4C 4D 00 00 04 03 00 00 4B 00 00 00 03 09 ${D8} 00 04 03 F7`)),
+    "shaype: draw + drag across -> ARP_SET bytes (9 notes, the new one last)");
+  let g = E.parse[C.ARP_GET](await rq(E.req.arpGet(0)));
+  ok(g.pat === 0 && js(g.notes) === js(drawn), "shaype: the device keeps it; other notes make PAT USER");
+  /* carry a note (row 1, step 1) to row 6, step 3; stretch row 3's note from its right half; a still click removes;
+     right-drag erases what it crosses */
+  const carried = gesture(drawn, { row: 0, step: 0 }, [{ row: 5, step: 2 }]);
+  const stretched = gesture(g0.notes, { row: 2, step: 0, rightHalf: true }, [{ row: 2, step: 1 }, { row: 2, step: 3 }]);
+  const clicked = gesture(g0.notes, { row: 1, step: 1 });
+  const erased = gesture(g0.notes, { row: 3, step: 1, erase: true }, [{ row: 3, step: 2 }, { row: 3, step: 3 }]);
+  ok(js(carried.at(-1)) === js({ step: 2, row: 5, length: 1 }) && carried.length === 9 && !carried.some((n) => n.row === 0 && n.step === 0)
+    && js(stretched.filter((n) => n.row === 2)) === js([{ step: 0, row: 2, length: 4 }]) && stretched.length === 7
+    && clicked.length === 7 && !clicked.some((n) => n.row === 1) && js(erased) === js(notesOf(g0.notes).filter((n) => n.row !== 3 || n.step === 0)),
+    "shaype: carry, stretch (it takes the note it covers), a still click removes, right-drag erases");
+  sent.length = 0;
+  live.push({ track: 1, s: st({ notes: erased, on: true, steps: 4, rate: 5, dir: 2, bound: 1, gate: 50, hold: true, swing: 20, root: 1, oct: -2 }) });
+  await settle();
+  ok(eq(sent[0], hex("F0 7D 46 4C 4D 01 01 04 05 02 01 32 01 14 01 01 05 00 00 01 00 02 01 01 01 01 02 02 01 03 00 01 F7")),
+    "shaype: the settings in ARP_SET's order (on steps rate dir bound gate hold swing root oct+3), track 2");
+  g = E.parse[C.ARP_GET](await rq(E.req.arpGet(1)));
+  const d0 = E.parse[C.DUMP](await rq(E.req.dump()), info), t1 = E.parse[C.TRACK_DUMP](await rq(E.req.trackDump(1)), info);
+  ok(g.on && g.rate === 5 && g.dir === 2 && g.bound === 1 && g.gate === 50 && g.hold && g.swing === 20 && g.root === 1 && g.oct === -2
+    && eq(t1.p.slice(17, 25), [1, 5, 2, 50, 20, 4, 1, 1]) && eq(d0.p.slice(17, 25), [0, 3, 0, 75, 0, 4, 0, 0]),
+    "shaype: ARP_SET moves that track's ARP parameters (17..24) only");
+  const desc = [];
+  for (let i = 17; i < 25; i++) desc.push(E.parse[C.DESC](await rq(E.req.desc(0, i))));
+  ok(desc.map((d) => d.label).join() === "ARP,RATE,DIR,GATE,SWG,STEPS,HOLD,BOUND" && desc[1].names.join() === E.ARP.RATES.join()
+    && desc[2].names.join() === "UP,DOWN,PEND,RAND" && desc[7].names.join() === "WRAP,OCT" && desc[3].min === 10 && desc[3].max === 100 && desc[3].unit === "%"
+    && desc[5].fmt === E.F.STEPS && desc.map((d) => d.def).join() === "0,3,0,75,0,4,0,0"
+    && /\{ t: "ARP", pages: \[\["ARP", 0, \[17, 22, 18, 19\]\], \["ARP 2", 0, \[24, 20, 23, 21\]\]\] \}/.test(html),
+    "shaype: the ARP ids over DESC (ARP RATE DIR GATE SWG STEPS HOLD BOUND); pages ARP, ARP 2");
+
+  /* the mock refuses as the firmware: each rc, nothing changes, the reply is the state as it was */
+  const before = E.parse[C.ARP_GET](await rq(E.req.arpGet(2)));
+  const refuse = async (what, rc, s, args) => {
+    const r = E.parse[C.ARP_SET](await rq(args ? [C.ARP_SET, args] : E.req.arpSet(2, s)));
+    const after = E.parse[C.ARP_GET](await rq(E.req.arpGet(2)));
+    const same = js({ ...after, rc: 0 }) === js({ ...before, rc: 0 }) && js({ ...r, rc: 0 }) === js({ ...before, rc: 0 });
+    ok(r.rc === rc && same && (!s || E.arpCheck(s) === rc), `shaype: mock ARP_SET rc ${rc}: ${what}`);
+  };
+  const base = st();
+  await refuse("wrong length", 1, null, E.req.arpSet(2, base)[1].slice(0, -1));
+  const r4 = E.parse[C.ARP_SET](await rq(E.req.arpSet(4, base)));
+  ok(r4.rc === 1 && r4.track === 4 && r4.notes === undefined, "shaype: mock ARP_SET rc 1: track 5 (track, 1 only)");
+  const many = Array.from({ length: 31 }, (_, i) => ({ step: i, row: i % 8, length: 1 }));
+  await refuse("31 notes", 2, st({ steps: 64, notes: many }));
+  for (const [f, v] of [["on", 2], ["steps", 0], ["steps", 65], ["rate", 8], ["dir", 4], ["bound", 2], ["gate", 9], ["gate", 101],
+    ["hold", 2], ["swing", 101], ["root", 13], ["oct", 4]])
+    await refuse(`${f} ${v}`, 3, st({ [f]: v, notes: f === "steps" ? [] : base.notes }));
+  for (const [what, n] of [["step past STEPS", { step: 4, row: 0, length: 1 }], ["row 9", { step: 0, row: 8, length: 1 }],
+    ["length 0", { step: 1, row: 7, length: 0 }], ["past the end", { step: 3, row: 7, length: 2 }]])
+    await refuse(what, 4, st({ notes: [...base.notes, n] }));
+  await refuse("two notes overlap in a row", 5, st({ notes: [{ step: 0, row: 6, length: 3 }, { step: 2, row: 6, length: 1 }] }));
+  const same = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st({ gate: 60 }))));
+  ok(same.rc === 0 && same.pat === 1 && same.gate === 60, "shaype: a SET with the same notes keeps PAT");
+
+  /* LIVE: a burst is one ARP_SET (the latest); at most one in flight, the latest wins */
+  sent.length = 0;
+  for (let k = 1; k <= 10; k++) live.push({ track: 3, s: st({ gate: 10 * k }) });
+  await settle();
+  const burst = sent.slice();
+  g = E.parse[C.ARP_GET](await rq(E.req.arpGet(3)));
+  ok(burst.length === 1 && burst[0][4] === C.ARP_SET && burst[0][11] === 100 && g.gate === 100, "shaype: ten edits in a burst -> one ARP_SET, the last");
+  const calls = [];
+  let inflight = 0, most = 0;
+  const slow = new E.Coalescer(async (x) => { calls.push(x); most = Math.max(most, ++inflight); await wait(40); inflight--; return x; }, { delay: 50 });
+  slow.push("a"); await wait(70);                   /* a goes at 50 ms, answers at 90 */
+  slow.push("b"); slow.push("c"); await wait(5); slow.push("d");
+  while (slow.busy) await wait(5);
+  const idle = [];
+  const now = new E.Coalescer(async (x) => { calls.push(x); most = Math.max(most, ++inflight); await wait(40); inflight--; return x; },
+    { onDone: (r) => idle.push(r + (now.busy ? "+" : "")) });
+  now.now("w"); await wait(10); now.now("x"); now.now("y");
+  while (now.busy) await wait(5);
+  ok(calls.join("") === "adwy" && most === 1 && idle.join() === "w+,y", "shaype: one in flight; edits meanwhile -> only the latest goes (push and WRITE); idle after the last");
+
+  /* zoom and shift: the toy's own subdivide / shift, within the FM-1's rates */
+  const z = E.arpZoom(st(), 2), zz = z && E.arpZoom(z, 0.5), want = seq.subdivide(notesOf(seq.DEFAULT_PATTERN), 4, 2, 2);
+  ok(z && z.steps === 8 && z.rate === 5 && js(z.notes) === js(want.pattern) && js(zz.notes) === js(st().notes) && zz.rate === 3 && zz.steps === 4,
+    "shaype: x2 = 8 steps of 1/16 (subdivide), /2 back to 4 of 1/8");
+  ok(!E.arpZoom(st({ rate: 7 }), 2) && seq.subdivide(st().notes, 4, 8, 2) && !E.arpZoom(st({ rate: 0 }), 0.5) && !E.arpZoom(st({ steps: 64, notes: [] }), 2)
+    && !E.arpZoom(st({ notes: [{ step: 1, row: 0, length: 1 }] }), 0.5), "shaype: no x2 past 1/32 or 64 steps, no /2 past 1/2 or with a note on an odd step");
+  const sh = E.arpShift(st({ notes: [{ step: 2, row: 5, length: 2 }, { step: 0, row: 1, length: 1 }] }), 1), back = sh && E.arpShift(sh, -1);
+  ok(js(sh.notes) === js(seq.shift([{ step: 2, row: 5, length: 2 }, { step: 0, row: 1, length: 1 }], 4, 1)) && sh.notes.length === 3
+    && js(back.notes.slice().sort((a, b) => a.row - b.row)) === js([{ step: 0, row: 1, length: 1 }, { step: 2, row: 5, length: 2 }]),
+    "shaype: shift right splits a note over the end; left joins it back (shift)");
+  const split = st({ steps: 8, notes: [{ step: 7, row: 0, length: 1 }, ...Array.from({ length: 28 }, (_, i) => ({ step: i >> 2, row: 1 + (i & 3), length: 1 })),
+    { step: 6, row: 7, length: 2 }] });
+  ok(E.arpCheck(split) === 0 && split.notes.length === 30 && E.arpShift(split, 1) === null && E.arpShift(split, -1) !== null,
+    "shaype: a shift that would split a note past 30 is refused");
+  ok(js(E.arpFit([{ step: 0, row: 0, length: 4 }, { step: 3, row: 1, length: 1 }], 2)) === js([{ step: 0, row: 0, length: 2 }]),
+    "shaype: fewer steps drop the notes past the end and cut the rest there");
+
+  const off = E.makeMockDevice({ auto: false, shaype: false });
+  const oi = [...off.access.inputs.values()][0], oo = [...off.access.outputs.values()][0];
+  const ol = new E.Link((d) => oo.send(d), { timeout: 100 });
+  oi.onmidimessage = (e) => ol.receive(e.data);
+  const oinfo = E.parse[C.INFO](await ol.request(E.req.info()));
+  const none = await ol.request(E.req.arpGet(0), { retries: 0, quiet: true }).then(() => false, () => true);
+  ok(oinfo.arpMax === 0 && none, "shaype: firmware without the tag: no SHAYPE, ARP_GET unanswered");
+  ol.close(); off.stop(); link.close(); m.stop();
 }
 
 /* ------------------------------------------------- editor icons (Fukiai) --- */
@@ -1544,6 +1719,7 @@ await editorSessions();
 await editorFm6();
 fm6TabNoBank();
 await editorFm4();
+await editorShaype();
 editorTabs();
 editorIcons();
 samplesMatch();
