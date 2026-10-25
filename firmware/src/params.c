@@ -4,7 +4,7 @@
 static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};
 /* WaveLoop Kit: the ARP is SHAYPE, WaveLoop's Shape Arp (arp_shape.c); the ARP ids are its settings. RATE: steps as the
  * toy's RATES (ARP_RATE2); DIR: how each pass moves the rows; BOUND: a row past the chord wraps round the held notes
- * or goes up octaves. ROOT, PAT and OCT are not parameters: seq.c arp_x (ARP 3, page ids ARPX_*) */
+ * or goes up octaves. ROOT, PAT, OCT and ATTACH are not parameters: seq.c arp_x (ARP 3, page ids ARPX_*) */
 static const char *const N_ARATE[] = {"1/2", "1/4", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 /* DIR: 3 RAND is off the face (enum_step steps over it), kept so a stored RAND still plays and shows; WYNDO and SHYFT
  * appended (arp_shape.c AD_*) */
@@ -13,6 +13,7 @@ static const char *const N_ABOUND[] = {"WRAP", "OCT"};
 static const char *const N_AROOT[] = {"OFF", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const N_APAT[] = {"USER", "SHAYPE", "UP 4", "UPDOWN", "STABS", "OCT RUN", "PEDAL", "DRONE"};
 static const char *const N_AXOCT[] = {"-3", "-2", "-1", "0", "+1", "+2", "+3", 0};   /* (F_INT: 0-terminated) */
+static const char *const N_AATT[] = {"NOW", "NOTE", "CYCLE"};   /* KEY ATTACH (seq.c AT_*), SHAYPE's NOW NOTE CYCLE */
 static const char *const N_DIV[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"};
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
@@ -119,15 +120,22 @@ static const param_desc_t TP[P_COUNT] = {
 };
 
 static const param_desc_t DRUM_LEVEL_DESC=PD("LVL",F_DB,0,112,112);
-/* ARP 3's PAT ROOT OCT (page ids ARPX_PAT..ARPX_OCT): the track's SHAYPE extras, seq.c arp_x, stored with its pattern */
-enum { ARPX_PAT, ARPX_ROOT, ARPX_OCT, ARPX_N };
+/* ARP 3's PAT ROOT OCT ATTACH (page ids ARPX_PAT..ARPX_ATT): the track's SHAYPE extras, seq.c arp_x, stored with its
+ * pattern. ATTACH, SHAYPE's KEY ATTACH (WaveLoop windows/shaype 4cbf5392): when a chord you press or lift reaches the
+ * arp, keys, MIDI and the sequencer's chords alike (seq.c arp_fire). NOTE by default (Elijah; the Windows SHAYPE's is
+ * NOW) */
+enum { ARPX_PAT, ARPX_ROOT, ARPX_OCT, ARPX_ATT, ARPX_N };
+enum { AT_NOW, AT_NOTE, AT_CYCLE, AT_N };
 #define ARPX_ID0 0xF0u                           /* page id of ARPX_PAT (0xFF stays the empty slot) */
 static const param_desc_t ARPX_DESC[ARPX_N] = {
     [ARPX_PAT] = PE("PAT", N_APAT, 1),            /* the factory pattern last loaded (turning loads one), USER once edited */
     [ARPX_ROOT] = PE("ROOT", N_AROOT, 0),         /* the held note of that name is the lowest, the ones under it up octaves */
     [ARPX_OCT] = {"OCT", F_INT, -3, 3, 0, N_AXOCT, 0},   /* the arp's notes up / down octaves (OP3 on the ARP pages) */
+    [ARPX_ATT] = PE("ATTACH", N_AATT, AT_NOTE),    /* NOW: at once, the step just struck again; NOTE: the next step, the
+                                                   * note sounding plays out; CYCLE: the next pass (seq.c arp_fire) */
 };
-static int16_t arp_x[NTRK][ARPX_N];              /* per track: PAT, ROOT, OCT (main loop writes, the audio ISR reads) */
+static int16_t arp_x[NTRK][ARPX_N];              /* per track: PAT, ROOT, OCT, ATTACH (main loop writes, the audio ISR
+                                                  * reads) */
 
 static const param_desc_t GP[G_COUNT] = {
     [G_BPM] = PD("BPM", F_BPM, 40, 240, 120),
@@ -405,8 +413,8 @@ static const page_t PAGES[] = {
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_MOTION, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"SETLIST", FAM_SEQ, SC_GLOBAL, GR_SETLIST, {0xFF,0xFF,0xFF,0xFF}},
     {"DRUM MIX", FAM_EDIT, SC_TRACK, GR_NONE, {P_LEVEL,P_PAN,P_CHOR,P_REV}},
-    /* WaveLoop Kit: SHAYPE's PAT ROOT OCT (seq.c arp_x), after the others so every stored page index stays */
-    {"ARP 3", FAM_ARP, SC_TRACK, GR_ARP, {ARPX_ID0 + ARPX_PAT, ARPX_ID0 + ARPX_ROOT, ARPX_ID0 + ARPX_OCT, 0xFF}},
+    /* WaveLoop Kit: SHAYPE's PAT ROOT OCT ATTACH (seq.c arp_x), after the others so every stored page index stays */
+    {"ARP 3", FAM_ARP, SC_TRACK, GR_ARP, {ARPX_ID0 + ARPX_PAT, ARPX_ID0 + ARPX_ROOT, ARPX_ID0 + ARPX_OCT, ARPX_ID0 + ARPX_ATT}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */

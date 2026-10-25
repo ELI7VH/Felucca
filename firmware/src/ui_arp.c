@@ -9,7 +9,8 @@
  *   a row key held + any knob   that row's note at the cursor: its length (a note the press wrote, or one already there)
  *   EDIT        the notes starting on the cursor step go
  *   ARP 3's PAT a factory pattern, loaded as it is turned to (its STEPS and BOUND too); an edit makes it USER
- *               (PAT ROOT OCT are seq.c arp_x, not parameters: stored with the pattern, project.c)
+ *               (PAT ROOT OCT ATTACH are seq.c arp_x, not parameters: stored with the pattern, project.c); ATTACH, KEY
+ *               ATTACH: when a chord you change reaches the arp, NOW / NOTE / CYCLE (seq.c arp_fire)
  *   an OP key held + OCT- / OCT+   the OP's shift (ui_layer.c op_shift; arp_op below):
  *               OP1 ZOOM out / in, OP2 SHIFT left / right, OP3 OCT down / up, OP4 MIRROR flip / reverse,
  *               OP5 MUTATE a note out / in

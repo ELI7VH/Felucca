@@ -356,7 +356,8 @@ static void ed_motion_reply(uint32_t k, uint32_t rc)
     }
 }
 /* ---- WaveLoop Kit: SHAYPE (76 ARP_GET, 77 ARP_SET; web/EDITOR_PROTOCOL.md "SHAYPE"): a track's ARP settings, PAT
- * ROOT OCT (seq.c arp_x) and pattern (arp_pat). A SET is checked whole before anything changes (never trust the
+ * ROOT OCT ATTACH (seq.c arp_x) and pattern (arp_pat). ATTACH (KEY ATTACH, midi27: 0 NOW, 1 NOTE, 2 CYCLE) is a trailing
+ * byte: ARP_GET ends with it, ARP_SET takes it after the notes or, without it (a host before midi27), leaves it. A SET is checked whole before anything changes (never trust the
  * host): its length, the note count, every setting's range, every note inside STEPS x 8 rows, no two of a row
  * overlapping; then written with the audio ISR held off (the arp reads the pattern), as a device edit: the ARP page
  * redraws (its graph signature), the autosave sees it, the WATCH shadow takes the selected track's new values (no
@@ -376,11 +377,13 @@ static uint32_t ed_arp_set(uint32_t k, const uint8_t *a, uint32_t na)
     n = a[11];
     if (n > ARP_NMAX)
         return ED_ARP_MANY;
-    if (na != 12u + 3u * n)
+    if (na != 12u + 3u * n && na != 13u + 3u * n)     /* (+1: ATTACH) */
         return ED_ARP_ARGS;
     for (i = 0; i < 10u; i++)                          /* on steps rate dir bound gate hold swing root oct+3 */
         if (a[1u + i] < ED_ARP_LO[i] || a[1u + i] > ED_ARP_HI[i])
             return ED_ARP_RANGE;
+    if (na == 13u + 3u * n && a[na - 1u] >= AT_N)
+        return ED_ARP_RANGE;
     steps = a[2];
     memset(&p, 0, sizeof p);
     memset(occ, 0, sizeof occ);
@@ -406,6 +409,8 @@ static uint32_t ed_arp_set(uint32_t k, const uint8_t *a, uint32_t na)
         t->p[ED_ARP_ID[i]] = (int16_t)a[1u + i];
     arp_x[k][ARPX_ROOT] = a[9];
     arp_x[k][ARPX_OCT] = (int16_t)(a[10] - 3);
+    if (na == 13u + 3u * n)
+        arp_x[k][ARPX_ATT] = a[na - 1u];
     fm1_irq_on();
     if (k == song.sel)
         for (i = 0; i < 8u; i++)
@@ -431,6 +436,7 @@ static void ed_arp_reply(uint32_t k, uint32_t rc)       /* ARP_GET's shape */
         ed_b(ARP_ROW(p->note[i]));
         ed_b(ARP_LEN(p->note[i]));
     }
+    ed_b((uint32_t)clamp(arp_x[k][ARPX_ATT], 0, AT_N - 1));
 }
 static int ed_arp_handle(uint32_t cmd, const uint8_t *a, uint32_t na)
 {

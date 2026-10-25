@@ -5,13 +5,13 @@
  * through sh_build_table, one row per step of a whole cycle, and what the table plays is written as C for
  * tests/arp_shape_test.c, which plays the same case through firmware/src/arp_shape.c ash_tick for two cycles and wants
  * exactly the same notes at every tick (tick % the cycle). UP, DOWN and PEND are re-checked the same way (RAND draws
- * differ by design: tools/arp_vectors.mjs holds it to the toy).
- *   W=$WAVELOOP/windows/shaype   (WAVELOOP: ~/repos/waveloop; the vectors in the repo: its commit c4e321fd)
+ * differ by design: tools/arp_vectors.mjs holds it to the toy). PEND climbs in octaves whatever BOUND says (WaveLoop
+ * a205e3a6), so its WRAP cases are SHAYPE's, not the toy's (tests/arp_shape_test.c retires the toy's PEND WRAP).
+ *   W=$WAVELOOP/windows/shaype   (WAVELOOP: ~/repos/waveloop; the vectors in the repo: its commit 4cbf5392, origin/main
+ *                                 on 2026-10-25; shaype_core.c last changed at a205e3a6)
  *   cc -O1 -I"$W" -o build/arp_windows_vectors tools/arp_windows_vectors.c "$W/shaype_core.c" -lm
  *   build/arp_windows_vectors "$(shasum -a 256 "$W/shaype_core.c" | cut -c1-64)" > tests/arp_window_vectors.h
- * (WaveLoop a205e3a6, after c4e321fd, makes PEND climb in octaves whatever BOUND says; the Kit's PEND keeps the toy's
- * BOUND, so vectors made from that core fail PEND WRAP on purpose.) Chords are given voiced (low to high, each once):
- * ash_voicing / sh_root_voicing are held to the toy elsewhere. */
+ * Chords are given voiced (low to high, each once): ash_voicing / sh_root_voicing are held to the toy elsewhere. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

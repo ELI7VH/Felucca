@@ -726,15 +726,17 @@ const parse = {
     for (let i = 0; i < o.count; i++) o.rows.push({ slot: r.b(), repeat: r.b() });
     return o;
   },
-  /* -> {track, rc} for a bad track, else the settings, pat, max and the notes {step, row, length} in their order */
+  /* -> {track, rc} for a bad track, else the settings, pat, max, the notes {step, row, length} in their order and
+     attach (KEY ATTACH 0 NOW 1 NOTE 2 CYCLE, a trailing byte from midi27; null from older firmware) */
   [CMD.ARP_GET](a) {
     const r = new Reader(a), o = { track: r.b(), rc: r.b() };
     if (a.length === 2) return o;
     Object.assign(o, { on: !!r.b(), steps: r.b(), rate: r.b(), dir: r.b(), bound: r.b(), gate: r.b(), hold: !!r.b(), swing: r.b(),
       root: r.b(), oct: r.b() - 3, pat: r.b(), max: r.b() });
     const n = r.b();
-    if (n > o.max || a.length !== 15 + 3 * n) throw new Error("Invalid SHAYPE reply");
+    if (n > o.max || (a.length !== 15 + 3 * n && a.length !== 16 + 3 * n)) throw new Error("Invalid SHAYPE reply");
     o.notes = Array.from({ length: n }, () => ({ step: r.b(), row: r.b(), length: r.b() }));
+    o.attach = a.length === 16 + 3 * n ? r.b() : null;
     return o;
   },
   [CMD.ARP_SET](a) { return parse[CMD.ARP_GET](a); },
@@ -893,7 +895,8 @@ const req = {
   /* SHAYPE (INFO 41 01): a track's ARP pattern and settings; s as arpState (oct -3..+3, sent + 3) */
   arpGet: (tr) => [CMD.ARP_GET, [tr & 0x7F]],
   arpSet: (tr, s) => [CMD.ARP_SET, [tr & 0x7F, +s.on, s.steps, s.rate, s.dir, s.bound, s.gate, +s.hold, s.swing, s.root,
-    s.oct + 3, s.notes.length, ...s.notes.flatMap((n) => [n.step, n.row, n.length])]],
+    s.oct + 3, s.notes.length, ...s.notes.flatMap((n) => [n.step, n.row, n.length]),
+    ...(s.attach == null ? [] : [s.attach])]],     /* (ATTACH only to firmware that answered with it: midi27) */
 };
 
 /* which reply belongs to which request (the device echoes these) */
@@ -1693,10 +1696,12 @@ const ARP = {
      the track holds it (FACE: the picker's order) */
   DIRS: ["UP", "DOWN", "PEND", "RAND", "WYNDO", "SHYFT"], DIR_FACE: [0, 1, 2, 4, 5], DIR_RAND: 3, BOUNDS: ["WRAP", "OCT"], ROOTS: ["OFF", ...NOTE_NAMES],
   PATS: ["USER", "SHAYPE", "UP 4", "UPDOWN", "STABS", "OCT RUN", "PEDAL", "DRONE"],
+  /* KEY ATTACH (ARP 3 ATTACH, midi27): when a chord you press or lift reaches the arp; NOTE by default on the FM-1 */
+  ATTACH: ["NOW", "NOTE", "CYCLE"], ATTACH_FRESH: 1,
   /* the ARP parameters (DESC 17..24) and the field each one is */
   PARAM: { 17: "on", 18: "rate", 19: "dir", 20: "gate", 21: "swing", 22: "steps", 23: "hold", 24: "bound" },
-  /* a fresh track: ARP OFF, 4 steps of 1/8, WYNDO (the default since midi26), WRAP, gate 75, HOLD OFF, ROOT OFF, OCT 0, PAT SHAYPE (the toy's pattern) */
-  fresh: () => ({ on: false, steps: 4, rate: 3, dir: 4, bound: 0, gate: 75, hold: false, swing: 0, root: 0, oct: 0, pat: 1,
+  /* a fresh track: ARP OFF, 4 steps of 1/8, WYNDO (the default since midi26), WRAP, gate 75, HOLD OFF, ROOT OFF, OCT 0, PAT SHAYPE (the toy's pattern), ATTACH NOTE */
+  fresh: () => ({ on: false, steps: 4, rate: 3, dir: 4, bound: 0, gate: 75, hold: false, swing: 0, root: 0, oct: 0, pat: 1, attach: 1,
     notes: ARPC.DEFAULT_PATTERN.map((n) => ({ ...n })) }),
 };
 /* the ARP_SET rc a state would get (0 ok): 2 too many notes, 3 a setting out of range, 4 a note outside the grid,
@@ -1705,7 +1710,8 @@ function arpCheck(s, max = ARP.MAX) {
   const inr = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
   if (s.notes.length > max) return 2;
   if (!(inr(+s.on, 0, 1) && inr(s.steps, 1, ARP.STEPS) && inr(s.rate, 0, 7) && inr(s.dir, 0, 5) && inr(s.bound, 0, 1) && inr(s.gate, 10, 100)
-    && inr(+s.hold, 0, 1) && inr(s.swing, 0, 100) && inr(s.root, 0, 12) && inr(s.oct, -3, 3))) return 3;
+    && inr(+s.hold, 0, 1) && inr(s.swing, 0, 100) && inr(s.root, 0, 12) && inr(s.oct, -3, 3)
+    && (s.attach == null || inr(s.attach, 0, 2)))) return 3;
   if (s.notes.some((n) => !(inr(n.step, 0, s.steps - 1) && inr(n.row, 0, ARP.ROWS - 1) && inr(n.length, 1, s.steps - n.step)))) return 4;
   if (s.notes.some((n, i) => s.notes.some((m, k) => k > i && m.row === n.row && m.step < n.step + n.length && n.step < m.step + m.length))) return 5;
   return 0;
@@ -2519,7 +2525,7 @@ function makeMockDevice(opt = {}) {
   const newTrack = () => ({ engine: 0, preset: 0, fm6: FM6.INIT_PK.slice(),
     p: TP.map((d) => d.def).concat(new Array(8).fill(0)),
     motion: {on: true, events: []},
-    arp: (({ pat, root, oct, notes }) => ({ pat, root, oct, notes }))(ARP.fresh()),   /* SHAYPE's extras (the settings: p[17..24]) */
+    arp: (({ pat, root, oct, attach, notes }) => ({ pat, root, oct, attach, notes }))(ARP.fresh()),   /* SHAYPE's extras (the settings: p[17..24]) */
     step: Array.from({ length: NSTEP }, () => ({ chance: 100, ratchet: 1, n: 0, notes: [0, 0, 0, 0], time: 2, flags: 0, vel: 0, hit: 0, acc: 0 })) });
   const st = {
     tracks: [0, 1, 2, 3].map(newTrack), sel: 0, rec: 0,
@@ -2793,24 +2799,27 @@ function makeMockDevice(opt = {}) {
         const tr = st.tracks[a[0]];
         if (!tr) { b(a[0]); b(1); break; }
         let rc = 0;
+        const att = opt.attach !== false;              /* (false: firmware before midi27, no ATTACH byte) */
         if (cmd === CMD.ARP_SET) {
-          const n = a[11];
-          if (a.length < 12 || a.length !== 12 + 3 * n) rc = 1;
+          const n = a[11], withAtt = att && a.length === 13 + 3 * n;
+          if (a.length < 12 || (a.length !== 12 + 3 * n && !withAtt)) rc = 1;
           else if (n > ARP.MAX) rc = 2;
           else {
             const x = { on: a[1], steps: a[2], rate: a[3], dir: a[4], bound: a[5], gate: a[6], hold: a[7], swing: a[8], root: a[9], oct: a[10] - 3,
+              attach: withAtt ? a[a.length - 1] : null,
               notes: Array.from({ length: n }, (_, k) => ({ step: a[12 + 3 * k], row: a[13 + 3 * k], length: a[14 + 3 * k] })) };
             rc = arpCheck(x);
             if (!rc) {
               Object.entries(ARP.PARAM).forEach(([id, f]) => { tr.p[id] = +x[f]; });
               if (JSON.stringify(x.notes) !== JSON.stringify(tr.arp.notes.map(({ step, row, length }) => ({ step, row, length })))) tr.arp.pat = 0;
-              Object.assign(tr.arp, { root: x.root, oct: x.oct, notes: x.notes });
+              Object.assign(tr.arp, { root: x.root, oct: x.oct, notes: x.notes }, withAtt ? { attach: x.attach } : {});
             }
           }
         }
         const p = tr.p, x = tr.arp;
         [a[0], rc, p[17], p[22], p[18], p[19], p[24], p[20], p[23], p[21], x.root, x.oct + 3, x.pat, ARP.MAX, x.notes.length].forEach(b);
         x.notes.forEach((n) => { b(n.step); b(n.row); b(n.length); });
+        if (att) b(x.attach ?? ARP.ATTACH_FRESH);
         break;
       }
       case CMD.DIAG: {
@@ -3364,7 +3373,8 @@ const TEXT = {
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
     tabShaype: "SHAYPE", arpLive: "編集しながら送る", arpWrite: "SHAYPE を書き込む", arpRead: "トラックから読む", arpClear: "消去",
-    arpHelp: "ARP が弾くパターンを描きます。行は押さえた和音の音で、いちばん下が最低音。空いたマスをドラッグするとノートを置いて長さを決めます。ノートはドラッグで移動、最後のマスの右半分からドラッグで伸ばし、クリックで消去。右クリック・右ドラッグでも消せます。×2 ÷2 でステップを分割・結合、◀ ▶ でパターンをずらします。DIR は1周ごとの動き(初期値は WYNDO): UP・DOWN・PEND、WYNDO はパターンを押さえた音の上へ1音ずつずらし、SHYFT は和音はそのままで、和音と同じ高さの窓がパターンを1行ずつ上がります(窓の外の行は休み)。",
+    arpHelp: "ARP が弾くパターンを描きます。行は押さえた和音の音で、いちばん下が最低音。空いたマスをドラッグするとノートを置いて長さを決めます。ノートはドラッグで移動、最後のマスの右半分からドラッグで伸ばし、クリックで消去。右クリック・右ドラッグでも消せます。×2 ÷2 でステップを分割・結合、◀ ▶ でパターンをずらします。DIR は1周ごとの動き(初期値は WYNDO): UP・DOWN、PEND は一番上まで上がって戻り、和音を越えた行はオクターブ上へ。WYNDO はパターンを押さえた音の上へ1音ずつずらし、SHYFT は和音はそのままで、和音と同じ高さの窓がパターンを1行ずつ上がります(窓の外の行は休み)。ATTACH は押さえた和音の変化がいつ ARP に届くか: NOW はすぐ(今のステップを新しい和音で弾き直し)、NOTE(初期値)は次のステップで、鳴っている音は最後まで、CYCLE はパターンの次の周回の頭で。NOTE と CYCLE では鍵盤を全部離しても最後の音は鳴り切ります(CYCLE はその周回を弾き終えてから)。",
+    arpAttach: "和音の変化が ARP に届くとき: NOW すぐ、NOTE 次のステップ、CYCLE 次の周回",
     arpNoFw: "このファームウェアには SHAYPE がありません。FM-1 のファームウェアを更新してください。",
     arpSending: "送信中…", arpSentOk: "送信済み", arpUnsent: "未送信", arpFromDevice: "FM-1 から読み込みました", arpNoAnswer: "応答がありません",
     arpRc1: "受け付けられませんでした: トラックかデータが不正です", arpRc2: "受け付けられませんでした: ノートが多すぎます",
@@ -3479,7 +3489,8 @@ const TEXT = {
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
     tabShaype: "SHAYPE", arpLive: "Send while editing", arpWrite: "Write SHAYPE", arpRead: "Read from track", arpClear: "Clear",
-    arpHelp: "Draw the pattern the ARP plays. Rows are the notes of the chord you hold, lowest at the bottom. Drag on an empty cell to place a note and set its length. Drag a note to move it; drag from the right half of its last cell to stretch it; click it to remove it. Right-click or right-drag erases. ×2 and ÷2 split or join steps; ◀ ▶ shift the pattern. DIR is how each pass moves (WYNDO unless you change it): UP, DOWN, PEND; WYNDO slides the pattern up the notes you hold, a note a pass; SHYFT keeps the chord and plays a chord-high window of the pattern that climbs a row a pass (rows outside it rest).",
+    arpHelp: "Draw the pattern the ARP plays. Rows are the notes of the chord you hold, lowest at the bottom. Drag on an empty cell to place a note and set its length. Drag a note to move it; drag from the right half of its last cell to stretch it; click it to remove it. Right-click or right-drag erases. ×2 and ÷2 split or join steps; ◀ ▶ shift the pattern. DIR is how each pass moves (WYNDO unless you change it): UP, DOWN; PEND climbs to the top and back, rows past the chord going up octaves; WYNDO slides the pattern up the notes you hold, a note a pass; SHYFT keeps the chord and plays a chord-high window of the pattern that climbs a row a pass (rows outside it rest). ATTACH is when a chord you change reaches the arp: NOW at once (the step plays again with the new chord), NOTE (the default) at the next step, the note sounding plays out, CYCLE at the top of the pattern's next pass. In NOTE and CYCLE, letting go of every key lets the last notes ring (CYCLE finishes the pass first).",
+    arpAttach: "When a chord you change reaches the arp: NOW at once, NOTE at the next step, CYCLE at the next pass",
     arpNoFw: "This firmware has no SHAYPE. Update your FM-1 firmware to draw ARP patterns.",
     arpSending: "SENDING…", arpSentOk: "SENT", arpUnsent: "NOT SENT", arpFromDevice: "READ FROM THE FM-1", arpNoAnswer: "NO ANSWER",
     arpRc1: "REFUSED: wrong track or message", arpRc2: "REFUSED: too many notes", arpRc3: "REFUSED: a setting is out of range",
@@ -5891,7 +5902,7 @@ async function arpRead(d = dev, track = arpTrack, quiet = false) {
   arpTrack = track;
   arpPat = r.pat;
   arpS = { on: r.on, steps: r.steps, rate: r.rate, dir: r.dir, bound: r.bound, gate: r.gate, hold: r.hold, swing: r.swing,
-    root: r.root, oct: r.oct, notes: arpFit(r.notes, r.steps) };
+    root: r.root, oct: r.oct, attach: r.attach, notes: arpFit(r.notes, r.steps) };
   renderArp();
   if (!quiet) arpSay("arpFromDevice");
 }
@@ -5928,11 +5939,12 @@ function arpBuild() {
     rate: sel("rate", ARP.RATES), dir: seg("dir", ARP.DIRS, [...ARP.DIR_FACE.slice(0, 3), ARP.DIR_RAND, ...ARP.DIR_FACE.slice(3)]), bound: seg("bound", ARP.BOUNDS),
     gate: range("gate", 10, 100), gateV: el("span"), hold: el("button", { type: "button", class: "tog", onclick: () => arpS && set("hold", !arpS.hold) }, "HOLD"),
     swing: range("swing", 0, 100), swingV: el("span"), root: sel("root", ARP.ROOTS),
-    oct: sel("oct", ["-3", "-2", "-1", "0", "+1", "+2", "+3"], -3),
+    oct: sel("oct", ["-3", "-2", "-1", "0", "+1", "+2", "+3"], -3), attach: seg("attach", ARP.ATTACH),
   });
+  arpCtl.attachBox = box("ATTACH", arpCtl.attach);
   $("arpctl").replaceChildren(box("STEPS", arpCtl.steps), box("RATE", arpCtl.rate), box("DIR", arpCtl.dir), box("BOUND", arpCtl.bound),
     box("GATE", arpCtl.gate, arpCtl.gateV), box("SWING", arpCtl.swing, arpCtl.swingV), box("ROOT", arpCtl.root), box("OCT", arpCtl.oct),
-    box("HOLD", arpCtl.hold));
+    box("HOLD", arpCtl.hold), arpCtl.attachBox);
 }
 arpBuild();
 function renderArpCount() {
@@ -5955,7 +5967,9 @@ function renderArp() {
   for (const f of ["rate", "root", "oct", "gate", "swing"]) arpCtl[f].value = arpS[f];
   arpCtl.gateV.textContent = arpS.gate + " %";
   arpCtl.swingV.textContent = String(arpS.swing);
-  for (const f of ["dir", "bound"]) for (const b of arpCtl[f].children) b.setAttribute("aria-pressed", +b.dataset.v === arpS[f] ? "true" : "false");
+  for (const f of ["dir", "bound", "attach"]) for (const b of arpCtl[f].children) b.setAttribute("aria-pressed", +b.dataset.v === arpS[f] ? "true" : "false");
+  arpCtl.attachBox.hidden = arpS.attach == null;   /* (firmware before midi27: no KEY ATTACH) */
+  arpCtl.attachBox.title = t("arpAttach");
   for (const b of arpCtl.dir.children) b.hidden = +b.dataset.v === ARP.DIR_RAND && arpS.dir !== ARP.DIR_RAND;   /* RAND: only as held */
   $("arpfiner").disabled = !arpZoom(arpS, 2);
   $("arpcoarser").disabled = !arpZoom(arpS, 0.5);

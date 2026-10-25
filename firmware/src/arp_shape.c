@@ -7,8 +7,9 @@
  * A pattern is notes {step, row, length} on STEPS steps (1..64) by ARP_ROWS rows. A row is a place in the held chord
  * (ash_voicing: low to high, each pitch once, a ROOT moving the notes under it up octaves). Every pass (one cycle of
  * STEPS) moves the rows by an offset (ash_pass_offset: UP, DOWN, PEND, RAND; ash_window: WYNDO, SHYFT); a place past
- * the chord wraps round the held pitches (WRAP) or moves by octaves (OCT) (ash_resolve). The notes starting on a step sound together, one pitch
- * once (the longest of its lengths), for length x the step x GATE (ash_events). */
+ * the chord wraps round the held pitches (WRAP) or moves by octaves (OCT) (ash_resolve; PEND always by octaves). The
+ * notes starting on a step sound together, one pitch once (the longest of its lengths), for length x the step x GATE
+ * (ash_events). */
 #ifndef ARP_SHAPE_C
 #define ARP_SHAPE_C                      /* (project.c includes it on the Mac without seq.c) */
 #include <stdint.h>
@@ -28,7 +29,8 @@ typedef struct {
 } arp_pat_t;
 
 /* P_AOCT: DIR (sequence.mjs passOffset's directions, then SHAYPE's WYNDO and SHYFT: WaveLoop windows/shaype/shaype_core.c
- * SH_WINDOW / SH_SHYFT at c4e321fd, ahead of the toy's sequence.mjs; held to it by tests/arp_window_vectors.h). RAND is
+ * SH_WINDOW / SH_SHYFT, ahead of the toy's sequence.mjs; PEND in octaves from a205e3a6; held to that core at 4cbf5392 by
+ * tests/arp_window_vectors.h). RAND is
  * off the face (params.c enum_step steps over it); a stored RAND still plays and shows as RAND */
 enum { AD_UP, AD_DOWN, AD_PEND, AD_RAND, AD_WYNDO, AD_SHYFT, AD_N };
 enum { AB_WRAP, AB_OCT };                    /* P_AORDER: BOUND */
@@ -179,16 +181,25 @@ static uint32_t ash_events(const arp_pat_t *p, uint32_t step, const uint8_t *hel
 }
 
 /* one step of the hosts' loop (main.js schedule; seq.c arp_fire): step tick % steps of pass tick / steps over the held
- * chord (ash_voicing), the pass's offset worked out on its first step; the notes it starts (ash_events). WYNDO and
- * SHYFT work theirs out on every step (no draw: SHAYPE's table, rebuilt with the chord, read at its pass and step) */
+ * chord (ash_voicing); the notes it starts (ash_events). The pass's offset is worked out on every step from the chord
+ * it is given (SHAYPE's table, rebuilt with the chord, read at its pass and step: shaype_engine.c), RAND's drawn on the
+ * pass's first step only. Which chord a step is given (the keys as they are now, or the one its pass began with) is
+ * the host's: KEY ATTACH (seq.c arp_fire). PEND climbs to the top and back in octaves whatever BOUND says, never
+ * wrapping (WaveLoop a205e3a6: shaype_core.c sh_build_table) */
+#ifndef ASH_PASS_ONCE
+#define ASH_PASS_ONCE 0                  /* (tests/arp_seq_test.c sets it to hold the host's timing to the toy's shapeChords,
+                                          * whose UP DOWN PEND keep the offset their pass began with) */
+#endif
 static uint32_t ash_tick(const arp_pat_t *p, uint32_t steps, uint32_t tick, const uint8_t *held, uint32_t n, uint32_t dir,
                          uint32_t bound, uint32_t (*rnd)(void), int32_t *offset, uint8_t *pitch, uint8_t *len)
 {
     uint32_t s = tick % steps;
     if (dir == AD_WYNDO || dir == AD_SHYFT)
         *offset = ash_window(p, steps, tick / steps, n, dir);
-    else if (!s)
+    else if (!s || (dir != AD_RAND && !ASH_PASS_ONCE))
         *offset = ash_pass_offset(tick / steps, n, dir, rnd);
+    if (dir == AD_PEND)
+        bound = AB_OCT;
     return ash_events(p, s, held, n, *offset, bound, dir == AD_SHYFT, pitch, len);
 }
 

@@ -6149,6 +6149,26 @@ static int test_arp_page(void)
     turn(EN_K1, 2);                                  /* OCT RUN: BOUND OCT too */
     ok &= arp_x[0][ARPX_PAT] == 5 && TSEL->p[P_AORDER] == AB_OCT && TSEL->p[P_APROB] == 8;
     bad += check("  ARP 3 PAT: each factory pattern as it is turned to, its STEPS and BOUND (UPDOWN 6, OCT RUN 8 OCT)", ok);
+    {   /* ARP 3 KNOB 4: ATTACH (KEY ATTACH) NOW NOTE CYCLE, NOTE on a fresh track; a project keeps it */
+        char val[8];
+        const char *unit;
+        ok = arp_x[0][ARPX_ATT] == AT_NOTE && arp_x[1][ARPX_ATT] == AT_NOTE;
+        turn(EN_K4, -1);
+        ok &= arp_x[0][ARPX_ATT] == AT_NOW;
+        turn(EN_K4, -1);
+        ok &= arp_x[0][ARPX_ATT] == AT_NOW;
+        turn(EN_K4, 2);
+        ok &= arp_x[0][ARPX_ATT] == AT_CYCLE;
+        param_format(&ARPX_DESC[ARPX_ATT], AT_CYCLE, val, &unit);
+        ok &= str_eq(val, "CYCLE") && str_eq(ARPX_DESC[ARPX_ATT].label, "ATTACH");
+        frame();
+        ok &= !project_save(0);
+        arp_x[0][ARPX_ATT] = AT_NOW;
+        project_load(0);
+        ok &= arp_x[0][ARPX_ATT] == AT_CYCLE;
+        arp_x[0][ARPX_ATT] = AT_NOTE;
+        bad += check("  ARP 3 KNOB 4 ATTACH: NOW NOTE CYCLE (NOTE fresh), a project keeps it", ok);
+    }
     go_page(GR_ARP); frame();
     {   /* DIR (KNOB 4): UP DOWN PEND WYNDO SHYFT; RAND is off the face: a stored RAND shows and stays until turned */
         static const int16_t UPW[5] = {AD_DOWN, AD_PEND, AD_WYNDO, AD_SHYFT, AD_SHYFT};

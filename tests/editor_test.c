@@ -366,7 +366,7 @@ static int arp_protocol(void)
 {
     static const uint8_t FRESH[] = {0xF0, 0x7D, 0x46, 0x4C, 0x4C, 0x00, 0x00, 0x00, 0x04, 0x03, 0x04, 0x00, 0x4B, 0x00,
         0x00, 0x00, 0x03, 0x01, 0x1E, 0x08, 0x00, 0x00, 0x01, 0x00, 0x02, 0x01, 0x01, 0x01, 0x01, 0x01, 0x03, 0x01, 0x02,
-        0x02, 0x01, 0x02, 0x03, 0x01, 0x03, 0x00, 0x01, 0x03, 0x03, 0x01, 0xF7};
+        0x02, 0x01, 0x02, 0x03, 0x01, 0x03, 0x00, 0x01, 0x03, 0x03, 0x01, 0x01, 0xF7};   /* (.. 01: ATTACH NOTE) */
     static const uint8_t S[10] = {1, 8, 5, 2, 1, 50, 1, 20, 8, 4};   /* ON, 8 steps, 1/16, PEND, OCT, 50 %, HOLD, 20, G, +1 */
     static const uint8_t N3[3][3] = {{0, 0, 2}, {2, 7, 1}, {4, 3, 4}};
     uint8_t a[2] = {0, 0};
@@ -382,11 +382,12 @@ static int arp_protocol(void)
                  n == sizeof FRESH && !memcmp(host_wire, FRESH, sizeof FRESH));
     ui.force = 0;
     n = arp_set(2, S, N3, 3, 0);
-    ok = n == 5u + 15u + 9u + 1u && host_wire[5] == 2 && !host_wire[6] && trk[2].p[P_AMODE] == 1 && trk[2].p[P_APROB] == 8 &&
+    ok = n == 5u + 15u + 9u + 1u + 1u && host_wire[5] == 2 && !host_wire[6] && trk[2].p[P_AMODE] == 1 && trk[2].p[P_APROB] == 8 &&
          trk[2].p[P_ARATE] == 5 && trk[2].p[P_AOCT] == AD_PEND && trk[2].p[P_AORDER] == AB_OCT && trk[2].p[P_AGATE] == 50 &&
          trk[2].p[P_AHOLD] == 1 && trk[2].p[P_ASWING] == 20 && arp_x[2][ARPX_ROOT] == 8 && arp_x[2][ARPX_OCT] == 1 &&
          arp_x[2][ARPX_PAT] == 0 && arp_pat[2].n == 3u && arp_pat[2].note[0] == ARP_NOTE(0, 0, 2) &&
-         arp_pat[2].note[1] == ARP_NOTE(2, 7, 1) && arp_pat[2].note[2] == ARP_NOTE(4, 3, 4) && ui.force;
+         arp_pat[2].note[1] == ARP_NOTE(2, 7, 1) && arp_pat[2].note[2] == ARP_NOTE(4, 3, 4) && ui.force &&
+         arp_x[2][ARPX_ATT] == AT_NOTE && host_wire[29] == AT_NOTE;   /* (no ATTACH byte: it stays; GET ends with it) */
     ok &= host_wire[19] == 3u && host_wire[20] == 0 && host_wire[21] == 0 && host_wire[22] == 2 && host_wire[28] == 4;
     bad += check("ARP_SET: settings, ROOT, OCT, the notes in their order; PAT USER; the reply as GET; the page redraws", ok);
     keep = arp_pat[2];
@@ -429,7 +430,7 @@ static int arp_protocol(void)
         ok &= arp_set(2, S, OVER, 2, 0) && host_wire[6] == 5;
         ok &= arp_set(2, S, (const uint8_t (*)[3])MANY, 31, 0) && host_wire[6] == 2;
         ok &= arp_set(2, S, N3, 3, 12u + 3u * 3u - 1u) && host_wire[6] == 1;   /* (a byte short) */
-        ok &= arp_set(2, S, N3, 3, 12u + 3u * 3u + 1u) && host_wire[6] == 1;   /* (a byte over) */
+        ok &= arp_set(2, S, N3, 3, 12u + 3u * 3u + 2u) && host_wire[6] == 1;   /* (two bytes over: one is ATTACH) */
         ok &= !memcmp(&arp_pat[2], &keep, sizeof keep);
         a[0] = 4;
         n = request(76, a, 1);
@@ -446,8 +447,30 @@ static int arp_protocol(void)
         ok &= arp_set(1, S, (const uint8_t (*)[3])FULL, 0, 0) && !host_wire[6] && arp_pat[1].n == 0u;
         a[0] = 1;
         n = request(76, a, 1);
-        ok &= n == 5u + 15u + 1u && host_wire[19] == 0;
-        bad += check("ARP_SET: 30 notes (the most) and none both land; GET of none is 15 bytes", ok);
+        ok &= n == 5u + 16u + 1u && host_wire[19] == 0 && host_wire[20] == AT_NOTE;
+        bad += check("ARP_SET: 30 notes (the most) and none both land; GET of none is 16 bytes (ATTACH last)", ok);
+    }
+    {   /* KEY ATTACH (midi27): a trailing byte after the notes, 0 NOW 1 NOTE 2 CYCLE; 3 is rc 3, nothing changes; a SET
+         * without it (a host before midi27) leaves it */
+        static uint8_t b[12 + 9 + 1];
+        uint32_t v;
+        memcpy(b + 1, S, 10);
+        b[0] = 2;
+        b[11] = 3;
+        memcpy(b + 12, N3, 9);
+        ok = 1;
+        for (v = 0; v < 3u; v++) {
+            b[21] = (uint8_t)v;
+            n = request(77, b, sizeof b);
+            ok &= n == 5u + 15u + 9u + 1u + 1u && !host_wire[6] && arp_x[2][ARPX_ATT] == (int16_t)v && host_wire[29] == v;
+        }
+        b[21] = 3;
+        n = request(77, b, sizeof b);
+        ok &= host_wire[6] == 3 && arp_x[2][ARPX_ATT] == AT_CYCLE;
+        n = arp_set(2, S, N3, 3, 0);
+        ok &= !host_wire[6] && arp_x[2][ARPX_ATT] == AT_CYCLE && host_wire[29] == AT_CYCLE;
+        arp_x[2][ARPX_ATT] = AT_NOTE;
+        bad += check("ARP_SET: ATTACH NOW / NOTE / CYCLE as a trailing byte, 3 refused (rc 3), absent kept; GET says it", ok);
     }
     song.sel = 0;                                    /* the selected track: the WATCH shadow takes the editor's write */
     ed_shadow();

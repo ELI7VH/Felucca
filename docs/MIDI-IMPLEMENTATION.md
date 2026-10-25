@@ -348,6 +348,32 @@ No DSP, controller preset assignments or storage formats change.
 Validation: firmware build, MIDI integration, editor web checks and target instruction budgets pass. MIDI checks cover all five shapes, channel routing, WAVE popups, normal-knob restoration, project persistence and motion recording. All 369 sound regression renders remain unchanged. Image size is 450684 bytes; main RAM remains 94384 / 98304 bytes and the audio/display pool 330208 / 344064 bytes. These are host/build results; installation on the physical FM-1 is pending.
 
 
+### midi27 SHAYPE: PEND in octaves, KEY ATTACH
+
+Level with WaveLoop's Windows SHAYPE at 4cbf5392 (`windows/shaype`: a205e3a6, a51d7d30, 4cbf5392, b6540f5a).
+
+- **PEND** climbs to the top and back in octaves whatever BOUND says, never wrapping (`shaype_core.c`
+  sh_build_table forces SH_OCTAVE). The toy's PEND WRAP vectors (17 of `tests/arp_vectors.h`, one shapeChords
+  case) are retired from the JS gate; each is checked to play exactly as PEND OCT.
+- **KEY ATTACH** (ARP 3 KNOB 4, `ATTACH`): when a change of the chord reaches the arp, for the keys, MIDI notes and
+  the sequencer's chords alike. **NOW**: at once; a change in the first half of a step (at most 120 ms in, `LATE_S`) plays that step again with
+  the new chord (what sounds cut first); the chord let go, the notes end. **NOTE** (the default): at the next step;
+  the notes sounding play to their end, the chord let go too. **CYCLE**: at the top of the pattern's next pass; the
+  pass keeps the chord it began with, every key let go too, then the last notes ring. A chord from nothing starts
+  the arp at once in every mode; STOP and ARP off end the notes. NOTE is the FM-1's default (Elijah); the Windows
+  SHAYPE starts on NOW.
+- **The pass's offset** (UP DOWN PEND, WYNDO SHYFT) is worked out on every step from the chord the step is given,
+  as SHAYPE's table is rebuilt with the chord; KEY ATTACH decides which chord that is (CYCLE: the pass's). midi26
+  kept UP DOWN PEND's offset for the pass and worked WYNDO SHYFT's out every step.
+- **Storage.** ATTACH is per track, in FUN9's SHAYPE block, byte 3's high bits (OCT + 3 in the low ones): 0 NOTE, 1
+  NOW, 2 CYCLE. Every block saved before midi27 reads as NOTE; new tracks, INIT and FUN8 / FUN7 migrations get
+  NOTE. Firmware before midi27 reads a block with NOW or CYCLE as damaged (SHAYPE's pattern on that track).
+- **Editor.** ARP_GET ends with an `attach` byte; ARP_SET takes it as an optional trailing byte (12 + 3n bytes
+  without it keep ATTACH). The SHAYPE tab's ATTACH picker shows only for firmware that sends it.
+- Parity: `tools/arp_windows_vectors.c` regenerated from WaveLoop 4cbf5392: 790 cases, 12894 notes a cycle, all
+  match through `ash_tick`. The shapeChords parity (`tests/arp_seq_test.c`) runs under NOW with the toy's
+  pass rule (`ASH_PASS_ONCE`, a test hook); every mode's change, release and soak is checked on the host.
+
 ### midi26 SHAYPE: WYNDO and SHYFT
 
 DIR gains SHAYPE's two window directions (WaveLoop `windows/shaype/shaype_core.c` SH_WINDOW / SH_SHYFT at

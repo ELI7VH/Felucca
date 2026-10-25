@@ -766,8 +766,9 @@ The ARP is SHAYPE, WaveLoop's Shape Arp (`firmware/src/arp_shape.c`, a port of t
 settings keep the ARP ids, with new meanings (DESC names them): 17 `ARP` OFF / ON (was MODE), 18 `RATE` 1/2 1/4
 1/4T 1/8 1/8T 1/16 1/16T 1/32 (default 1/8), 19 `DIR` UP DOWN PEND RAND WYNDO SHYFT (was OCT; 4 and 5 from midi26, default WYNDO;
 RAND is off the device's knob, still valid and shown when set), 20 `GATE` 10..100 % (default 75),
-21 `SWG` as before, 22 `STEPS` 1..64 (default 4; was PROB), 23 `HOLD` as before, 24 `BOUND` WRAP / OCT (was ORD). The
-pattern and three extras (PAT, ROOT, OCT) are not parameters: these two commands carry them. INFO advertises
+21 `SWG` as before, 22 `STEPS` 1..64 (default 4; was PROB), 23 `HOLD` as before, 24 `BOUND` WRAP / OCT (was ORD; DIR
+PEND climbs in octaves whatever it says, from midi27). The pattern and its extras (PAT, ROOT, OCT, and ATTACH from
+midi27) are not parameters: these two commands carry them. INFO advertises
 `41 01 30` at its end: commands 76 and 77, at most 30 notes a pattern. Firmware without the tag answers neither.
 
 A pattern is up to 30 notes `{step 0..63, row 0..7, length 1..64}` on STEPS steps by 8 rows (a row is a place in
@@ -775,15 +776,23 @@ the held chord, low to high), in the order they were written (the toy's array or
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |
-| 76 ARP_GET | track 0..3 | track, rc, on, steps, rate, dir, bound, gate, hold, swing, root, oct + 3, pat, max (30), n, then n × (step, row, length) |
-| 77 ARP_SET | track, on, steps, rate, dir, bound, gate, hold, swing, root, oct + 3, n, then n × (step, row, length) | as ARP_GET, after the write (rc 0) or as it was (rc ≠ 0) |
+| 76 ARP_GET | track 0..3 | track, rc, on, steps, rate, dir, bound, gate, hold, swing, root, oct + 3, pat, max (30), n, then n × (step, row, length), then attach (midi27) |
+| 77 ARP_SET | track, on, steps, rate, dir, bound, gate, hold, swing, root, oct + 3, n, then n × (step, row, length), then attach (optional, midi27) | as ARP_GET, after the write (rc 0) or as it was (rc ≠ 0) |
 
 - `root`: 0 OFF, 1..12 C..B (the lowest held note of that name is the root, the notes under it go up octaves).
   `oct + 3`: 0..6 = −3..+3 octaves on everything the arp plays. `pat`: 0 USER, 1..7 the factory pattern last loaded
   on the device (SHAYPE, UP 4, UPDOWN, STABS, OCT RUN, PEDAL, DRONE); a SET with other notes makes it USER.
-- rc: 0 ok; 1 a track past 3 or the wrong length (12 + 3n bytes); 2 n past 30; 3 a setting out of its range
+- `attach` (KEY ATTACH, ARP 3 ATTACH; midi27): when a chord you change reaches the arp, for the keys, MIDI notes and
+  the sequencer's chords alike. 0 NOW: at once (a change in the first half of a step, at most 120 ms in, plays that step again with the
+  new chord, what sounds cut first; the chord let go, the notes end). 1 NOTE (the default on the FM-1): at the next
+  step; the notes sounding play to their end, the chord let go too. 2 CYCLE: at the top of the pattern's next pass;
+  the pass playing keeps its chord, every key let go too, then the last notes ring. STOP and ARP off end the notes in
+  every mode. A trailing byte: ARP_GET ends with it (16 + 3n reply args; firmware before midi27 sends 15 + 3n, no
+  ATTACH); ARP_SET takes 12 + 3n bytes (ATTACH as it was: a host before midi27) or 13 + 3n (ATTACH set). Send it only
+  to firmware whose ARP_GET carried it: before midi27, 13 + 3n is the wrong length (rc 1).
+- rc: 0 ok; 1 a track past 3 or the wrong length (12 + 3n or 13 + 3n bytes); 2 n past 30; 3 a setting out of its range
   (on 0..1, steps 1..64, rate 0..7, dir 0..5 (midi25: 0..3), bound 0..1, gate 10..100, hold 0..1, swing 0..100, root 0..12,
-  oct 0..6); 4 a note outside the grid (step ≥ steps, row > 7, length 0, step + length > steps); 5 two notes of a
+  oct 0..6, attach 0..2); 4 a note outside the grid (step ≥ steps, row > 7, length 0, step + length > steps); 5 two notes of a
   row overlap. A refused SET changes nothing. A bad track answers `track & 0x7F, 1` only.
 - A SET writes with the audio ISR held off for a moment (the arp reads the pattern), lands like a device edit:
   the ARP page redraws, the autosave saves it, the WATCH shadow follows the parameters it moved (no CHANGED push
@@ -791,14 +800,16 @@ the held chord, low to high), in the order they were written (the toy's array or
 - Stored per track in the project (FUN9, below) and in every setlist song.
 
 Example: `F0 7D 46 4C 4C 00 F7` (ARP_GET track 1) on a fresh track answers
-`F0 7D 46 4C 4C 00 00 00 04 03 04 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7`:
+`F0 7D 46 4C 4C 00 00 00 04 03 04 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 01 F7`:
 track 0, rc 0, ARP OFF, 4 steps, 1/8, WYNDO (the default from midi26; midi25 answered UP, `00`), WRAP, gate 75, HOLD OFF, swing 0, ROOT OFF, OCT 0, PAT SHAYPE, max 30,
-8 notes (the toy's DEFAULT_PATTERN).
+8 notes (the toy's DEFAULT_PATTERN), ATTACH NOTE (`01`, from midi27; midi26 and older end after the notes).
 
 **Projects (FUN9).** `46 55 4E 39` ("FUN9"), 3840 bytes (the storage object's whole payload): FUN8's bytes 0..3567
 as they were (the parameters, steps, chain, motion, the FM6 patches at 3056..3567), then the four tracks' SHAYPE
-blocks at 3568..3823 (64 bytes each: n 0..30, pat, root, oct + 3, then 30 notes, two bytes each, little endian:
-step | row << 6 | (length − 1) << 9), the name at 3824..3835, the hash last. FUN8 (3584) and FUN7 (3388) load: each
+blocks at 3568..3823 (64 bytes each: n 0..30, pat, root, oct + 3 | attach code << 4, then 30 notes, two bytes
+each, little endian: step | row << 6 | (length − 1) << 9; the attach code, midi27: 0 NOTE, 1 NOW, 2 CYCLE, so every
+block saved before midi27 reads as NOTE; firmware before midi27 reads a block with NOW or CYCLE as damaged and
+loads SHAYPE's pattern on that track), the name at 3824..3835, the hash last. FUN8 (3584) and FUN7 (3388) load: each
 track gets SHAYPE's pattern and its old ARP settings mapped (ON stays on; the rate, gate, HOLD and SWING kept; DIR
-WYNDO from midi26, UP before; STEPS 4, BOUND WRAP, ROOT OFF, OCT 0). Backups, `PROJECT` and setlist songs carry 3840 bytes; a backup of
+WYNDO from midi26, UP before; STEPS 4, BOUND WRAP, ROOT OFF, OCT 0, ATTACH NOTE). Backups, `PROJECT` and setlist songs carry 3840 bytes; a backup of
 FUN8 projects or songs (3584) still restores. Firmware before midi25 does not read FUN9.

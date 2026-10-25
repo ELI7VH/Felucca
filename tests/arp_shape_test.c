@@ -157,16 +157,43 @@ static int same(const uint8_t *a, uint32_t n, const uint8_t *b, uint32_t m) { re
 
 int main(void)
 {
-    uint32_t k, bad = 0, events = 0;
+    uint32_t k, bad = 0, events = 0, pw = 0, pw_same = 0, pw_bad = 0;
     char line[96];
     for (k = 0; k < ARP_NVEC; k++) {
+        if (ARP_VEC[k].dir == AD_PEND && ARP_VEC[k].bound == AB_WRAP) {
+            /* (retired from the JS gate: the toy's PEND wraps round the chord, SHAYPE's climbs in octaves whatever
+             * BOUND says, WaveLoop a205e3a6; the Windows vectors hold PEND. Here: the case plays exactly as with OCT) */
+            arp_vec_t o = ARP_VEC[k];
+            arp_pat_t p;
+            uint8_t held[16], pa[ARP_ROWS], la[ARP_ROWS], pb[ARP_ROWS], lb[ARP_ROWS];
+            uint32_t n, t, ja, jb;
+            int32_t oa = 0, ob = 0;
+            pw++;
+            pw_same += play_vec(k, 0);
+            memset(&p, 0, sizeof p);
+            p.n = o.npat;
+            memcpy(p.note, o.pat, sizeof p.note);
+            n = ash_voicing(o.chord, o.nchord, o.root, held);
+            for (t = 0; t < (uint32_t)o.steps * o.passes; t++) {
+                ja = ash_tick(&p, o.steps, t, held, n, AD_PEND, AB_WRAP, xs_next, &oa, pa, la);
+                jb = ash_tick(&p, o.steps, t, held, n, AD_PEND, AB_OCT, xs_next, &ob, pb, lb);
+                if (ja != jb || memcmp(pa, pb, ja) || memcmp(la, lb, ja)) {
+                    pw_bad++;
+                    break;
+                }
+            }
+            continue;
+        }
         events += ARP_VEC[k].nev;
         if (!play_vec(k, bad < 5u))
             bad++;
     }
-    snprintf(line, sizeof line, "JS parity: %u cases, %u notes, every one as sequence.mjs plays it", (unsigned)ARP_NVEC,
-             (unsigned)events);
+    snprintf(line, sizeof line, "JS parity: %u cases, %u notes, every one as sequence.mjs plays it",
+             (unsigned)(ARP_NVEC - pw), (unsigned)events);
     check(line, !bad);
+    snprintf(line, sizeof line, "PEND WRAP: %u toy cases retired (%u never wrap: still the toy's); all play as PEND OCT",
+             (unsigned)pw, (unsigned)pw_same);
+    check(line, !pw_bad);
     {
         uint32_t wbad = 0, wev = 0, nd[AD_N] = {0}, bd[AD_N] = {0};
         for (k = 0; k < ARP_NWVEC; k++) {
@@ -241,6 +268,21 @@ int main(void)
               ash_resolve(CEG, 3, 3, AB_WRAP) == 60 && ash_resolve(CEG, 3, 3, AB_OCT) == 72 &&
               ash_resolve(CEG, 3, -1, AB_OCT) == 55 && ash_resolve(CEG, 0, 0, AB_WRAP) == -1 && ok &&
               ash_pass_offset(1, 3, AD_DOWN, xs_next) == -1);
+    }
+    {   /* PEND climbs to the top and back in octaves, BOUND WRAP or OCT (WaveLoop a205e3a6): UP 4 over C E G, passes
+         * 0 1 2 1 (offsets): C E G C', E G C' E', G C' E' G', E G C' E'; UP with WRAP still wraps (C E G C) */
+        static const uint8_t CEG[3] = {60, 64, 67};
+        static const uint8_t W[16] = {60, 64, 67, 72, 64, 67, 72, 76, 67, 72, 76, 79, 64, 67, 72, 76};
+        arp_pat_t p;
+        uint8_t pitch[ARP_ROWS], len[ARP_ROWS];
+        uint32_t t, b, ok = 1;
+        int32_t o = 0;
+        ash_load(&p, 1);
+        for (b = 0; b < 2u; b++)
+            for (t = 0; t < 16u; t++)
+                ok &= ash_tick(&p, 4, t, CEG, 3, AD_PEND, b, xs_next, &o, pitch, len) == 1u && pitch[0] == W[t];
+        ok &= ash_tick(&p, 4, 3, CEG, 3, AD_UP, AB_WRAP, xs_next, &o, pitch, len) == 1u && pitch[0] == 60;
+        check("PEND: up to the top and back in octaves, WRAP as OCT (C E G C', ... G C' E' G'); UP WRAP still wraps", ok);
     }
     {   /* painting replaces intersecting notes but keeps adjacent notes and other rows */
         arp_pat_t p = {3, {0}, {ARP_NOTE(0, 0, 3), ARP_NOTE(4, 0, 1), ARP_NOTE(1, 1, 2)}};

@@ -321,12 +321,23 @@ static int shape_arp(void)
     ok &= t->arp_n == 0u;
     bad += check("  a note two steps long sounds 1.5 steps at GATE 75 %", ok);
     ash_load(&arp_pat[0], 0);
-    /* let go: the notes end; HOLD: the chord stays, the next press replaces it from step 1 */
+    /* KEY ATTACH NOTE (the default): let go, the notes ring to their end; NOW: they end; HOLD: the chord stays, the
+     * next press replaces it from step 1 */
+    ok = arp_x[0][ARPX_ATT] == AT_NOTE;
     arp_chord(t, CEG, 3);
     arp_next(t, got);
     for (i = 0; i < 3u; i++) arp_remove(t, CEG[i]);
     arp_tick(t, CTL);
-    bad += check("  the keys let go: nothing sounds, nothing held", !t->nheld && !t->arp_n);
+    ok &= !t->nheld && t->arp_n == 2u;
+    for (i = 0; i < 400u && t->arp_n; i++)
+        arp_tick(t, CTL);
+    bad += check("  ATTACH NOTE, the keys let go: the notes ring to their gate, then nothing sounds", ok && !t->arp_n);
+    arp_x[0][ARPX_ATT] = AT_NOW;
+    arp_chord(t, CEG, 3);
+    arp_next(t, got);
+    for (i = 0; i < 3u; i++) arp_remove(t, CEG[i]);
+    arp_tick(t, CTL);
+    bad += check("  ATTACH NOW, the keys let go: nothing sounds, nothing held", !t->nheld && !t->arp_n);
     t->p[P_AHOLD] = 1;
     arp_chord(t, CEG, 3);
     for (i = 0; i < 3u; i++) arp_remove(t, CEG[i]);
@@ -337,6 +348,7 @@ static int shape_arp(void)
     bad += check("  HOLD: the chord stays after the keys; a new one replaces it from the first step", ok && t->nheld == 3u);
     t->p[P_AHOLD] = 0;
     t->nheld = 0; arp_tick(t, CTL);
+    arp_x[0][ARPX_ATT] = AT_NOTE;
     /* recording: the chord played is written, not what the arp plays: C E G pressed into step 1, the arp
      * stepping meanwhile (SHAYPE: C+G, E+C, ..), one step holds C E G and nothing else is written */
     song.sel = 0; song.rec = 1;

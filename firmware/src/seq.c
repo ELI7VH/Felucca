@@ -150,22 +150,36 @@ static uint32_t kb_map(const track_t *t, uint32_t k)
  * Its steps: stopped, a chord from nothing starts the pattern at once from its first step. While the transport plays
  * (the internal clock or an external one), the arp steps on the song's grid from PLAY, chord or none (the toy's
  * shapeChords: recorded chords in, the notes out on a fixed grid); a chord coming in the first half of a step that
- * started with none plays that step late (shapeChords rounds a start to the nearest step), later it waits */
+ * started with none plays that step late (shapeChords rounds a start to the nearest step), later it waits.
+ * KEY ATTACH (ARP 3 ATTACH, arp_x; SHAYPE's, WaveLoop windows/shaype 4cbf5392): when a change of the chord reaches the
+ * arp, the keys, MIDI notes and the sequencer's chords alike. NOW: at once; a change early in a step (its first half,
+ * at most 120 ms) plays that step again with the new chord, what sounds cut first; the chord gone, the notes end. NOTE (the default):
+ * at the next step; the notes sounding play to their end, the chord gone too. CYCLE: at the top of the pattern's next
+ * pass; the pass playing keeps the chord it began with (arp_cyc), every key lifted too, then the last notes ring.
+ * A chord from nothing starts the arp at once in every mode; STOP and ARP off end the notes */
 #include "arp_shape.c"
 static arp_pat_t arp_pat[NTRK] __attribute__((section(".pool")));   /* the tracks' patterns: the main loop writes them
                                                  * with the ISR off (ui_arp.c, project.c, editor.c), the audio ISR reads */
 #define ARP_SND 8u
 static struct { uint8_t note[ARP_SND]; uint32_t off[ARP_SND]; } arp_snd[NTRK] __attribute__((section(".pool")));
                                                  /* sounding, oldest first: the note, arp_clk at its end; arp_n of them */
+#define ARP_CHORD (16u + 4u)                    /* the chord the arp plays: the held notes and the sequencer's (arp_list) */
+#define ARP_LATE_MS 120u                        /* KEY ATTACH NOW: how late in a step a new chord still plays it again */
+static struct { uint8_t note[ARP_CHORD], vel; } arp_cyc[NTRK] __attribute__((section(".pool")));
+                                                 /* KEY ATTACH CYCLE: the chord (voiced) and velocity its pass began with;
+                                                  * arp_cn of them */
 #define ARP_KEYS 0x1FFFu                        /* the keys the ARP pages edit with (F3..F4: the white ones are rows
                                                  * 1..8, the black ones OP1..OP5; ui_arp.c, song.grid 4): silent there */
 static uint32_t arp_steps(const track_t *t) { return (uint32_t)clamp(t->p[P_APROB], 1, ARP_STEPS); }
-static void arp_defaults(uint32_t k)            /* a fresh track's: SHAYPE (the toy's DEFAULT_PATTERN), ROOT OFF, OCT 0 */
+static uint32_t arp_att(const track_t *t) { return (uint32_t)clamp(arp_x[trk_index(t)][ARPX_ATT], 0, AT_N - 1); }
+static void arp_defaults(uint32_t k)            /* a fresh track's: SHAYPE (the toy's DEFAULT_PATTERN), ROOT OFF, OCT 0,
+                                                 * ATTACH NOTE */
 {
     ash_load(&arp_pat[k % NTRK], 0);
     arp_x[k % NTRK][ARPX_PAT] = 1;
     arp_x[k % NTRK][ARPX_ROOT] = 0;
     arp_x[k % NTRK][ARPX_OCT] = 0;
+    arp_x[k % NTRK][ARPX_ATT] = AT_NOTE;
 }
 static uint32_t arp_period(const track_t *t)    /* a step of RATE in samples (the toy's RATES) */
 {
@@ -188,10 +202,13 @@ static void arp_add(track_t *t, uint32_t note)
     for (i = 0; i < t->nheld; i++)
         if (t->held[i] == note)
             return;                                 /* repeated note-on: not a new note */
-    if (t->nheld < 16u)
+    if (t->nheld < 16u) {
         t->held[t->nheld++] = (uint8_t)note;
-    if (t->nheld == 1u && !song.playing && !(t->seq_arp && t->seq_n))
-        arp_restart(t);                             /* stopped, from nothing: its first step now */
+        t->arp_chg = 1;
+    }
+    if (t->nheld == 1u && !song.playing && !(t->seq_arp && t->seq_n) && !t->arp_cn)
+        arp_restart(t);                             /* stopped, from nothing: its first step now (CYCLE: not while
+                                                     * a pass plays its chord out) */
 }
 
 static void arp_remove(track_t *t, uint32_t note)
@@ -204,6 +221,7 @@ static void arp_remove(track_t *t, uint32_t note)
     for (i = 0; i < t->nheld; i++)
         if (t->held[i] != note)
             t->held[k++] = t->held[i];
+    t->arp_chg |= (uint8_t)(k != t->nheld);
     t->nheld = (uint8_t)k;
 }
 
@@ -269,7 +287,6 @@ static volatile uint32_t beat_pos, beat_n;      /* samples into the beat, the be
 
 /* the chord the arp plays (raw, its count; 0: nothing to play): the held notes, each once, and the sequencer's chord
  * (seq_chord: as the step plays them, QNT SEQ done). ash_voicing orders them. raw: ARP_CHORD */
-#define ARP_CHORD (16u + 4u)
 static uint32_t arp_list(const track_t *t, uint8_t *raw)
 {
     uint32_t i, j, n = 0, x;
@@ -297,8 +314,10 @@ static uint32_t arp_list(const track_t *t, uint8_t *raw)
  * keys alone. Not inlined: once a step, kept out of the audio ISR's loop over the tracks (tests/target_budget.py) */
 static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period, int adv)
 {
-    uint8_t raw[ARP_CHORD], held[ARP_CHORD], pitch[ARP_ROWS], len[ARP_ROWS];
+    uint8_t raw[ARP_CHORD], live[ARP_CHORD], pitch[ARP_ROWS], len[ARP_ROWS];
+    const uint8_t *held = live;
     uint32_t n = arp_list(t, raw), i, j, k = trk_index(t), gate = (uint32_t)clamp(t->p[P_AGATE], 10, 100), vel = 100u;
+    uint32_t att = arp_att(t);
     int32_t ofs = t->arp_ofs, root = -1, rk = arp_x[k][ARPX_ROOT];
     if (t->seq_arp && t->seq_n)
         vel = t->nheld && t->seq_avel < 100u ? 100u : t->seq_avel;
@@ -306,9 +325,21 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period, int 
         for (i = 0; i < n; i++)
             if (raw[i] % 12u == (uint32_t)rk - 1u && (root < 0 || raw[i] < root))
                 root = raw[i];
-    n = ash_voicing(raw, n, root, held);
-    if (adv && ++t->arp_idx == 0u && t->arp_n)       /* a fresh chord (arp_restart): the notes of the one before end */
-        arp_silence(t);
+    n = ash_voicing(raw, n, root, live);
+    if (adv && ++t->arp_idx == 0u && t->arp_n && att == AT_NOW)
+        arp_silence(t);                              /* a fresh chord (arp_restart): NOW, the notes of the one before end */
+    if (att == AT_CYCLE) {                           /* a pass begins (or the arp starts): the chord as it is now */
+        if (!t->arp_cn || t->arp_idx % arp_steps(t) == 0u) {
+            memcpy(arp_cyc[k].note, live, n);
+            arp_cyc[k].vel = (uint8_t)vel;
+            t->arp_cn = (uint8_t)n;
+            if (!n)
+                return;                              /* (every key lifted: done; the last notes ring to their end) */
+        }
+        held = arp_cyc[k].note;
+        n = t->arp_cn;
+        vel = arp_cyc[k].vel;
+    }
     j = ash_tick(&arp_pat[k], arp_steps(t), t->arp_idx, held, n, (uint32_t)clamp(t->p[P_AOCT], 0, AD_N - 1),
                  (uint32_t)clamp(t->p[P_AORDER], 0, 1), rng, &ofs, pitch, len);
     t->arp_ofs = (int8_t)ofs;
@@ -318,18 +349,24 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period, int 
             arp_play(t, (uint32_t)(pitch[i] + ofs), period * len[i] / 100u * gate, vel);
 }
 
-/* the arp's block (arp_step: only while it sounds, is on or the transport plays). The chord gone, its notes end; with
- * no chord and the transport stopped nothing moves. Else the steps of RATE (SWING) go by, the remainder kept so the
- * grid stays the transport's; a step with a chord plays (arp_fire), one without is passed (its pass's offset 0, as
- * shapeChords works it out over no chord) and marked (arp_miss) for a chord coming in its first half */
+/* the arp's block (arp_step: only while it sounds, is on or the transport plays). The chord gone, its notes end (NOW,
+ * or the ARP off; NOTE and CYCLE let them ring to their end); with no chord and the transport stopped nothing moves.
+ * Else the steps of RATE (SWING) go by, the remainder kept so the grid stays the transport's; a step with a chord plays
+ * (arp_fire), one without is passed (its pass's offset 0, as shapeChords works it out over no chord) and marked
+ * (arp_miss) for a chord coming in its first half. CYCLE: the pass keeps its chord (arp_cn), the keys lifted too.
+ * NOW: the chord changed in a step's first half (at most ARP_LATE_MS), that step again with it */
 static __attribute__((noinline)) void arp_block(track_t *t, uint32_t n)
 {
-    uint32_t period, len;
+    uint32_t period, len, att = arp_att(t), chg = t->arp_chg;
     int32_t sw;
-    int fed = t->p[P_AMODE] && arp_fed(t);
+    int live = t->p[P_AMODE] && arp_fed(t), fed;
+    t->arp_chg = 0;
+    if (!t->p[P_AMODE] || att != AT_CYCLE)
+        t->arp_cn = 0;
+    fed = live || t->arp_cn;
     if (t->arp_n)
         arp_gates(t);
-    if (!fed && t->arp_n)
+    if (!fed && t->arp_n && (att == AT_NOW || !t->p[P_AMODE]))
         arp_silence(t);
     if (!fed && !song.playing) {
         t->arp_miss = 0;
@@ -340,10 +377,15 @@ static __attribute__((noinline)) void arp_block(track_t *t, uint32_t n)
     len = period + (uint32_t)((t->arp_idx & 1u) ? sw : -sw);
     t->arp_pos += n;
     if (t->arp_pos < len && t->arp_pos != 0xFFFFFFF + n) {
-        if (t->arp_miss && fed) {                    /* a chord into a step that started with none */
+        if (t->arp_miss && live) {                   /* a chord into a step that started with none */
             t->arp_miss = 0;
             if (t->arp_pos < len / 2u)
                 arp_fire(t, period, 0);              /* (in its first half: that step, late) */
+        } else if (chg && att == AT_NOW && live && !t->arp_miss && t->arp_pos < len / 2u &&
+                   t->arp_pos < ARP_LATE_MS * (FS / 1000u)) {
+            arp_silence(t);                          /* NOW: the chord moved early in the step (its first half, at most
+                                                      * ARP_LATE_MS: shaype_engine.c LATE_S): it again, with it */
+            arp_fire(t, period, 0);
         }
         return;
     }
@@ -351,9 +393,11 @@ static __attribute__((noinline)) void arp_block(track_t *t, uint32_t n)
     if (t->arp_pos >= period)
         t->arp_pos = 0;                              /* (a tempo jump: no burst of steps) */
     t->arp_miss = (uint8_t)!fed;
-    if (fed)
+    if (fed) {
         arp_fire(t, period, 1);
-    else if (++t->arp_idx % arp_steps(t) == 0u)
+        if (att == AT_CYCLE && !t->arp_cn)
+            t->arp_miss = 1;                         /* (CYCLE, a pass's top with no keys: it ended) */
+    } else if (++t->arp_idx % arp_steps(t) == 0u)
         t->arp_ofs = 0;
 }
 
@@ -663,6 +707,7 @@ static void seq_start(void)
 static void seq_release(track_t *t)
 {
     uint32_t i;
+    t->arp_chg |= (uint8_t)(t->seq_arp && t->seq_n);   /* (the arp's chord changes: KEY ATTACH) */
     for (i = 0; !t->seq_arp && i < t->seq_n; i++)   /* (the arp's chord sounds no voice: seq_chord) */
         trk_note_off(t, t->seq_notes[i]);
     t->seq_n = 0;
@@ -675,10 +720,15 @@ static void seq_stop(void)
 {
     uint32_t i;
     song.playing = 0;
-    if (song.g[G_CLOCK])                           /* external clock: the arp stops with the transport, */
-        for (i = 0; i < NPART; i++)                /* its sounding note too (HOLD keeps the latched chord) */
+    for (i = 0; i < NPART; i++)                    /* external clock: the arp stops with the transport, its sounding
+                                                    * notes too (HOLD keeps the latched chord); nothing held, the
+                                                    * sequencer's chord ends with STOP and so do its notes (KEY ATTACH
+                                                    * NOTE / CYCLE let a chord let go ring; STOP does not), CYCLE's pass */
+        if (song.g[G_CLOCK] || !trk[i].nheld) {
             if (trk[i].arp_n)
                 arp_silence(&trk[i]);
+            trk[i].arp_cn = 0;
+        }
     for (i = 0; i < NTRK; i++) {
         seq_release(&trk[i]);
         trk[i].rh_n = 0;                           /* a recorded note held over the stop: as far as it got */
@@ -706,7 +756,9 @@ static __attribute__((noinline)) void seq_chord(track_t *t, const uint8_t *nn, u
     uint32_t i, fresh;
     if (!t->seq_arp)
         seq_release(t);
-    fresh = !t->seq_n && !t->nheld && !song.playing;
+    fresh = !t->seq_n && !t->nheld && !song.playing && !t->arp_cn;
+    m = m < 4u ? m : 4u;
+    t->arp_chg |= (uint8_t)(m != t->seq_n || memcmp(t->seq_notes, nn, m) != 0);   /* (KEY ATTACH) */
     for (i = 0; i < m && i < 4u; i++)
         t->seq_notes[i] = nn[i];
     t->seq_n = (uint8_t)i;
@@ -936,6 +988,7 @@ static void events_block(uint32_t n)
             t->nheld = 0;
             t->arp_phys = 0;
             t->arp_n = 0;                             /* (its notes ended: trk_all_off) */
+            t->arp_cn = 0;
             t->seq_n = t->seq_arp = 0;
         }
         engine_block(t);                              /* engine switch: fade, then switch (voice.c) */
@@ -946,9 +999,9 @@ static void events_block(uint32_t n)
         if ((t->armp && !t->p[P_AMODE]) || (t->aholdp && !t->p[P_AHOLD] && !t->arp_phys)) {
             t->nheld = 0;
             if (!t->p[P_AMODE])
-                t->arp_phys = 0;
-            if (t->arp_n)
-                arp_silence(t);
+                t->arp_phys = t->arp_cn = 0;
+            if (t->arp_n && (!t->p[P_AMODE] || arp_att(t) == AT_NOW))
+                arp_silence(t);                       /* (HOLD let go: a chord let go, KEY ATTACH as the keys) */
         }
         t->armp = t->p[P_AMODE];
         t->aholdp = t->p[P_AHOLD];

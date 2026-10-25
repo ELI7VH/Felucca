@@ -279,6 +279,8 @@ typedef struct track {
     uint8_t seq_avel;            /* .. that chord's velocity (the step's), what the arp plays it at */
     uint8_t arp_miss;            /* the transport's arp step started with no chord: one coming in its first half plays it
                                   * late (seq.c arp_block, the toy's shapeChords rounding a start to the nearest step) */
+    uint8_t arp_chg;             /* the chord it is fed changed since its last block (KEY ATTACH NOW: seq.c arp_block) */
+    uint8_t arp_cn;              /* KEY ATTACH CYCLE: notes of the chord its pass began with (seq.c arp_cyc), 0 none */
     uint32_t arp_clk;            /* samples since boot of the arp's clock: its notes' gates end against it (arp_snd) */
     /* sequencer */
     step_t step[NSTEP];

@@ -262,7 +262,7 @@ static void midi_silence_track(uint32_t track)
     track_t *t = &trk[track];
     uint32_t i;
     trk_all_off(t);
-    t->nheld = t->arp_phys = t->arp_n = t->rh_n = 0;
+    t->nheld = t->arp_phys = t->arp_n = t->arp_cn = t->rh_n = 0;
     t->seq_n = t->seq_arp = t->seq_hold = t->slide_glide = 0;
     for (i = 0; i < NVOICE; i++)
         if (t->v[i].active)

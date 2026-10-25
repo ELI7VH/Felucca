@@ -57,7 +57,7 @@
  * EDIT values are dropped (SAMPLE's meanings, not DRUM's).
  *
  * Format 9 ("FUN9", written since WaveLoop Kit midi25) = FUN8 with each track's SHAYPE block (the ARP's pattern and
- * its PAT ROOT OCT: seq.c arp_pat, arp_x; 4 x PROJ_ARP_BLK bytes between the FM6 patches and the name): 3840 bytes,
+ * its PAT ROOT OCT ATTACH: seq.c arp_pat, arp_x; 4 x PROJ_ARP_BLK bytes between the FM6 patches and the name): 3840 bytes,
  * the storage object's whole payload (storage.c ST_PAYLOAD_MAX). FUN8, FUN7 and older load with SHAYPE's pattern on
  * every track and their old ARP settings mapped (proj_arp_migrate); firmware before midi25 does not read FUN9.
  *
@@ -125,7 +125,7 @@ _Static_assert(sizeof(project_v5_t) == 3352u && sizeof(project_v6_t) == 3388u, "
 #define PROJ_STORE_SIZE 3840u                  /* FUN9 */
 #define PROJ_STORE_V8 3584u                    /* FUN8 */
 #define PROJ_STORE_V7 3388u                    /* FUN7 */
-#define PROJ_ARP_BLK 64u                       /* FUN9: a track's SHAYPE block: n, pat, root, oct + 3, ARP_NMAX notes LE */
+#define PROJ_ARP_BLK 64u                       /* FUN9, a track's SHAYPE: n, pat, root, oct+3 | attch<<4, the notes */
 #define PROJ_NAME_OFF (PROJ_STORE_SIZE - 4u - PROJ_NAME_LEN)
 #define PROJ_ARP_OFF (PROJ_NAME_OFF - NTRK * PROJ_ARP_BLK)
 #define PROJ_FM6_OFF (PROJ_ARP_OFF - NTRK * FM6_PACKED)   /* (3056, as FUN8's) */
@@ -597,7 +597,11 @@ static void proj_motion_ids(motion_store_t *m, uint32_t np)
         if (np < P_COUNT && m->event[i].param >= np - 8u && m->event[i].param < np)
             m->event[i].param = (uint8_t)(m->event[i].param + P_COUNT - np);
 }
-/* WaveLoop Kit: the SHAYPE block of a track (FUN9, PROJ_ARP_BLK bytes) <-> its pattern and PAT ROOT OCT */
+/* WaveLoop Kit: the SHAYPE block of a track (FUN9, PROJ_ARP_BLK bytes) <-> its pattern and PAT ROOT OCT ATTACH. ATTACH
+ * (midi27) rides in byte 3's high bits, OCT + 3 in its low ones: 0 NOTE (the default, and what every block saved before
+ * midi27 holds), 1 NOW, 2 CYCLE. Firmware before midi27 reads a block with NOW or CYCLE as damaged (SHAYPE's pattern) */
+static const uint8_t PROJ_ATT_CODE[AT_N] = {[AT_NOW] = 1u, [AT_NOTE] = 0u, [AT_CYCLE] = 2u};
+static const uint8_t PROJ_ATT_OF[3] = {AT_NOTE, AT_NOW, AT_CYCLE};
 static void proj_arp_put(uint8_t *a, const arp_pat_t *p, const int16_t *x)
 {
     uint32_t i, n = p->n < ARP_NMAX ? p->n : ARP_NMAX;
@@ -605,7 +609,7 @@ static void proj_arp_put(uint8_t *a, const arp_pat_t *p, const int16_t *x)
     a[0] = (uint8_t)n;
     a[1] = (uint8_t)clamp(x[ARPX_PAT], 0, 7);
     a[2] = (uint8_t)clamp(x[ARPX_ROOT], 0, 12);
-    a[3] = (uint8_t)(clamp(x[ARPX_OCT], -3, 3) + 3);
+    a[3] = (uint8_t)(clamp(x[ARPX_OCT], -3, 3) + 3 + (PROJ_ATT_CODE[clamp(x[ARPX_ATT], 0, AT_N - 1)] << 4));
     for (i = 0; i < n; i++) {
         a[4u + 2u * i] = (uint8_t)p->note[i];
         a[5u + 2u * i] = (uint8_t)(p->note[i] >> 8);
@@ -615,14 +619,15 @@ static void proj_arp_get(const uint8_t *a, arp_pat_t *p, int16_t *x)   /* (damag
 {
     uint32_t i;
     memset(p, 0, sizeof *p);
-    if (a[0] <= ARP_NMAX && a[1] <= 7u && a[2] <= 12u && a[3] <= 6u) {
+    if (a[0] <= ARP_NMAX && a[1] <= 7u && a[2] <= 12u && (a[3] & 15u) <= 6u && (a[3] >> 4) <= 2u) {
         p->n = a[0];
         for (i = 0; i < a[0]; i++)
             p->note[i] = (uint16_t)(a[4u + 2u * i] | a[5u + 2u * i] << 8);
         if (ash_valid(p)) {
             x[ARPX_PAT] = a[1];
             x[ARPX_ROOT] = a[2];
-            x[ARPX_OCT] = (int16_t)(a[3] - 3);
+            x[ARPX_OCT] = (int16_t)((a[3] & 15u) - 3);
+            x[ARPX_ATT] = PROJ_ATT_OF[a[3] >> 4];
             return;
         }
     }
@@ -630,6 +635,7 @@ static void proj_arp_get(const uint8_t *a, arp_pat_t *p, int16_t *x)   /* (damag
     x[ARPX_PAT] = 1;
     x[ARPX_ROOT] = 0;
     x[ARPX_OCT] = 0;
+    x[ARPX_ATT] = AT_NOTE;
 }
 /* a project saved before the ARP was SHAYPE (FUN8 and older): its ARP settings meant MODE (OFF UP DN UPDN RND ORD
  * REPEAT), RATE (N_DIV: 1/4 1/8 1/16 1/32 8T 16T 1/2 1/1 2BAR 4BAR), OCT 1..4, GATE (1..127), PROB, ORD; now they are ARP
@@ -648,7 +654,7 @@ static void proj_arp_migrate(int16_t *p)
 }
 static void proj_arp_old(project_t *q)
 {
-    static const int16_t X[ARPX_N] = {1, 0, 0};
+    static const int16_t X[ARPX_N] = {1, 0, 0, AT_NOTE};
     arp_pat_t p;
     uint32_t t;
     ash_load(&p, 0);

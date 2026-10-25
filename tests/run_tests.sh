@@ -38,10 +38,12 @@
 #                   written by tools/arp_vectors.mjs running the toy's sequence.mjs, played tick by tick as seq.c arp_fire
 #                   plays them; ZOOM, SHIFT against the toy's subdivide / shift (--zoom, --shift), MIRROR, MUTATE; DIR
 #                   (UP DOWN PEND and SHAYPE's WYNDO SHYFT) against SHAYPE's Windows core: tests/arp_window_vectors.h,
-#                   written by tools/arp_windows_vectors.c running shaype_core.c's table (two cycles a case).
+#                   written by tools/arp_windows_vectors.c running shaype_core.c's table (two cycles a case; PEND
+#                   in octaves, so the toy's PEND WRAP cases are retired from the JS gate).
 # SEQ > ARP (tests/arp_seq_test.c, WaveLoop Kit): the sequencer's chords through the arp against shapeChords (--chords),
-#                   its edges, chords let go anywhere in a step (MIDI, keys, HOLD, the external clock, CC123), MIDI step
-#                   recording, a soak: every note the arp starts ends once, every voice released.
+#                   its edges, chords let go anywhere in a step (MIDI, keys, HOLD, the external clock, CC123), KEY ATTACH
+#                   (ATTACH NOW / NOTE / CYCLE: keys, MIDI, the sequencer), MIDI step recording, a soak in each ATTACH:
+#                   every note the arp starts ends once, every voice released.
 # CHORD (tests/chord_test.c): the chord keys (src/chord.c): diatonic triads / sevenths of several scales and roots,
 #                   the fixed shapes and voicings (at most 4 notes), names, MONO plays the root, a release ends
 #                   exactly what its key / MIDI note started, recording, the ARP, MIDI IN, kits ignore CHRD.

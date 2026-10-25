@@ -10,9 +10,15 @@
  *   releases             a MIDI or key chord let go in every block of a step and at the edges of its gate, HOLD on /
  *                        off, the external clock stopped, the same pitch a key holds and the arp plays, CC123: every
  *                        note the arp starts ends once, every voice it started is released
+ *   key attach           ATTACH NOW / NOTE / CYCLE (SHAYPE's KEY ATTACH): a chord joining mid-step or every key lifted,
+ *                        by the keys, MIDI and the sequencer: when the change reaches the arp, what rings; persistence
  *   recording            ARP on: the chord played is recorded, not the arp's notes; MIDI step recording on SEQ > STEP
- *   soak                 random chords let go anywhere, HOLD, ARP, transport, RATE, GATE, patterns: nothing hangs */
+ *   soak                 random chords let go anywhere, HOLD, ARP, transport, RATE, GATE, patterns, each ATTACH: nothing
+ *                        hangs
+ * The parity, edges and release cases run under ATTACH NOW (a chord let go ends its notes: the arp before midi27) */
 #define UI_TEST_NO_MAIN 1
+static int ash_pass_once;                            /* (parity: the toy's UP DOWN PEND keep their pass's offset) */
+#define ASH_PASS_ONCE ash_pass_once
 #include "ui_test.c"
 #include "arp_chords_vectors.h"
 
@@ -133,6 +139,8 @@ static track_t *setup(uint32_t pat, uint32_t dir, uint32_t rate, uint32_t gate, 
     t->p[P_ASWING] = 0;
     t->p[P_AHOLD] = 0;
     arp_x[0][ARPX_ROOT] = arp_x[0][ARPX_OCT] = 0;
+    arp_x[0][ARPX_ATT] = AT_NOW;                     /* (these cases: a chord let go ends its notes; NOTE and CYCLE,
+                                                      * key_attach) */
     events_block(CTL);                               /* (the ISR sees ARP on) */
     cap_reset();
     return t;
@@ -228,16 +236,26 @@ static int parity_case(uint32_t c, int verbose)
         ok = 0;
     return ok;
 }
+/* The toy's shapeChords against the host under KEY ATTACH NOW (a chord moving early in a step plays it: shapeChords
+ * rounds a chord's start to the nearest step), with the toy's pass rule (ASH_PASS_ONCE: UP DOWN PEND keep the offset
+ * their pass began with; SHAYPE works it out on every step from the chord it has, arp_shape.c ash_tick). Retired: PEND
+ * WRAP (the toy wraps, SHAYPE climbs in octaves, WaveLoop a205e3a6) */
 static void parity(void)
 {
-    uint32_t c, fails = 0, notes = 0;
-    char line[120];
+    uint32_t c, fails = 0, notes = 0, retired = 0;
+    char line[140];
+    ash_pass_once = 1;
     for (c = 0; c < ACV_N; c++) {
+        if (ACV[c].dir == AD_PEND && ACV[c].bound == AB_WRAP) {
+            retired++;
+            continue;
+        }
         notes += ACV[c].nev;
         fails += !parity_case(c, fails < 3u);
     }
-    snprintf(line, sizeof line, "SEQ > ARP: %u cases, %u notes as shapeChords plays the same chords (step, pitch, end, vel)",
-             (unsigned)ACV_N, (unsigned)notes);
+    ash_pass_once = 0;
+    snprintf(line, sizeof line, "SEQ > ARP: %u cases, %u notes as shapeChords plays the same chords (step, pitch, end, vel; "
+             "%u PEND WRAP retired)", (unsigned)(ACV_N - retired), (unsigned)notes, (unsigned)retired);
     bad += check(line, !fails);
 }
 
@@ -485,6 +503,7 @@ static void releases(void)
     /* the same pitch a key holds and the arp plays: SHAYPE's step 2 over C E G is E + C (rows 2 and 4, C wrapping);
      * E's key let go while the arp sounds E: the arp's E ends with its gate, not cut short by the key, and once */
     t = setup(0, AD_UP, 3, 75, 16);
+    arp_x[0][ARPX_ATT] = AT_NOTE;                    /* (NOW would play the step again without E: key_attach) */
     fm1_in.notes = 1u << key_of(t, 60) | 1u << key_of(t, 64) | 1u << key_of(t, 67);
     for (j = 0; j < 4000u && !arp_sounds(t, 64); j++)
         blk1();
@@ -521,6 +540,217 @@ static void releases(void)
         fails += !rel_quiet(t) || t->nheld;
     }
     bad += check("ARP: All Notes Off (CC123) mid-gate, held or latched: the arp's notes end, nothing hangs", !fails);
+}
+
+/* ----------------------------------------------------------- key attach --- */
+/* KEY ATTACH (ARP 3 ATTACH; SHAYPE's NOW NOTE CYCLE): UP 4 (one row a step, 4 steps, WRAP) over C E G, A joining under it
+ * early in step 1 (A C E G: row 1 is C, not E), or every key lifted there; the keys, MIDI and the sequencer's chords.
+ * Every note the arp starts ends once, every voice released */
+static const uint8_t ACEG[4] = {57, 60, 64, 67};
+static void ka_press(const track_t *t, uint32_t via, uint32_t note, int on)
+{
+    if (via == RL_KEYS) {
+        if (on)
+            fm1_in.notes |= 1u << key_of(t, note);
+        else
+            fm1_in.notes &= ~(1u << key_of(t, note));
+    } else {
+        mi(on ? 0x90 : 0x80, note, on ? 100 : 0);
+    }
+}
+static uint32_t ka_tick(uint32_t k, uint32_t p) { return (cap[k].on + p / 2u) / p; }
+static int ka_ended(const track_t *t)               /* every note-on has its note-off, after it; no voice left */
+{
+    uint32_t k;
+    for (k = 0; k < ncap; k++)
+        if (cap[k].off == ~0u || cap[k].off < cap[k].on)
+            return 0;
+    return !t->arp_n && !track_gates(t, 128) && !cap_lost;
+}
+/* the keys (MIDI or the FM-1's), the transport stopped: A joins early in step 1, or (lift) every key goes there */
+static int ka_keys(uint32_t att, uint32_t via, int lift, int verbose)
+{
+    track_t *t = setup(factory("UP 4"), AD_UP, 3, 75, 16);
+    uint32_t p = arp_period(t), i, k, n0, ok = 1, e_off;
+    const char *why = "";
+    arp_x[0][ARPX_ATT] = (int16_t)att;
+    for (i = 0; i < 3u; i++)
+        ka_press(t, via, CEG[i], 1);
+    while (nblk * CTL < p + p / 8u)                  /* (step 1 plays E: row 1 of C E G) */
+        blk1();
+    if (!arp_sounds(t, 64)) {
+        ok = 0;
+        why = "step 1 is not E";
+    }
+    for (k = 0, e_off = 0; k < ncap; k++)
+        if (cap[k].pitch == 64)
+            e_off = k;
+    n0 = ncap;
+    if (lift)
+        for (i = 0; i < 3u; i++)
+            ka_press(t, via, CEG[i], 0);
+    else
+        ka_press(t, via, 57, 1);
+    blk1();
+    if (!lift && att == AT_NOW && ok && !(arp_sounds(t, 60) && !arp_sounds(t, 64) && ka_tick(ncap - 1u, p) == 1u)) {
+        ok = 0;
+        why = "NOW: step 1 not played again with A C E G (C)";
+    }
+    if (!lift && att != AT_NOW && ok && !(arp_sounds(t, 64) && !arp_sounds(t, 60) && ncap == n0)) {
+        ok = 0;
+        why = "NOTE / CYCLE: the sounding E cut, or a note before the next step";
+    }
+    if (lift && att == AT_NOW && ok && t->arp_n) {
+        ok = 0;
+        why = "NOW: every key lifted, the notes still sound";
+    }
+    if (lift && att != AT_NOW && ok && !arp_sounds(t, 64)) {
+        ok = 0;
+        why = "NOTE / CYCLE: every key lifted, E did not ring";
+    }
+    blks(6u * p / CTL);                               /* to the middle of the next pass */
+    if (!lift && ok) {
+        uint32_t first57 = ~0u;
+        for (k = 0; k < ncap; k++)
+            if (cap[k].pitch == 57 && first57 == ~0u)
+                first57 = ka_tick(k, p);
+        for (k = n0; k < ncap; k++)                  /* steps 2, 3: rows 2, 3 of A C E G, E G (NOW, NOTE), or of C E G,
+                                                      * G and C wrapped (CYCLE: the pass keeps its chord) */
+            if ((ka_tick(k, p) == 2u && cap[k].pitch != (att == AT_CYCLE ? 67 : 64)) ||
+                (ka_tick(k, p) == 3u && cap[k].pitch != (att == AT_CYCLE ? 60 : 67)))
+                break;
+        if (k < ncap) {
+            ok = 0;
+            why = "steps 2 and 3 played the wrong chord";
+        } else if (first57 != 7u) {                  /* (the next pass: UP's offset 1, row 3 wraps to A) */
+            ok = 0;
+            why = "A reached the arp on the wrong step";
+        }
+        if (att == AT_NOTE && ok && cap[e_off].off != ~0u && cap[e_off].off < p + p * 3u / 4u - CTL) {
+            ok = 0;
+            why = "NOTE: E did not play to its end";
+        }
+        ka_press(t, via, 57, 0);
+        for (i = 0; i < 3u; i++)
+            ka_press(t, via, CEG[i], 0);
+    }
+    if (lift && ok) {
+        uint32_t want = att == AT_CYCLE ? 2u : 0u, after = 0;
+        for (k = n0; k < ncap; k++)
+            after++;
+        if (after != want) {                         /* CYCLE: steps 2 and 3 of the pass, then done */
+            ok = 0;
+            why = "lifted: the wrong number of notes after";
+        }
+    }
+    blks(FS / CTL);
+    if (ok && !ka_ended(t)) {
+        ok = 0;
+        why = "a note left on, or a voice";
+    }
+    if (!ok && verbose)
+        printf("    %s %s %s: %s (arp_n %u, gates %u, %u notes)\n", att == AT_NOW ? "NOW" : att == AT_NOTE ? "NOTE" : "CYCLE",
+               via == RL_KEYS ? "keys" : "MIDI", lift ? "lift" : "A joins", why, (unsigned)t->arp_n,
+               (unsigned)track_gates(t, 128), (unsigned)ncap);
+    fm1_in.notes = 0;
+    keyboard_block();
+    return ok;
+}
+/* the sequencer's chords, playing: C E G on its step 0, A C E G from step 1 (a 1/4 arp step is eight 1/32 steps: the
+ * change lands an eighth into arp step 0, 62 ms) to step 44 (half into arp step 5), then RESTs */
+static int ka_seq(uint32_t att, int verbose)
+{
+    track_t *t = setup(factory("UP 4"), AD_UP, 1, 75, 64);
+    uint32_t p, k, ok = 1, a0 = 0, s1 = 0, last = 0, c0_off = 0, late = 0;
+    const char *why = "";
+    arp_x[0][ARPX_ATT] = (int16_t)att;
+    t->p[P_SDIV] = 3;                                /* (1/32) */
+    chord_steps(t, CEG, 3, 0, 1, 90);
+    chord_steps(t, ACEG, 4, 1, 44, 90);
+    p = arp_period(t);
+    transport_req = 1;
+    while (nblk * CTL < 8u * p - p / 4u)             /* (to before the sequence comes round) */
+        blk1();
+    for (k = 0; k < ncap; k++) {
+        uint32_t tk = ka_tick(k, p);
+        a0 |= tk == 0u && cap[k].pitch == 57;
+        if (tk == 1u)
+            s1 = cap[k].pitch;
+        if (tk == 0u && cap[k].pitch == 60)
+            c0_off = cap[k].off;
+        last = tk > last ? tk : last;
+        late |= cap[k].off != ~0u && cap[k].off > 5u * p + p / 2u + 2u * CTL && tk == 5u;
+    }
+    /* NOW: arp step 0 again with A C E G (A), C cut; NOTE: step 0's C plays to its end, A C E G from step 1 (row 1: C);
+     * CYCLE: the pass keeps C E G (step 1: E), A C E G from the next */
+    if (a0 != (att == AT_NOW) || s1 != (att == AT_CYCLE ? 64u : 60u)) {
+        ok = 0;
+        why = "the new chord reached the arp on the wrong step";
+    } else if ((att == AT_NOW) != (c0_off < p / 2u)) {
+        ok = 0;
+        why = "step 0's C cut (NOTE, CYCLE) or not (NOW)";
+    } else if (last != (att == AT_CYCLE ? 7u : 5u)) {   /* the chord over half into step 5: CYCLE plays its pass out */
+        ok = 0;
+        why = "the wrong last step after the chord ended";
+    } else if (late != (att != AT_NOW)) {            /* NOW: step 5's note ends with the chord; NOTE: rings to its end */
+        ok = 0;
+        why = "step 5's note cut with the chord (NOTE) or not (NOW)";
+    }
+    transport_req = 2;
+    blks(FS / CTL);
+    if (ok && !ka_ended(t)) {
+        ok = 0;
+        why = "a note left on, or a voice";
+    }
+    if (!ok && verbose)
+        printf("    %s SEQ: %s (A on step 0 %u, step 1 %u, C off %u of %u, last step %u, late %u)\n",
+               att == AT_NOW ? "NOW" : att == AT_NOTE ? "NOTE" : "CYCLE", why, (unsigned)a0, (unsigned)s1,
+               (unsigned)c0_off, (unsigned)p, (unsigned)last, (unsigned)late);
+    return ok;
+}
+static void key_attach(void)
+{
+    uint32_t att, via, fails = 0, cases = 0;
+    int lift;
+    for (att = 0; att < AT_N; att++)
+        for (via = 0; via < 2u; via++)
+            for (lift = 0; lift < 2; lift++) {
+                fails += !ka_keys(att, via, lift, fails < 4u);
+                cases++;
+            }
+    bad += check("KEY ATTACH, the keys and MIDI: NOW plays the step again with the new chord, NOTE at the next step "
+                 "(the sounding note plays out), CYCLE at the next pass; lifted, NOW ends the notes, NOTE lets them "
+                 "ring, CYCLE finishes the pass; every note ends once", !fails);
+    printf("    (%u cases)\n", (unsigned)cases);
+    fails = 0;
+    for (att = 0; att < AT_N; att++)
+        fails += !ka_seq(att, 1);
+    bad += check("KEY ATTACH, the sequencer's chords: NOW the step again, NOTE the next step, CYCLE the next pass; "
+                 "the chord over, CYCLE finishes its pass; STOP ends the notes", !fails);
+    {   /* a fresh track is NOTE; a project keeps ATTACH (FUN9 byte 3's high bits), a block saved before midi27 is NOTE */
+        int16_t x[ARPX_N] = {1, 0, 0, AT_NOTE}, y[ARPX_N];
+        uint8_t a[PROJ_ARP_BLK];
+        arp_pat_t pt, q;
+        uint32_t ok;
+        ui_power_on();
+        ok = arp_x[0][ARPX_ATT] == AT_NOTE && arp_x[3][ARPX_ATT] == AT_NOTE;
+        ash_load(&pt, 0);
+        for (att = 0; att < AT_N; att++) {
+            x[ARPX_ATT] = (int16_t)att;
+            x[ARPX_OCT] = (int16_t)att - 1;
+            proj_arp_put(a, &pt, x);
+            proj_arp_get(a, &q, y);
+            ok &= y[ARPX_ATT] == (int16_t)att && y[ARPX_OCT] == x[ARPX_OCT] && q.n == pt.n;
+            ok &= att != AT_NOTE || a[3] == 3u;      /* (NOTE, OCT 0: 3 alone, what midi26 wrote) */
+        }
+        a[3] = 3u;                                   /* (a block saved by midi26: OCT 0, no ATTACH) */
+        proj_arp_get(a, &q, y);
+        ok &= y[ARPX_ATT] == AT_NOTE && y[ARPX_OCT] == 0;
+        a[3] = 3u | 3u << 4;                         /* (ATTACH 3: damaged, SHAYPE and its defaults) */
+        proj_arp_get(a, &q, y);
+        ok &= y[ARPX_ATT] == AT_NOTE && y[ARPX_PAT] == 1;
+        bad += check("KEY ATTACH: NOTE by default; a project keeps NOW / NOTE / CYCLE, one before midi27 is NOTE", ok);
+    }
 }
 
 /* ------------------------------------------------------------ recording --- */
@@ -600,10 +830,12 @@ static uint32_t sk_rnd(void)
     s ^= s << 5;
     return s;
 }
-static void soak(void)
+static void soak(uint32_t att)
 {
     track_t *t = setup(0, AD_UP, 5, 75, 16);
     uint32_t b, i, held[4] = {0}, nh = 0, fails = 0, maxn = 0;
+    char line[140];
+    arp_x[0][ARPX_ATT] = (int16_t)att;
     for (i = 0; i < 16u; i++)
         if (sk_rnd() % 3u == 0u)
             chord_steps(t, CEG, 3, i, i + 1u, 90);
@@ -638,8 +870,9 @@ static void soak(void)
     t->p[P_AHOLD] = 0;
     transport_req = 2;
     blks(2u * FS / CTL);
-    bad += check("soak: 40 s of MIDI chords, HOLD, ARP, transport, RATE, GATE, patterns: nothing hangs at the end",
-                 !fails && rel_quiet(t) && !t->nheld && maxn > 0u && !cap_lost);
+    snprintf(line, sizeof line, "soak, ATTACH %s: 40 s of MIDI chords, HOLD, ARP, transport, RATE, GATE, patterns: nothing "
+             "hangs at the end", N_AATT[att]);
+    bad += check(line, !fails && rel_quiet(t) && !t->nheld && maxn > 0u && !cap_lost);
 }
 
 int main(void)
@@ -647,8 +880,11 @@ int main(void)
     parity();
     edges();
     releases();
+    key_attach();
     recording();
-    soak();
+    soak(AT_NOW);
+    soak(AT_NOTE);
+    soak(AT_CYCLE);
     printf("arp_seq: %s\n", bad ? "FAILED" : "all ok");
     return bad != 0;
 }

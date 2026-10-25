@@ -41,6 +41,7 @@ Direct DIN MIDI control; no computer needed while playing.
 | Couldn’t see what a MIDI knob was changing | Brief popup shows track, parameter name and value. |
 | Wanted WaveLoop's Shape Arp on the FM-1 | The ARP is SHAYPE: draw a pattern of rows over the chord you hold. |
 | Wanted the sequencer to play through the arp | With ARP on, each step's chord is the arp's chord; record chords, hear the shape. |
+| Wanted to choose when a new chord reaches the arp | ARP 3 → ATTACH: NOW, NOTE (default) or CYCLE, for keys, MIDI and the sequencer. |
 | Wanted to step-record from the MiniLab | On SEQ → STEP with REC armed and stopped, MiniLab notes write the step like the keys. |
 | Wanted to draw arp patterns on a computer | Editor → SHAYPE: draw, zoom and shift; it sends to the FM-1 live or on WRITE SHAYPE. |
 | Needed quick screen-track switching | Encoder click cycles the displayed track 1 → 2 → 3 → 4 → 1. |
@@ -67,11 +68,20 @@ Row 1 is the lowest note you hold, row 2 the next, and so on. Each pass moves th
 rows past the chord wrap round it or go up octaves (BOUND).
 
 - **ARP:** ARP on/off, STEPS, RATE (1/2 to 1/32 with triplets), DIR (UP, DOWN, PEND, WYNDO, SHYFT; WYNDO by default).
+  - **PEND:** up to the top and back down. Rows past the chord go up an octave, whatever BOUND says.
   - **WYNDO:** the pattern's rows slide up through the notes you hold, one note a pass. Hold F A C E under a 3-row pattern: F A C, then A C E.
   - **SHYFT:** the chord stays put. A window as tall as the chord climbs the pattern a row a pass; only the rows inside it play.
   - RAND is off the knob. A song saved with RAND (or any DIR) keeps it until you turn DIR.
 - **ARP 2:** BOUND (WRAP, OCT), GATE, HOLD, SWING.
-- **ARP 3:** PAT (load SHAYPE, UP 4, UPDOWN, STABS, OCT RUN, PEDAL, DRONE), ROOT, OCT.
+- **ARP 3:** PAT (load SHAYPE, UP 4, UPDOWN, STABS, OCT RUN, PEDAL, DRONE), ROOT, OCT, ATTACH.
+  - **ATTACH** (key attach): when a chord you press or let go reaches the arp. The keys, MIDI and the sequencer's
+    chords work the same way.
+  - **NOW:** at once. The step just played plays again with the new chord.
+  - **NOTE** (default): at the next step. The note sounding plays to its end.
+  - **CYCLE:** at the start of the pattern's next pass. The pass playing keeps its chord.
+  - In NOTE and CYCLE, letting go of every key lets the last notes ring; CYCLE finishes the pass first. STOP and
+    ARP off end the notes.
+  - NOTE is the FM-1's default by Elijah's choice; WaveLoop's Windows SHAYPE starts on NOW.
 - On every ARP page the grid shows the pattern. PRESETS moves the cursor step.
 - The white keys **F3–F4** are rows 1–8 at the cursor: tap to add or remove a note. Hold a row key and turn a knob to set its length. EDIT clears the step.
 - The black keys **F#3 G#3 A#3 C#4 D#4 are OP1–OP5**. Hold one and press OCT− / OCT+:
@@ -86,9 +96,10 @@ rows past the chord wrap round it or go up octaves (BOUND).
 
 The OP keys breathe on the ARP pages; OCT− / OCT+ light only where the held OP can act.
 With ARP on, the sequencer's chords feed SHAYPE and recording writes the chords you play.
-Patterns, PAT, ROOT and OCT save with every project and setlist song. Songs from midi24 and earlier
-load with SHAYPE's pattern and their old ARP settings mapped. Back up before going back to an older
-firmware: it cannot read songs saved by midi25.
+Patterns, PAT, ROOT, OCT and ATTACH save with every project and setlist song. Songs from midi24 and earlier
+load with SHAYPE's pattern and their old ARP settings mapped; songs from before midi27 load with ATTACH NOTE.
+Back up before going back to an older firmware: midi24 and earlier cannot read songs saved by midi25, and
+before midi27 a track set to NOW or CYCLE loads with SHAYPE's default pattern.
 
 ## Drum kits
 

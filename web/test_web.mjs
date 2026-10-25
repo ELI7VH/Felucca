@@ -1390,11 +1390,12 @@ async function editorShaype() {
   /* ARP_GET of a fresh track: EDITOR_PROTOCOL.md's example, byte for byte, and what it means */
   sent.length = got.length = 0;
   const g0 = E.parse[C.ARP_GET](await rq(E.req.arpGet(0)));
-  ok(eq(sent[0], hex("F0 7D 46 4C 4C 00 F7")) && eq(got[0], hex("F0 7D 46 4C 4C 00 00 00 04 03 04 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 F7")),
+  ok(eq(sent[0], hex("F0 7D 46 4C 4C 00 F7")) && eq(got[0], hex("F0 7D 46 4C 4C 00 00 00 04 03 04 00 4B 00 00 00 03 01 1E 08 00 00 01 00 02 01 01 01 01 01 03 01 02 02 01 02 03 01 03 00 01 03 03 01 01 F7")),
     "shaype: ARP_GET track 1 == the protocol's example (request and reply bytes)");
   ok(g0.track === 0 && g0.rc === 0 && g0.on === false && g0.steps === 4 && g0.rate === 3 && g0.dir === 4 && g0.bound === 0 && g0.gate === 75
-    && g0.hold === false && g0.swing === 0 && g0.root === 0 && g0.oct === 0 && g0.pat === 1 && g0.max === 30 && js(g0.notes) === js(notesOf(seq.DEFAULT_PATTERN)),
-    "shaype: ARP_GET parsed: ARP OFF, 4 steps of 1/8, WYNDO, WRAP, gate 75, OCT 0, PAT SHAYPE, the toy's 8 notes");
+    && g0.hold === false && g0.swing === 0 && g0.root === 0 && g0.oct === 0 && g0.pat === 1 && g0.max === 30 && js(g0.notes) === js(notesOf(seq.DEFAULT_PATTERN))
+    && g0.attach === 1,
+    "shaype: ARP_GET parsed: ARP OFF, 4 steps of 1/8, WYNDO, WRAP, gate 75, OCT 0, PAT SHAYPE, the toy's 8 notes, ATTACH NOTE");
   let bad = 0;
   for (const a of [[0, 0, 0, 4, 3, 0, 0, 75, 0, 0, 0, 3, 1, 30, 1, 0, 0], [0, 0, 0, 4, 3, 0, 0, 75, 0, 0, 0, 3, 1, 2, 3, 0, 0, 1, 1, 0, 1, 2, 0, 1]])
     try { E.parse[C.ARP_GET](a); } catch { bad++; }
@@ -1487,6 +1488,22 @@ async function editorShaype() {
       && /b\.hidden = \+b\.dataset\.v === ARP\.DIR_RAND && arpS\.dir !== ARP\.DIR_RAND/.test(html),
       "shaype: the DIR picker is UP DOWN PEND WYNDO SHYFT; RAND shows only while the track holds it");
   }
+  {   /* KEY ATTACH (midi27): a trailing byte 0 NOW 1 NOTE 2 CYCLE; ARP_SET without it (older hosts) keeps it; 3 is rc 3;
+       the SHAYPE tab's ATTACH picker, hidden for firmware without it */
+    let att = true;
+    for (let v = 0; v <= 2; v++) {
+      sent.length = 0;
+      const r = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st({ attach: v }))));
+      att = att && r.rc === 0 && r.attach === v && sent[0].at(-2) === v && sent[0].length === 6 + 12 + 3 * base.notes.length + 1;
+    }
+    const kept = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st())));
+    const r3 = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st({ attach: 3 }))));
+    ok(att && kept.rc === 0 && kept.attach === 2 && r3.rc === 3 && r3.attach === 2 && E.arpCheck(st({ attach: 3 })) === 3
+      && E.ARP.ATTACH.join() === "NOW,NOTE,CYCLE" && E.ARP.fresh().attach === 1
+      && /arpCtl\.attachBox\.hidden = arpS\.attach == null/.test(html),
+      "shaype: ATTACH NOW / NOTE / CYCLE as ARP_SET's trailing byte; absent, kept; 3 is rc 3; NOTE fresh");
+    await rq(E.req.arpSet(2, st({ attach: 1 })));
+  }
   const same = E.parse[C.ARP_SET](await rq(E.req.arpSet(2, st({ gate: 60 }))));
   ok(same.rc === 0 && same.pat === 1 && same.gate === 60, "shaype: a SET with the same notes keeps PAT");
 
@@ -1534,7 +1551,22 @@ async function editorShaype() {
   const oinfo = E.parse[C.INFO](await ol.request(E.req.info()));
   const none = await ol.request(E.req.arpGet(0), { retries: 0, quiet: true }).then(() => false, () => true);
   ok(oinfo.arpMax === 0 && none, "shaype: firmware without the tag: no SHAYPE, ARP_GET unanswered");
-  ol.close(); off.stop(); link.close(); m.stop();
+  ol.close(); off.stop();
+  {   /* firmware before midi27 (no ATTACH byte): ARP_GET parses with attach null, the editor sends no ATTACH; a SET with
+       one is the wrong length there */
+    const old = E.makeMockDevice({ auto: false, attach: false });
+    const xi = [...old.access.inputs.values()][0], xo = [...old.access.outputs.values()][0];
+    const xl = new E.Link((d) => xo.send(d), { timeout: 100 });
+    xi.onmidimessage = (e) => xl.receive(e.data);
+    await xl.request(E.req.info());
+    const og = E.parse[C.ARP_GET](await xl.request(E.req.arpGet(0)));
+    const os = E.parse[C.ARP_SET](await xl.request(E.req.arpSet(0, { ...st(), attach: og.attach })));
+    const ow = E.parse[C.ARP_SET](await xl.request(E.req.arpSet(0, st({ attach: 2 }))));
+    ok(og.rc === 0 && og.attach === null && os.rc === 0 && os.attach === null && ow.rc === 1,
+      "shaype: firmware before midi27: no ATTACH byte either way (a SET with one is rc 1 there)");
+    xl.close(); old.stop();
+  }
+  link.close(); m.stop();
 }
 
 /* ------------------------------------------------- editor icons (Fukiai) --- */
